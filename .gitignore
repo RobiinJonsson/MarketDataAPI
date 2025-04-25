@@ -1,0 +1,51 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+env/
+ENV/
+.venv/
+.env/
+
+# Environment variables
+.env
+
+# IDE files
+.vscode/
+.idea/
+
+# Logs and local dev files
+*.log
+downloads/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python egg
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Coverage reports
+htmlcov/
+coverage.xml
+.cache/
+.tox/
+.nox/
+
+# Flask
+instance/
+*.db
+*.sqlite3
+
+# PyInstaller
+*.spec
+
+# Jupyter
+.ipynb_checkpoints/

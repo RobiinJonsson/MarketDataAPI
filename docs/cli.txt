@@ -1,0 +1,53 @@
+CMD Prompts
+From root -> cd C:\Users\robin\Projects\MarketDataAPI>
+
+Usage:
+    python scripts/cli.py fetch <ISIN> [instrument_type]       or: python scripts/cli.py f <ISIN> [instrument_type]
+    python scripts/cli.py search <ISIN>                        or: python scripts/cli.py s <ISIN>
+    python scripts/cli.py list                                 or: python scripts/cli.py l
+    python scripts/cli.py delete <ISIN> [table]                or: python scripts/cli.py d <ISIN> [table]
+    python scripts/cli.py rename <table> <old_name> <new_name> or: python scripts/cli.py r <table> <old_name> <new_name>
+    python scripts/cli.py tables                               or: python scripts/cli.py t
+    python scripts/cli.py schema <table>                       or: python scripts/cli.py sc <table>
+    python scripts/cli.py preview <table> [limit]              or: python scripts/cli.py p <table> [limit]
+    python scripts/cli.py modify <table> <column> <new_type>   or: python scripts/cli.py m <table> <column> <new_type>
+    python scripts/cli.py copy <src_table> <new_table> [data]  or: python scripts/cli.py cp <src_table> <new_table> [data]
+    python scripts/cli.py backup                               or: python scripts/cli.py b
+    python scripts/cli.py cfi <code>                           or: python scripts/cli.py c <code>
+    python scripts/cli.py analyze_cfi                          or: python scripts/cli.py ac
+    python scripts/cli.py download <date> [type]               or: python scripts/cli.py dl <date> [type]
+    python scripts/cli.py test_debt <ISIN>                     or: python scripts/cli.py td <ISIN>
+    python scripts/cli.py gleif <LEI>        - Import LEI record from GLEIF API
+    python scripts/cli.py gleif-print <LEI> - Print LEI record from GLEIF API
+          
+Commands:
+    fetch     Fetch data for the given ISIN from XML and insert into the database
+              For equity instruments: python scripts/cli.py fetch <ISIN> or python scripts/cli.py fetch <ISIN> equity
+              For debt instruments: python scripts/cli.py fetch <ISIN> debt
+    search    Search for an ISIN across all tables (firds_e, firds_d, isin_figi_map)
+    list      List all rows from all tables (firds_e, firds_d, isin_figi_map)
+    delete    Delete a row by ISIN from the specified table (default: firds_e)
+    rename    Rename a column in the specified table
+    tables    List all tables and their columns in the database
+    schema    Show detailed schema for a table
+    preview   Preview data from a table (default 5 rows)
+    modify    Modify a column's data type
+    copy      Copy table structure and optionally data
+    backup    Create a timestamped backup of the database
+    cfi       Classify a CFI code
+    analyze_cfi Analyze CFI codes in the database
+    download  Download FIRDS files for a specific date and type (default: debt)
+    test_debt Test processing of debt instruments with a specific ISIN
+    gleif     Import LEI record from GLEIF API
+    gleif-print Print LEI record from GLEIF API
+
+Examples:
+    python scripts/cli.py fetch SE0000242455
+    python scripts/cli.py fetch SE0000242455 equity
+    python scripts/cli.py fetch SE0000242455 debt
+    python scripts/cli.py s SE0000242455
+    python scripts/cli.py l
+    python scripts/cli.py delete NL00150001S5
+    python scripts/cli.py d NL00150001S5 isin_figi_map
+    python scripts/cli.py gleif 5493001KJTIIGC8Y1R12 - Import LEI record from GLEIF API
+    python scripts/cli.py gleif-print 5493001KJTIIGC8Y1R12 - Print LEI record from GLEIF API

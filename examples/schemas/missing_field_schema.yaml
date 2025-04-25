@@ -1,0 +1,16 @@
+instrument:
+  type: object
+  properties:
+    identifier:
+      type: string
+      description: "Instrument identifier (ISIN or FIGI)"
+    full_name:
+      type: string
+      description: "Full name of the instrument"
+    short_name:
+      type: string
+      description: "Short name of the instrument"
+    # Missing required field: classification_type
+    currency:
+      type: string
+      description: "National currency" 

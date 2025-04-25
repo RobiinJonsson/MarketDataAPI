@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Market Data API</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <!-- Header Section -->
+        <header class="header">
+            <h1>MarketDataAPI</h1>
+            <p>Search, request, manage, and analyze market data</p>
+        </header>
+
+        <!-- Search Section -->
+        <section class="search-section">
+            <form class="search-form" onsubmit="searchByIsin(); return false;">
+                <div class="input-group">
+                    <input
+                        type="text"
+                        id="isin-input"
+                        class="input-field"
+                        placeholder="Enter ISIN"
+                        required
+                    />
+                </div>
+                <div class="button-group">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                    <button type="button" class="btn btn-secondary" onclick="listAll()">List All</button>
+                    <button type="button" class="btn btn-tertiary" onclick="fetchAndInsert()">Fetch & Insert</button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Results Table -->
+        <div class="table-container">
+            <table id="results-table" class="data-table">
+                <!-- Table content gets rendered by JavaScript -->
+            </table>
+        </div>
+
+        <!-- Schema-based Search Section -->
+        <section class="schema-search-section">
+            <h2>Schema-based Instrument Search</h2>
+            <form class="schema-search-form" onsubmit="searchBySchema(); return false;">
+                <div class="input-group">
+                    <input
+                        type="text"
+                        id="identifier-input"
+                        class="input-field"
+                        placeholder="Enter Instrument Identifier"
+                        required
+                    />
+                    <select id="identifier-type" class="input-field" required>
+                        <option value="">Select Identifier Type</option>
+                        <option value="ISIN">ISIN</option>
+                        <option value="FIGI">FIGI</option>
+                    </select>
+                </div>
+                <div class="schema-upload-group">
+                    <label for="schema-file" class="file-label">Upload Schema (YAML)</label>
+                    <input
+                        type="file"
+                        id="schema-file"
+                        class="file-input"
+                        accept=".yaml,.yml"
+                        required
+                    />
+                    <div class="file-name-display" style="display: none;"></div>
+                </div>
+                <div class="button-group">
+                    <button type="submit" class="btn btn-primary">Search with Schema</button>
+                </div>
+            </form>
+        </section>
+
+        <!-- Schema Results Section -->
+        <div id="schema-results" class="schema-results">
+            <h3>Schema-based Results</h3>
+            <div class="results-container">
+                <div class="results-panel">
+                    <h4>Results</h4>
+                    <pre id="schema-output" class="schema-output"></pre>
+                </div>
+                <div class="debug-panel">
+                    <h4>Unmapped Fields</h4>
+                    <pre id="unmapped-fields" class="schema-output"></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div id="spinner" class="spinner"></div>
+
+        <!-- Toast Notification -->
+        <div id="toast" class="toast"></div>
+
+    </div>
+
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

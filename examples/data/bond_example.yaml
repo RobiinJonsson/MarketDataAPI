@@ -1,0 +1,20 @@
+# Example data for a Swedish corporate bond
+type: bond
+data:
+  identifier: "SE0012674014"  # Example ISIN
+  full_name: "Nordea Bank Abp 2.125% 2025"
+  short_name: "NDA 2.125 25"
+  classification_type: "DBBTFB"
+  currency: "SEK"
+  issuer_lei: "529900ODI3047E2LIV03"
+  trading_venue_id: "XSTO"
+  coupon_rate: 2.125
+  maturity_date: "2025-09-15"
+  issue_date: "2020-09-15"
+  face_value: 1000
+  coupon_frequency: "Annual"
+  day_count_convention: "30/360"
+  credit_rating: "A+"
+  callable: false
+  puttable: false
+  seniority: "Senior" 

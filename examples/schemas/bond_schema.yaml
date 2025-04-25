@@ -1,0 +1,53 @@
+type: bond
+properties:
+  identifier:
+    type: string
+    description: "Instrument identifier (ISIN or FIGI)"
+  full_name:
+    type: string
+    description: "Full name of the instrument"
+  short_name:
+    type: string
+    description: "Short name of the instrument"
+  classification_type:
+    type: string
+    description: "Classification type (CFI code)"
+  currency:
+    type: string
+    description: "National currency"
+  issuer_lei:
+    type: string
+    description: "Legal Entity Identifier of the issuer"
+  trading_venue_id:
+    type: string
+    description: "Trading venue identifier"
+  coupon_rate:
+    type: number
+    description: "Annual coupon rate percentage"
+  maturity_date:
+    type: date
+    description: "Bond maturity date"
+  issue_date:
+    type: date
+    description: "Bond issue date"
+  face_value:
+    type: number
+    description: "Face value of the bond"
+  coupon_frequency:
+    type: string
+    description: "Frequency of coupon payments (e.g., Annual, Semi-Annual)"
+  day_count_convention:
+    type: string
+    description: "Day count convention for interest calculation"
+  credit_rating:
+    type: string
+    description: "Credit rating of the bond"
+  callable:
+    type: boolean
+    description: "Whether the bond is callable"
+  puttable:
+    type: boolean
+    description: "Whether the bond is puttable"
+  seniority:
+    type: string
+    description: "Seniority level of the bond (e.g., Senior, Subordinated)" 

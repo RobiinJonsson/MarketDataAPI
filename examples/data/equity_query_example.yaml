@@ -1,0 +1,33 @@
+# Example of using the equity schema to query and format data
+type: equity
+properties:
+  identifier: true
+  full_name: true
+  short_name: true
+  classification_type: true
+  currency: true
+  issuer_lei: true
+  trading_venue_id: true
+  market_cap: true
+  dividend_yield: true
+  sector: true
+  share_class: true
+  voting_rights: true
+  ipo_date: true
+
+# Example of the data that would be returned from the database
+# This is what the application would return, not what would be input
+result:
+  identifier: "SE0000115446"
+  full_name: "Telefonaktiebolaget LM Ericsson (publ) B"
+  short_name: "ERIC B"
+  classification_type: "ESVUFR"
+  currency: "SEK"
+  issuer_lei: "5493006QMFDDMYWIAM13"
+  trading_venue_id: "XSTO"
+  market_cap: 200000000000
+  dividend_yield: 3.2
+  sector: "Technology"
+  share_class: "B"
+  voting_rights: "1:1"
+  ipo_date: "1983-01-01" 

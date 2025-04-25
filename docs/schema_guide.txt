@@ -1,0 +1,132 @@
+Schema Guide for Market Data API
+=============================
+
+This guide explains how to use the schema system to search for instrument data.
+
+What is a Schema?
+----------------
+A schema is like a template that describes what kind of data you want to search for and how you want it formatted. It's written in a format called YAML, which is a simple way to write structured data.
+
+Basic Schema Structure
+---------------------
+Here's a simple example of a schema:
+
+```yaml
+type: firds_e
+properties:
+  identifier:
+    type: string
+    description: "Instrument identifier (ISIN or FIGI)"
+  full_name:
+    type: string
+    description: "Full name of the instrument"
+  short_name:
+    type: string
+    description: "Short name of the instrument"
+  classification_type:
+    type: string
+    description: "Classification type (CFI code)"
+  currency:
+    type: string
+    description: "National currency"
+```
+
+Supported Schema Types
+---------------------
+The system supports different schema types for different instrument categories:
+
+1. firds_e: Basic FIRDS European instrument data
+2. equity: Equity-specific data (extends firds_e)
+3. bond: Bond-specific data (extends firds_e)
+
+Each schema type has its own set of required and optional fields. When using a schema that extends another (like equity or bond), you get access to all fields from both schemas.
+
+How to Use the Schema
+--------------------
+1. In the web interface:
+   - Enter an instrument identifier (e.g., ISIN)
+   - Select the identifier type (ISIN or FIGI)
+   - Upload your schema file (must be a .yaml file)
+
+2. The system will:
+   - Validate your schema against the schema registry
+   - Check that all required fields are present
+   - Search for the instrument
+   - Return the data matching your schema format
+
+Common Fields You Can Use
+------------------------
+- identifier: The instrument's ISIN or FIGI
+- full_name: The instrument's full name
+- short_name: The instrument's short name
+- classification_type: The CFI code
+- currency: The instrument's currency
+- issuer_lei: The issuer's Legal Entity Identifier
+- trading_venue_id: The trading venue identifier
+
+Additional Fields for Specific Types
+----------------------------------
+Equity-specific fields:
+- market_cap: Market capitalization
+- dividend_yield: Dividend yield percentage
+
+Bond-specific fields:
+- coupon_rate: Annual coupon rate
+- maturity_date: Bond maturity date
+
+Handling Unmapped Fields
+-----------------------
+When you request fields that are not yet mapped to the database:
+
+1. The system will still accept your schema
+2. Unmapped fields will be returned as `null` in the results
+3. You can still use these fields in your schema for future compatibility
+4. The system will log which fields are unmapped for future reference
+
+Example of handling unmapped fields:
+```yaml
+type: equity
+properties:
+  identifier: true
+  full_name: true
+  market_cap: true  # This might be unmapped initially
+  dividend_yield: true  # This might be unmapped initially
+```
+
+The result might look like:
+```json
+{
+  "identifier": "SE0000115446",
+  "full_name": "Telefonaktiebolaget LM Ericsson (publ) B",
+  "market_cap": null,  # Unmapped field returns null
+  "dividend_yield": null  # Unmapped field returns null
+}
+```
+
+Example Schema Files
+-------------------
+You can find example schema files in the `examples/schemas` directory:
+- firds_e_schema.yaml: Example schema for FIRDS E data
+- equity_schema.yaml: Example schema for equity instruments
+- bond_schema.yaml: Example schema for bond instruments
+
+Tips for Creating Your Own Schema
+--------------------------------
+1. Start with the example schema and modify it
+2. Always include the `type` field at the root level
+3. List all fields directly under `properties`
+4. Make sure to use the correct field names
+5. Save your file with a .yaml extension
+
+Troubleshooting
+--------------
+If you get an error:
+1. Check that your schema file is valid YAML
+2. Verify that you've specified a valid schema type
+3. Make sure all required fields are present
+4. Check that your instrument identifier exists in the database
+5. Verify that you've selected the correct identifier type
+
+Need Help?
+----------
+If you need help creating or modifying a schema, contact your system administrator or refer to the example schemas provided. 

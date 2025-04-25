@@ -1,0 +1,35 @@
+Processing file: FULINS_E_20250315_01of02.xml
+Testing for ISIN: SE0000115446
+ISIN: SE0000115446
+RefData_FinInstrmGnlAttrbts: None
+RefData_Issr: 549300HGV012CNC8JD22
+RefData_TradgVnRltdAttrbts: None
+RefData_TechAttrbts: None
+FinInstrmGnlAttrbts_Id: SE0000115446
+FinInstrmGnlAttrbts_FullNm: Volvo, AB ser. B
+FinInstrmGnlAttrbts_ShrtNm: VOLVO/SH B
+FinInstrmGnlAttrbts_ClssfctnTp: ESRUFR
+FinInstrmGnlAttrbts_NtnlCcy: SEK
+FinInstrmGnlAttrbts_CmmdtyDerivInd: false
+FullNm: Volvo, AB ser. B
+ShrtNm: VOLVO/SH B
+ClssfctnTp: ESRUFR
+NtnlCcy: SEK
+CmmdtyDerivInd: false
+Issr: 549300HGV012CNC8JD22
+TradgVnRltdAttrbts_Id: XSTO
+TradgVnRltdAttrbts_IssrReq: true
+TradgVnRltdAttrbts_FrstTradDt: 1998-03-12T07:00:00Z
+IssrReq: true
+FrstTradDt: 1998-03-12T07:00:00Z
+TechAttrbts_RlvntCmptntAuthrty: SE
+TechAttrbts_PblctnPrd: None
+TechAttrbts_RlvntTradgVn: DSTO
+RlvntCmptntAuthrty: SE
+PblctnPrd_FrDt: 2023-11-21
+FrDt: 2023-11-21
+RlvntTradgVn: DSTO
+TradgVnRltdAttrbts_ReqForAdmssnDt: 1998-03-12T00:00:00Z
+ReqForAdmssnDt: 1998-03-12T00:00:00Z
+TradgVnRltdAttrbts_AdmssnApprvlDtByIssr: 2018-05-21T14:16:41Z
+AdmssnApprvlDtByIssr: 2018-05-21T14:16:41Z

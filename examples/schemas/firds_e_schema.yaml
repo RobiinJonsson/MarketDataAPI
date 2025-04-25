@@ -1,0 +1,50 @@
+type: firds_e
+properties:
+  identifier:
+    type: string
+    description: "Instrument identifier (ISIN or FIGI)"
+  full_name:
+    type: string
+    description: "Full name of the instrument"
+  short_name:
+    type: string
+    description: "Short name of the instrument"
+  classification_type:
+    type: string
+    description: "Classification type (CFI code)"
+  currency:
+    type: string
+    description: "National currency"
+  issuer_lei:
+    type: string
+    description: "Issuer's Legal Entity Identifier"
+  issuer_req:
+    type: boolean
+    description: "Issuer requirement flag"
+  trading_venue_id:
+    type: string
+    description: "Trading venue identifier"
+  first_trade_date:
+    type: string
+    format: date-time
+    description: "First trading date"
+  termination_date:
+    type: string
+    format: date-time
+    description: "Termination date"
+  commodity_deriv_ind:
+    type: boolean
+    description: "Commodity derivative indicator"
+  underlying_instrm:
+    type: string
+    description: "Underlying instrument"
+  relevant_authority:
+    type: string
+    description: "Relevant competent authority"
+  relevant_trading_venue:
+    type: string
+    description: "Relevant trading venue"
+  from_date:
+    type: string
+    format: date
+    description: "Publication period from date" 

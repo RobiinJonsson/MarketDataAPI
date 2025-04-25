@@ -1,0 +1,41 @@
+type: equity
+properties:
+  identifier:
+    type: string
+    description: "Instrument identifier (ISIN or FIGI)"
+  full_name:
+    type: string
+    description: "Full name of the instrument"
+  short_name:
+    type: string
+    description: "Short name of the instrument"
+  classification_type:
+    type: string
+    description: "Classification type (CFI code)"
+  currency:
+    type: string
+    description: "National currency"
+  issuer_lei:
+    type: string
+    description: "Legal Entity Identifier of the issuer"
+  trading_venue_id:
+    type: string
+    description: "Trading venue identifier"
+  market_cap:
+    type: number
+    description: "Market capitalization in the instrument's currency"
+  dividend_yield:
+    type: number
+    description: "Dividend yield percentage"
+  sector:
+    type: string
+    description: "Industry sector classification"
+  share_class:
+    type: string
+    description: "Share class type (e.g., Common, Preferred)"
+  voting_rights:
+    type: string
+    description: "Voting rights information"
+  ipo_date:
+    type: date
+    description: "Initial public offering date" 

@@ -1,0 +1,13 @@
+# This is an invalid schema that will trigger multiple validation errors
+# Missing the 'instrument' section at the top level
+properties:
+  type: object
+  fields:
+    # Wrong field name (should be 'identifier')
+    id:
+      type: string
+      description: "Instrument identifier"
+    # Missing required fields: full_name, short_name, classification_type
+    currency:
+      type: string
+      description: "National currency" 
