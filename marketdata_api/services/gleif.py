@@ -78,9 +78,9 @@ def map_lei_record(response: Dict[str, Any]) -> Dict[str, Any]:
         }
     }
 
-result = fetch_lei_info("5493001KJTIIGC8Y1R12")
-if "error" in result:
-    print(result["error"])
-else:
-    mapped_result = map_lei_record(result)
-    print(json.dumps(mapped_result, indent=2))
+# result = fetch_lei_info("5493001KJTIIGC8Y1R12")
+# if "error" in result:
+#     print(result["error"])
+# else:
+#     mapped_result = map_lei_record(result)
+#     print(json.dumps(mapped_result, indent=2))
