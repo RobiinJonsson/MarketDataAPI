@@ -350,7 +350,7 @@ async function fetchAndInsert() {
             toast.className = "toast success show";
             setTimeout(() => toast.className = "toast", 3000);
             
-            // Refresh the table to show the new data
+            // Refresh the view to show the new data
             searchAndDisplay();
         } else {
             const toast = document.getElementById("toast");
