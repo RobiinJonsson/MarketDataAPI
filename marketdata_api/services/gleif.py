@@ -35,22 +35,28 @@ def map_lei_record(response: Dict[str, Any]) -> Dict[str, Any]:
     entity = attributes.get("entity", {})
     registration = attributes.get("registration", {})
 
+    # Safely convert any potential list values to strings
+    def safe_list_to_str(value):
+        if isinstance(value, list):
+            return ", ".join(str(item) for item in value)
+        return value
+
     return {
         "leiRecord": {
             "lei": attributes.get("lei"),
             "legalName": entity.get("legalName", {}).get("name"),
             "legalJurisdiction": entity.get("jurisdiction"),
             "legalFormId": entity.get("legalForm", {}).get("id"),
-            "registeredAs": entity.get("registeredAs"),
-            "category": entity.get("category"),
-            "subCategory": entity.get("subCategory"),
+            "registeredAs": safe_list_to_str(entity.get("registeredAs")),
+            "category": safe_list_to_str(entity.get("category")),
+            "subCategory": safe_list_to_str(entity.get("subCategory")),
             "status": entity.get("status"),
-            "bic": attributes.get("bic"),
-            "mic": attributes.get("mic"),
-            "ocid": attributes.get("ocid"),
-            "qcc": attributes.get("qcc"),
+            "bic": safe_list_to_str(attributes.get("bic")),
+            "mic": safe_list_to_str(attributes.get("mic")),
+            "ocid": safe_list_to_str(attributes.get("ocid")),
+            "qcc": safe_list_to_str(attributes.get("qcc")),
             "conformityFlag": attributes.get("conformityFlag"),
-            "spglobal": ", ".join(attributes.get("spglobal", [])),
+            "spglobal": safe_list_to_str(attributes.get("spglobal")),
             "associatedEntityLei": entity.get("associatedEntity", {}).get("lei"),
             "associatedEntityName": entity.get("associatedEntity", {}).get("name"),
             "successorEntityLei": entity.get("successorEntity", {}).get("lei"),
@@ -78,9 +84,3 @@ def map_lei_record(response: Dict[str, Any]) -> Dict[str, Any]:
         }
     }
 
-result = fetch_lei_info("5493001KJTIIGC8Y1R12")
-if "error" in result:
-    print(result["error"])
-else:
-    mapped_result = map_lei_record(result)
-    print(json.dumps(mapped_result, indent=2))

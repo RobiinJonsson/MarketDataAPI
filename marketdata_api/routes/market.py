@@ -4,11 +4,11 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'
 from flask import Blueprint, jsonify, request, render_template
 from marketdata_api.services.openfigi import search_openfigi, batch_search_openfigi
 from marketdata_api.services.firds import get_firds_file_names
-from marketdata_api.database.db import insert_into_db, map_fields, FIELD_MAPPING, DEBT_FIELD_MAPPING, insert_figi_data, get_figi_data
+from marketdata_api.database.db import insert_into_db, map_fields, FIELD_MAPPING, DEBT_FIELD_MAPPING, insert_figi_data, get_figi_data, insert_lei_data
 from marketdata_api.services.firds import process_all_xml_files_cli, downloads_dir
 from scripts.frontend import search_isin_frontend, list_all_entries_frontend
 from marketdata_api.database.db import get_db_connection
-from marketdata_api.services.gleif import fetch_lei_info
+from marketdata_api.services.gleif import fetch_lei_info, map_lei_record
 
 # Create a Blueprint for the market routes
 market_bp = Blueprint("market", __name__)
@@ -143,6 +143,23 @@ def fetch_and_insert_frontend():
             trading_venue_id = existing_record[1]
             print(f"ISIN {identifier} exists in {instrument_type} table with MIC: {trading_venue_id}")  # Debug
             
+            # Get IssuerLEI for existing record
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            table = "firds_e" if instrument_type == "equity" else "firds_d"
+            cursor.execute(f"SELECT IssuerLEI FROM {table} WHERE ISIN = ?", (identifier,))
+            lei_record = cursor.fetchone()
+            conn.close()
+
+            if lei_record and lei_record[0]:
+                try:
+                    lei_response = fetch_lei_info(lei_record[0])
+                    if 'error' not in lei_response:
+                        lei_data = map_lei_record(lei_response)
+                        insert_lei_data(lei_data)
+                except Exception as lei_error:
+                    print(f"Error processing LEI data: {str(lei_error)}")
+            
             # Check if FIGI data already exists
             existing_figi = get_figi_data(identifier)
             print(f"Existing FIGI data: {existing_figi}")  # Debug
@@ -199,6 +216,17 @@ def fetch_and_insert_frontend():
             mapped_data = map_fields(result, FIELD_MAPPING)
             insert_into_db(mapped_data, "equity")
             
+            # Process LEI data if available
+            if mapped_data.get('IssuerLEI'):
+                try:
+                    lei_response = fetch_lei_info(mapped_data['IssuerLEI'])
+                    if 'error' not in lei_response:
+                        lei_data = map_lei_record(lei_response)
+                        insert_lei_data(lei_data)
+                except Exception as lei_error:
+                    print(f"Error processing LEI data: {str(lei_error)}")
+                    # Continue execution even if LEI processing fails
+            
             # Get TradingVenueID for the newly inserted record
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -240,6 +268,17 @@ def fetch_and_insert_frontend():
         if result:
             mapped_data = map_fields(result, DEBT_FIELD_MAPPING)
             insert_into_db(mapped_data, "debt")
+            
+            # Process LEI data if available
+            if mapped_data.get('IssuerLEI'):
+                try:
+                    lei_response = fetch_lei_info(mapped_data['IssuerLEI'])
+                    if 'error' not in lei_response:
+                        lei_data = map_lei_record(lei_response)
+                        insert_lei_data(lei_data)
+                except Exception as lei_error:
+                    print(f"Error processing LEI data: {str(lei_error)}")
+                    # Continue execution even if LEI processing fails
             
             # Get TradingVenueID for the newly inserted record
             conn = get_db_connection()
