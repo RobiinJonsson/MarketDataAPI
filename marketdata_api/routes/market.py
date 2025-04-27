@@ -24,9 +24,7 @@ def get_market_data(ticker):
     data = search_openfigi(ticker)
     return jsonify(data)
 
-# Route to search for a security using a query
-@market_bp.route("/search", methods=["POST"])
-def search_security():
+
     data = request.json
     query = data.get("query")
 
@@ -86,13 +84,32 @@ def list_db_entries():
 # Route to handle database operations search db entry by ISIN
 @market_bp.route('/api/search/<string:isin>', methods=['GET'])
 def search_db_entry(isin):
-    print(f"Received search request for ISIN: {isin}")  # Debug
-    entry = search_isin_frontend(isin)
-    print(f"Search result: {entry}")  # Debug
-    if entry:
-        return jsonify(entry)
-    else:
-        return jsonify({"message": f"No data found for ISIN: {isin}"}), 200
+    """Handle search requests from the frontend."""
+    try:
+        print(f"Received search request for ISIN: {isin}")
+        
+        # Validate ISIN format
+        if not isin or len(isin) != 12:
+            return jsonify({"message": "Invalid ISIN format"}), 400
+            
+        # Search using the updated frontend function
+        try:
+            entry = search_isin_frontend(isin)
+            print(f"Search result: {entry}")  # Debug log
+            
+            if not entry:
+                return jsonify({"message": f"No data found for ISIN: {isin}"}), 404
+                
+            # Return the complete dataset
+            return jsonify(entry), 200
+            
+        except Exception as e:
+            print(f"Database error: {str(e)}")
+            return jsonify({"error": "Database error occurred"}), 500
+        
+    except Exception as e:
+        print(f"Route error: {str(e)}")
+        return jsonify({"error": "An unexpected error occurred"}), 500
 
 # Route to handle database operations fetch and insert from frontend
 @market_bp.route('/api/fetch', methods=['POST'])
