@@ -188,6 +188,52 @@ def test_debt_instrument(downloads_dir: str, target_isin: str):
     except Exception as e:
         print(f"Error in test: {e}")
 
+def process_all_lei_records():
+    """Process LEI records for all ISINs in FIRDS tables."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        print("[+] Fetching all unique LEIs from FIRDS tables...")
+        
+        # Get unique IssuerLEI values from both tables
+        cursor.execute("""
+            SELECT DISTINCT IssuerLEI FROM (
+                SELECT IssuerLEI FROM firds_e WHERE IssuerLEI IS NOT NULL
+                UNION
+                SELECT IssuerLEI FROM firds_d WHERE IssuerLEI IS NOT NULL
+            )
+        """)
+        
+        lei_codes = [row[0] for row in cursor.fetchall()]
+        total = len(lei_codes)
+        
+        print(f"[+] Found {total} unique LEI codes")
+        
+        for index, lei in enumerate(lei_codes, 1):
+            try:
+                print(f"[{index}/{total}] Processing LEI: {lei}")
+                
+                # Fetch and process LEI data
+                response = fetch_lei_info(lei)
+                if 'error' not in response:
+                    lei_data = map_lei_record(response)
+                    insert_lei_data(lei_data)
+                    print(f"[✓] Successfully processed LEI: {lei}")
+                else:
+                    print(f"[!] Error fetching data for LEI: {lei}")
+                
+            except Exception as e:
+                print(f"[!] Error processing LEI {lei}: {str(e)}")
+                continue
+        
+        print(f"\n[✓] Completed processing {total} LEI records")
+        
+    except Exception as e:
+        print(f"[!] Error: {str(e)}")
+    finally:
+        conn.close()
+
 def print_usage():
     print("""
 Usage:
@@ -208,6 +254,7 @@ Usage:
     python scripts/cli.py test_debt <ISIN>                     or: python scripts/cli.py td <ISIN>
     python scripts/cli.py gleif <LEI>        - Import LEI record from GLEIF API
     python scripts/cli.py gleif-print <LEI> - Print LEI record from GLEIF API
+    python scripts/cli.py process-lei                         - Process LEI records for all ISINs in database
           
 Commands:
     fetch     Fetch data for the given ISIN from XML and insert into the database
@@ -229,6 +276,7 @@ Commands:
     test_debt Test processing of debt instruments with a specific ISIN
     gleif     Import LEI record from GLEIF API
     gleif-print Print LEI record from GLEIF API
+    process-lei Process LEI records for all ISINs in database
 
 Examples:
     python scripts/cli.py fetch SE0000242455
@@ -240,6 +288,7 @@ Examples:
     python scripts/cli.py d NL00150001S5 isin_figi_map
     python scripts/cli.py gleif 5493001KJTIIGC8Y1R12 - Import LEI record from GLEIF API
     python scripts/cli.py gleif-print 5493001KJTIIGC8Y1R12 - Print LEI record from GLEIF API
+    python scripts/cli.py process-lei      - Process all LEI records
 """)
 
 def print_headers(columns):
@@ -929,6 +978,9 @@ def main():
             return
         lei = sys.argv[2]
         print_gleif_record(lei)
+    
+    elif command == 'process-lei':
+        process_all_lei_records()
         
     else:
         print("Invalid command or wrong number of arguments.")

@@ -231,13 +231,18 @@ async function searchAndDisplay() {
                 "First Trade Date": formatDate(data.equity?.FirstTradeDate || data.debt?.FirstTradeDate) || 'N/A',
                 "FIGI": data.figi?.FIGI || 'N/A',
                 "Security Type": data.figi?.SecurityType || 'N/A',
-                "Market Sector": data.figi?.MarketSector || 'N/A'
-            },
-            issuerData: {
-                "Issuer LEI": data.equity?.IssuerLEI || data.debt?.IssuerLEI || 'N/A',
-                "Issuer Required": String(data.equity?.IssuerReq || data.debt?.IssuerReq) === 'true' ? 'Yes' : 'No',
                 "Market Sector": data.figi?.MarketSector || 'N/A',
                 "Security Description": data.figi?.SecurityDescription || 'N/A'
+            },
+            issuerData: {
+                "LEI": data.lei?.lei || 'N/A',
+                "Legal Name": data.lei?.legalName || 'N/A',
+                "Legal Jurisdiction": data.lei?.legalJurisdiction || 'N/A',
+                "Registered As": data.lei?.registeredAs || 'N/A',
+                "Category": data.lei?.category || 'N/A',
+                "Subcategory": data.lei?.subCategory || 'N/A',
+                "Conformity Flag": data.lei?.conformityFlag || 'N/A',
+                "Creation Date": formatDate(data.lei?.creationDate) || 'N/A'
             },
             tradingVenue: {
                 "Trading Venue": data.equity?.TradingVenueId || data.debt?.TradingVenueId || 'N/A',
