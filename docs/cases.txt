@@ -50,12 +50,13 @@ Technical Considerations:
 - Support versioning for schema changes
 - Consider security aspects (authentication, rate limiting)
 - Add documentation for mapping configuration
-- ORM
+- Use SQLAlchemy as ORM with Flask
+- Implement repository pattern for data access
 
 Next Steps:
 1. Implement ORM Layer
-   - Set up TypeORM configuration
-   - Create entity classes
+   - Set up SQLAlchemy configuration
+   - Create database models
    - Implement repositories
    - Update services to use ORM
 2. Define schema mapping configuration format

@@ -2,6 +2,8 @@ import sqlite3
 import os
 import sys
 from typing import Dict, Any
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, declarative_base
 
 # Dynamically add the project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))) #during development
@@ -11,6 +13,18 @@ file_path = "C:\\Users\\robin\\Projects\\MarketDataAPI\\downloads"
 
 # Ensure the database is always created inside `marketdata_api/database/`
 DB_PATH = os.path.join(os.path.dirname(__file__), "marketdata.db")
+
+# Add SQLAlchemy setup
+engine = create_engine(f'sqlite:///{DB_PATH}')
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 # field mapping for the database
 # This mapping is used to rename the fields in the XML files to more user-friendly names
@@ -168,6 +182,7 @@ def create_db(db_name):
         raise
     finally:
         conn.close()
+        Base.metadata.create_all(bind=engine)
 
 def create_db_table(db_name):
     """
