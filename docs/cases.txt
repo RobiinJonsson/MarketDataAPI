@@ -53,13 +53,15 @@ Technical Considerations:
 - ORM
 
 Next Steps:
-1. Define schema mapping configuration format
-2. Design API endpoints
-3. Create proof of concept for mapping engine
-4. Implement core functionality
-5. Add testing and validation
-6. Document configuration process
-7. Redesign backend with ORM
+1. Implement ORM Layer
+   - Set up TypeORM configuration
+   - Create entity classes
+   - Implement repositories
+   - Update services to use ORM
+2. Define schema mapping configuration format
+3. Design API endpoints
+4. Create proof of concept for mapping engine
+5. Implement core functionality
+6. Add testing and validation
+7. Document configuration process
 8. Add authentication handling in API
-9. Prevent SQL injections
-10.
