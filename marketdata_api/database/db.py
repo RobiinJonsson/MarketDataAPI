@@ -282,22 +282,6 @@ def check_table_columns(db_name):
 
     conn.close()
     
-# Create the database and table
-#create_db(DB_PATH)
-
-# Extract column names and process XML files
-#result = process_all_xml_files(file_path, target_isin="NL00150001S5")
-
-# Map the fields using FIELD_MAPPING
-#mapped_data = [map_fields(item, FIELD_MAPPING) for item in result]
-
-# Insert data into the database
-#insert_mapped_data_to_db(DB_PATH, "firds_e", mapped_data)
-
-#insert_into_db(DB_PATH, "firds_e", data_dict=result)  # Assuming result is a list of dictionaries
-# Fetch and print all data from the database
-#fetch_all_data(DB_PATH)
-
 def insert_figi_data(figi_data):
     """
     Insert or update FIGI data for an ISIN.
