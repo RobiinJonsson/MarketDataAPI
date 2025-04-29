@@ -2,11 +2,11 @@ Case 1: Instrument Data Retrieval with Schema Mapping
 
 Requirements:
 1. User input:
-   - Instrument identifier (e.g., ticker symbol, ISIN, etc.)
-   - Instrument schema (from front-end trading application)
-   - Schema contains instrument attributes as described by front-end application 
+   - Instrument identifier (e.g., ticker symbol, ISIN, etc.) <- Done
+   - Instrument schema (from front-end trading application) <- Done
+   - Schema contains instrument attributes as described by front-end application <- Done
 2. Output:
-   - Corresponding instrument data in the requested schema format
+   - Corresponding instrument data in the requested schema format <- Currently outputs database format
 
 Components:
 1. Input Handler
@@ -31,6 +31,7 @@ Components:
    - Support different output formats (JSON, XML, etc.)
    - Include metadata and error information
 
+
 Implementation Approach:
 1. Create a configuration system for schema mappings
 2. Implement a flexible mapping engine
@@ -49,6 +50,7 @@ Technical Considerations:
 - Support versioning for schema changes
 - Consider security aspects (authentication, rate limiting)
 - Add documentation for mapping configuration
+- ORM
 
 Next Steps:
 1. Define schema mapping configuration format
@@ -56,4 +58,8 @@ Next Steps:
 3. Create proof of concept for mapping engine
 4. Implement core functionality
 5. Add testing and validation
-6. Document configuration process 
+6. Document configuration process
+7. Redesign backend with ORM
+8. Add authentication handling in API
+9. Prevent SQL injections
+10.
