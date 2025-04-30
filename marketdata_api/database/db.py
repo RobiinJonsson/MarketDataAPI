@@ -2,22 +2,23 @@ import sqlite3
 import os
 import sys
 from typing import Dict, Any
-from .base import Base, engine, DB_PATH
+from .base import Base, engine, DB_PATH, init_db
 from ..models.instrument import Instrument, Equity, Debt
 from .model_mapper import map_to_model
-from contextlib import contextmanager
+from .session import get_session
 from datetime import datetime
+from ..services.instrument_service import InstrumentService
+from model_mapper import MODEL_FIELD_MAPPING
 
 # Dynamically add the project root to sys.path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))) #during development
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-#db_path = "C:\\Users\\robin\\Projects\\MarketDataAPI\\marketdata_api\\database\\marketdata.db"
 file_path = "C:\\Users\\robin\\Projects\\MarketDataAPI\\downloads"
 
 # Ensure the database is always created inside `marketdata_api/database/`
 
 def create_db():
-    Base.metadata.create_all(bind=engine)
+    init_db()
 
 # Add table mapping to indicate where each field should be stored
 TABLE_MAPPING = {
