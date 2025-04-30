@@ -1,6 +1,7 @@
 from flask import Flask
 from marketdata_api.config import FLASK_ENV
-from marketdata_api.database.db import create_db, DB_PATH
+from marketdata_api.database.db import create_db
+from marketdata_api.database.session import DB_PATH
 
 def create_app():
     app = Flask(__name__,

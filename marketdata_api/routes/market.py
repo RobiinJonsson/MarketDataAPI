@@ -9,6 +9,8 @@ from marketdata_api.services.firds import process_all_xml_files_cli, downloads_d
 from scripts.frontend import search_isin_frontend, list_all_entries_frontend
 from marketdata_api.database.db import get_db_connection
 from marketdata_api.services.gleif import fetch_lei_info, map_lei_record
+from ..services.instrument_service import InstrumentService
+from ..models.instrument import Instrument, Equity, Debt
 
 # Create a Blueprint for the market routes
 market_bp = Blueprint("market", __name__)
@@ -114,212 +116,24 @@ def search_db_entry(isin):
 # Route to handle database operations fetch and insert from frontend
 @market_bp.route('/api/fetch', methods=['POST'])
 def fetch_and_insert_frontend():
-    """Fetch data from FI and insert into database."""
+    """Fetch and insert data using SQLAlchemy models"""
     try:
         data = request.get_json()
         identifier = data.get('identifier')
-        identifier_type = data.get('identifier_type')
+        instrument_type = data.get('instrument_type', 'equity')
         
-        print(f"Received fetch request for identifier: {identifier}, type: {identifier_type}")  # Debug
+        if not identifier:
+            return jsonify({'error': 'Missing identifier'}), 400
+
+        service = InstrumentService()
+        instrument = service.create_instrument(data, instrument_type)
         
-        if not identifier or not identifier_type:
-            return jsonify({'error': 'Missing identifier or identifier_type'}), 400
-
-        # First check if the ISIN exists in either table
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Check in both tables and get TradingVenueID
-        cursor.execute("""
-            SELECT 'equity' as type, TradingVenueID FROM firds_e WHERE ISIN = ? 
-            UNION 
-            SELECT 'debt' as type, TradingVenueID FROM firds_d WHERE ISIN = ?
-        """, (identifier, identifier))
-        existing_record = cursor.fetchone()
-        conn.close()
-
-        if existing_record:
-            instrument_type = existing_record[0]
-            trading_venue_id = existing_record[1]
-            print(f"ISIN {identifier} exists in {instrument_type} table with MIC: {trading_venue_id}")  # Debug
-            
-            # Get IssuerLEI for existing record
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            table = "firds_e" if instrument_type == "equity" else "firds_d"
-            cursor.execute(f"SELECT IssuerLEI FROM {table} WHERE ISIN = ?", (identifier,))
-            lei_record = cursor.fetchone()
-            conn.close()
-
-            if lei_record and lei_record[0]:
-                try:
-                    lei_response = fetch_lei_info(lei_record[0])
-                    if 'error' not in lei_response:
-                        lei_data = map_lei_record(lei_response)
-                        insert_lei_data(lei_data)
-                except Exception as lei_error:
-                    print(f"Error processing LEI data: {str(lei_error)}")
-            
-            # Check if FIGI data already exists
-            existing_figi = get_figi_data(identifier)
-            print(f"Existing FIGI data: {existing_figi}")  # Debug
-            
-            if not existing_figi:
-                print(f"No FIGI data found for ISIN {identifier}, fetching from OpenFIGI...")  # Debug
-                # Fetch FIGI data from OpenFIGI using TradingVenueID
-                # If TradingVenueID is None, we can still search by ISIN only
-                if instrument_type == "equity":
-                    figi_data = search_openfigi(identifier, trading_venue_id)
-                    print(f"OpenFIGI response: {figi_data}")  # Debug
-                else:
-                    figi_data = search_openfigi(identifier)
-                    print(f"OpenFIGI response: {figi_data}")
-
-                if figi_data and len(figi_data) > 0:
-                    figi_result = figi_data[0]
-                    # Prepare FIGI data for database
-                    figi_db_data = {
-                        'ISIN': identifier,
-                        'FIGI': figi_result.get('figi'),
-                        'CompositeFIGI': figi_result.get('compositeFIGI'),
-                        'ShareClassFIGI': figi_result.get('shareClassFIGI'),
-                        'Ticker': figi_result.get('ticker'),
-                        'SecurityType': figi_result.get('securityType'),
-                        'MarketSector': figi_result.get('marketSector'),
-                        'SecurityDescription': figi_result.get('securityDescription')
-                    }
-                    print(f"Prepared FIGI data for DB: {figi_db_data}")  # Debug
-                    # Insert FIGI data
-                    insert_figi_data(figi_db_data)
-                    return jsonify({
-                        'message': f'Added FIGI data for existing ISIN {identifier}',
-                        'figi_data': figi_data[0],
-                        'instrument_type': instrument_type
-                    })
-                else:
-                    return jsonify({
-                        'message': f'ISIN {identifier} exists but no FIGI data found',
-                        'status': 'exists_no_figi',
-                        'instrument_type': instrument_type
-                    })
-            else:
-                return jsonify({
-                    'message': f'ISIN {identifier} exists with FIGI data',
-                    'status': 'exists_with_figi',
-                    'figi_data': existing_figi,
-                    'instrument_type': instrument_type
-                })
-            
-        # Try to find the ISIN in equity files first
-        result = process_all_xml_files_cli(downloads_dir, identifier, instrument_type="equity")
-        if result:
-            mapped_data = map_fields(result, FIELD_MAPPING)
-            insert_into_db(mapped_data, "equity")
-            
-            # Process LEI data if available
-            if mapped_data.get('IssuerLEI'):
-                try:
-                    lei_response = fetch_lei_info(mapped_data['IssuerLEI'])
-                    if 'error' not in lei_response:
-                        lei_data = map_lei_record(lei_response)
-                        insert_lei_data(lei_data)
-                except Exception as lei_error:
-                    print(f"Error processing LEI data: {str(lei_error)}")
-                    # Continue execution even if LEI processing fails
-            
-            # Get TradingVenueID for the newly inserted record
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT TradingVenueID FROM firds_e WHERE ISIN = ?", (identifier,))
-            venue_record = cursor.fetchone()
-            conn.close()
-            
-            trading_venue_id = venue_record[0] if venue_record else None
-            
-            # Fetch FIGI data using both ISIN and TradingVenueID (MIC)
-            figi_data = search_openfigi(identifier, trading_venue_id)
-            if figi_data and len(figi_data) > 0:
-                figi_result = figi_data[0]
-                figi_db_data = {
-                    'ISIN': identifier,
-                    'FIGI': figi_result.get('figi'),
-                    'CompositeFIGI': figi_result.get('compositeFIGI'),
-                    'ShareClassFIGI': figi_result.get('shareClassFIGI'),
-                    'Ticker': figi_result.get('ticker'),
-                    'SecurityType': figi_result.get('securityType'),
-                    'MarketSector': figi_result.get('marketSector'),
-                    'SecurityDescription': figi_result.get('securityDescription')
-                }
-                insert_figi_data(figi_db_data)
-                return jsonify({
-                    'message': 'Data successfully fetched and stored as equity with FIGI data',
-                    'fi_data': mapped_data,
-                    'figi_data': figi_data[0],
-                    'instrument_type': 'equity'
-                })
-            return jsonify({
-                'message': 'Data successfully fetched and stored as equity (no FIGI data found)',
-                'fi_data': mapped_data,
-                'instrument_type': 'equity'
-            })
-            
-        # If not found in equity files, try debt files
-        result = process_all_xml_files_cli(downloads_dir, identifier, instrument_type="debt")
-        if result:
-            mapped_data = map_fields(result, DEBT_FIELD_MAPPING)
-            insert_into_db(mapped_data, "debt")
-            
-            # Process LEI data if available
-            if mapped_data.get('IssuerLEI'):
-                try:
-                    lei_response = fetch_lei_info(mapped_data['IssuerLEI'])
-                    if 'error' not in lei_response:
-                        lei_data = map_lei_record(lei_response)
-                        insert_lei_data(lei_data)
-                except Exception as lei_error:
-                    print(f"Error processing LEI data: {str(lei_error)}")
-                    # Continue execution even if LEI processing fails
-            
-            # Get TradingVenueID for the newly inserted record
-            conn = get_db_connection()
-            cursor = conn.cursor()
-            cursor.execute("SELECT TradingVenueID FROM firds_d WHERE ISIN = ?", (identifier,))
-            venue_record = cursor.fetchone()
-            conn.close()
-            
-            trading_venue_id = venue_record[0] if venue_record else None
-            
-            # Fetch FIGI data using only ISIN
-            figi_data = search_openfigi(identifier)
-            if figi_data and len(figi_data) > 0:
-                figi_result = figi_data[0]
-                figi_db_data = {
-                    'ISIN': identifier,
-                    'FIGI': figi_result.get('figi'),
-                    'CompositeFIGI': figi_result.get('compositeFIGI'),
-                    'ShareClassFIGI': figi_result.get('shareClassFIGI'),
-                    'Ticker': figi_result.get('ticker'),
-                    'SecurityType': figi_result.get('securityType'),
-                    'MarketSector': figi_result.get('marketSector'),
-                    'SecurityDescription': figi_result.get('securityDescription')
-                }
-                insert_figi_data(figi_db_data)
-                return jsonify({
-                    'message': 'Data successfully fetched and stored as debt with FIGI data',
-                    'fi_data': mapped_data,
-                    'figi_data': figi_data[0],
-                    'instrument_type': 'debt'
-                })
-            return jsonify({
-                'message': 'Data successfully fetched and stored as debt (no FIGI data found)',
-                'fi_data': mapped_data,
-                'instrument_type': 'debt'
-            })
-            
-        return jsonify({'error': 'No data found for the given identifier'}), 404
-        
+        return jsonify({
+            'message': f'Data successfully stored as {instrument_type}',
+            'instrument_id': instrument.id,
+            'instrument_type': instrument_type
+        })
     except Exception as e:
-        print(f"Error in fetch_and_insert_frontend: {str(e)}")  # Debug
         return jsonify({'error': str(e)}), 500
 
 @market_bp.route('/api/figi/<string:figi>', methods=['GET'])
@@ -359,3 +173,60 @@ def get_lei_info():
     
     result = fetch_lei_info(lei_code)
     return jsonify(result)
+
+@market_bp.route('/api/instruments', methods=['GET'])
+def list_instruments():
+    """List all instruments using SQLAlchemy"""
+    try:
+        service = InstrumentService()
+        with get_session() as session:
+            instruments = session.query(Instrument).all()
+            return jsonify([{
+                'id': i.id,
+                'type': i.type,
+                'isin': i.isin,
+                'name': i.full_name,
+                'symbol': i.symbol,
+                'last_updated': i.last_updated.isoformat() if i.last_updated else None
+            } for i in instruments])
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@market_bp.route('/api/instruments/<identifier>', methods=['GET'])
+def get_instrument(identifier):
+    """Get instrument by ID, ISIN, or symbol using SQLAlchemy"""
+    try:
+        service = InstrumentService()
+        instrument = service.get_instrument(identifier)
+        if not instrument:
+            return jsonify({'error': 'Instrument not found'}), 404
+            
+        return jsonify({
+            'id': instrument.id,
+            'type': instrument.type,
+            'isin': instrument.isin,
+            'name': instrument.full_name,
+            'symbol': instrument.symbol,
+            'figi': instrument.figi,
+            'additional_data': instrument.additional_data,
+            'last_updated': instrument.last_updated.isoformat() if instrument.last_updated else None
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@market_bp.route('/api/test/instrument', methods=['POST'])
+def test_instrument_creation():
+    """Test route for instrument creation"""
+    try:
+        data = request.get_json()
+        service = InstrumentService()
+        instrument = service.create_instrument(data, data.get('type', 'equity'))
+        
+        return jsonify({
+            'message': 'Test successful',
+            'instrument_id': instrument.id,
+            'type': instrument.type,
+            'isin': instrument.isin
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

@@ -1,11 +1,16 @@
 from sqlalchemy import Column, String, JSON, DateTime, Float, Date, Enum, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
-from ..database.db import Base
+from ..database.base import Base
 import enum
 
 class InstrumentType(enum.Enum):
     EQUITY = "equity"
     DEBT = "debt"
+    DERIVATIVE = "derivative"
+    COMMODITY = "commodity"
+    CURRENCY = "currency"
+    # Add more types as needed
+
 
 class Instrument(Base):
     __tablename__ = "instruments"
@@ -21,6 +26,7 @@ class Instrument(Base):
     full_name = Column(String)         # FinInstrmGnlAttrbts_FullNm
     short_name = Column(String)        # FinInstrmGnlAttrbts_ShrtNm
     symbol = Column(String, index=True)
+    figi = Column(String, index=True)  # Figi code
     
     # Common FIRDS fields
     cfi_code = Column(String)          # FinInstrmGnlAttrbts_ClssfctnTp
@@ -39,6 +45,9 @@ class Instrument(Base):
     # Relationships
     lei_id = Column(String, ForeignKey('legal_entities.lei'))  # Issr
     legal_entity = relationship("LegalEntity", back_populates="instruments")
+    
+    # Add FIGI relationship
+    figi_data = relationship("FigiMapping", back_populates="instrument", uselist=False)
     
     # Additional data for flexibility
     additional_data = Column(JSON)

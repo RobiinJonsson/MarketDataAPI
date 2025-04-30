@@ -2,8 +2,11 @@ import sqlite3
 import os
 import sys
 from typing import Dict, Any
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
+from .base import Base, engine, DB_PATH
+from ..models.instrument import Instrument, Equity, Debt
+from .model_mapper import map_to_model
+from contextlib import contextmanager
+from datetime import datetime
 
 # Dynamically add the project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))) #during development
@@ -12,19 +15,9 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.
 file_path = "C:\\Users\\robin\\Projects\\MarketDataAPI\\downloads"
 
 # Ensure the database is always created inside `marketdata_api/database/`
-DB_PATH = os.path.join(os.path.dirname(__file__), "marketdata.db")
 
-# Add SQLAlchemy setup
-engine = create_engine(f'sqlite:///{DB_PATH}')
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+def create_db():
+    Base.metadata.create_all(bind=engine)
 
 # Add table mapping to indicate where each field should be stored
 TABLE_MAPPING = {
@@ -51,53 +44,6 @@ TABLE_MAPPING = {
         'DebtInstrmAttrbts_IntrstRate_Fxd',
         'DebtInstrmAttrbts_DebtSnrty'
     ]
-}
-
-# field mapping for the database
-# This mapping is used to rename the fields in the XML files to more user-friendly names
-FIELD_MAPPING = {
-    "FinInstrmGnlAttrbts_Id": "ISIN",
-    "FinInstrmGnlAttrbts_FullNm": "FullName",
-    "FinInstrmGnlAttrbts_ShrtNm": "ShortName",
-    "FinInstrmGnlAttrbts_ClssfctnTp": "CFICode",
-    "FinInstrmGnlAttrbts_NtnlCcy": "Currency",
-    "FinInstrmGnlAttrbts_CmmdtyDerivInd": "ComdtyDerInd",
-    "Issr": "IssuerLEI",
-    "TradgVnRltdAttrbts_Id": "TradingVenueId",
-    "TradgVnRltdAttrbts_IssrReq": "IssuerReq",
-    "TradgVnRltdAttrbts_FrstTradDt": "FirstTradeDate",
-    "DerivInstrmAttrbts_UndrlygInstrm": "UnderlyingInstrm",
-    "TechAttrbts_RlvntCmptntAuthrty": "RlvntCmptntAuthrty",
-    "TechAttrbts_RlvntTradgVn": "RelevantTradingVenue",
-    "PblctnPrd_FrDt": "FromDate",
-    "TradgVnRltdAttrbts_TermntnDt": "TerminationDate"
-}
-
-# Field mapping specifically for debt instruments
-# Combines reusable fields from FIELD_MAPPING with debt-specific fields
-DEBT_FIELD_MAPPING = {
-    # Reused fields from FIELD_MAPPING
-    "FinInstrmGnlAttrbts_Id": "ISIN",
-    "FinInstrmGnlAttrbts_FullNm": "FullName",
-    "FinInstrmGnlAttrbts_ShrtNm": "ShortName",
-    "FinInstrmGnlAttrbts_ClssfctnTp": "CFICode",
-    "FinInstrmGnlAttrbts_NtnlCcy": "Currency",
-    "FinInstrmGnlAttrbts_CmmdtyDerivInd": "ComdtyDerInd",
-    "Issr": "IssuerLEI",
-    "TradgVnRltdAttrbts_Id": "TradingVenueId",
-    "TradgVnRltdAttrbts_IssrReq": "IssuerReq",
-    "TradgVnRltdAttrbts_FrstTradDt": "FirstTradeDate",
-    "TechAttrbts_RlvntCmptntAuthrty": "RlvntCmptntAuthrty",
-    "TechAttrbts_RlvntTradgVn": "RelevantTradingVenue",
-    "PblctnPrd_FrDt": "FromDate",
-    "TradgVnRltdAttrbts_TermntnDt": "TerminationDate",
-    
-    # New debt-specific fields
-    "DebtInstrmAttrbts_TtlIssdNmnlAmt": "TotalIssuedNominalAmount",
-    "DebtInstrmAttrbts_MtrtyDt": "MaturityDate",
-    "DebtInstrmAttrbts_NmnlValPerUnit": "NominalValuePerUnit",
-    "DebtInstrmAttrbts_IntrstRate_Fxd": "FixedInterestRate",
-    "DebtInstrmAttrbts_DebtSnrty": "DebtSeniority"
 }
 
 def create_tables(cursor):
@@ -207,48 +153,42 @@ def create_db_table(db_name):
     finally:
         conn.close()
 
+def insert_instrument_data(data: Dict[str, Any], instrument_type: str = "equity"):
+    """Insert data using SQLAlchemy models"""
+    with get_session() as session:
+        # Map the input data to model fields
+        model_data = map_to_model(data, instrument_type)
+        
+        # Create the appropriate instrument type
+        if instrument_type == "equity":
+            instrument = Equity(**model_data)
+        elif instrument_type == "debt":
+            instrument = Debt(**model_data)
+        else:
+            instrument = Instrument(**model_data)
+        
+        # Add creation timestamp
+        instrument.last_updated = datetime.utcnow()
+        
+        # Store unmapped data in additional_data
+        unmapped_fields = {k: v for k, v in data.items() 
+                         if k not in MODEL_FIELD_MAPPING['instruments']}
+        if unmapped_fields:
+            instrument.additional_data = unmapped_fields
+        
+        session.add(instrument)
+        return instrument
+
+# Update existing insert_into_db to use new method
 def insert_into_db(mapped_data, instrument_type="equity"):
-    """
-    Insert data into the appropriate FIRDS table based on instrument type.
-    
-    Args:
-        mapped_data (dict): Dictionary containing the mapped data to insert
-        instrument_type (str): Type of instrument ('equity' or 'debt')
-    """
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    # Determine which table to use
-    table_name = "firds_e" if instrument_type == "equity" else "firds_d"
-    
-    # Get the appropriate field mapping
-    field_mapping = FIELD_MAPPING if instrument_type == "equity" else DEBT_FIELD_MAPPING
-    
-    # Create the insert query based on the field mapping
-    columns = list(field_mapping.values())
-    placeholders = ','.join(['?' for _ in columns])
-    insert_query = f"""INSERT INTO {table_name} (
-        {', '.join(columns)}
-    ) VALUES ({placeholders})"""
-
-    # Extract values from the mapped_data dictionary in the correct order
-    values = []
-    for column in columns:
-        value = mapped_data.get(column)
-        # Convert boolean strings to actual booleans
-        if column in ['ComdtyDerInd', 'IssuerReq']:
-            value = value.lower() == 'true' if value else False
-        values.append(value)
-    
+    """Legacy function updated to use InstrumentService"""
     try:
-        cursor.execute(insert_query, tuple(values))
-        conn.commit()
-        print(f"Successfully inserted data into {table_name}")
-    except sqlite3.Error as e:
-        print(f"Error inserting data into {table_name}: {e}")
+        service = InstrumentService()
+        instrument = service.create_instrument(mapped_data, instrument_type)
+        print(f"Successfully inserted {instrument_type} data with ID: {instrument.id}")
+    except Exception as e:
+        print(f"Error inserting data: {str(e)}")
         raise
-    finally:
-        conn.close()
 
 def fetch_all_data(db_name):
     # Connect to the SQLite database
@@ -311,6 +251,19 @@ def insert_figi_data(figi_data):
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='isin_figi_map'")
         if not cursor.fetchone():
             print("Creating isin_figi_map table...")
+            CREATE_OPENFIGI_TABLE = """
+            CREATE TABLE IF NOT EXISTS isin_figi_map (
+                ISIN TEXT PRIMARY KEY,
+                FIGI TEXT,
+                CompositeFIGI TEXT,
+                ShareClassFIGI TEXT,
+                Ticker TEXT,
+                SecurityType TEXT,
+                MarketSector TEXT,
+                SecurityDescription TEXT,
+                LastUpdated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
             cursor.execute(CREATE_OPENFIGI_TABLE)
             conn.commit()
 
@@ -453,56 +406,62 @@ def create_gleif_tables():
     """)
 
     conn.commit()
-# Function to insert LEI data into the database from GLEIF
+
 def insert_lei_data(data: Dict[str, Any]):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # Insert into gleif_lei_records
-    cursor.execute("""
-        INSERT OR REPLACE INTO gleif_lei_records (
-            lei, legalName, legalJurisdiction, legalFormId, registeredAs,
-            category, subCategory, status, bic, mic, ocid, qcc, conformityFlag,
-            spglobal, associatedEntityLei, associatedEntityName,
-            successorEntityLei, successorEntityName, creationDate
-        ) VALUES (
-            :lei, :legalName, :legalJurisdiction, :legalFormId, :registeredAs,
-            :category, :subCategory, :status, :bic, :mic, :ocid, :qcc, :conformityFlag,
-            :spglobal, :associatedEntityLei, :associatedEntityName,
-            :successorEntityLei, :successorEntityName, :creationDate
-        )
-    """, data["leiRecord"])
-
-    # Insert addresses
-    for address in data["addresses"]:
+    try:
+        # Insert into gleif_lei_records
         cursor.execute("""
-            INSERT INTO gleif_addresses (
-                lei, type, language, addressLines, city, region, country, postalCode
+            INSERT OR REPLACE INTO gleif_lei_records (
+                lei, legalName, legalJurisdiction, legalFormId, registeredAs,
+                category, subCategory, status, bic, mic, ocid, qcc, conformityFlag,
+                spglobal, associatedEntityLei, associatedEntityName,
+                successorEntityLei, successorEntityName, creationDate
             ) VALUES (
-                :lei, :type, :language, :addressLines, :city, :region, :country, :postalCode
+                :lei, :legalName, :legalJurisdiction, :legalFormId, :registeredAs,
+                :category, :subCategory, :status, :bic, :mic, :ocid, :qcc, :conformityFlag,
+                :spglobal, :associatedEntityLei, :associatedEntityName,
+                :successorEntityLei, :successorEntityName, :creationDate
             )
-        """, address)
+        """, data["leiRecord"])
 
-    # Insert registration
-    cursor.execute("""
-        INSERT OR REPLACE INTO gleif_registration (
-            lei, initialRegistrationDate, lastUpdateDate, status,
-            nextRenewalDate, managingLou, corroborationLevel,
-            validatedAt, validatedAs
-        ) VALUES (
-            :lei, :initialRegistrationDate, :lastUpdateDate, :status,
-            :nextRenewalDate, :managingLou, :corroborationLevel,
-            :validatedAt, :validatedAs
-        )
-    """, data["registration"])
+        # Insert addresses
+        for address in data["addresses"]:
+            cursor.execute("""
+                INSERT INTO gleif_addresses (
+                    lei, type, language, addressLines, city, region, country, postalCode
+                ) VALUES (
+                    :lei, :type, :language, :addressLines, :city, :region, :country, :postalCode
+                )
+            """, address)
 
-    # Insert meta info
-    cursor.execute("""
-        INSERT OR REPLACE INTO gleif_meta_info (
-            lei, publishDate
-        ) VALUES (
-            :lei, :publishDate
-        )
-    """, data["metaInfo"])
+        # Insert registration
+        cursor.execute("""
+            INSERT OR REPLACE INTO gleif_registration (
+                lei, initialRegistrationDate, lastUpdateDate, status,
+                nextRenewalDate, managingLou, corroborationLevel,
+                validatedAt, validatedAs
+            ) VALUES (
+                :lei, :initialRegistrationDate, :lastUpdateDate, :status,
+                :nextRenewalDate, :managingLou, :corroborationLevel,
+                :validatedAt, :validatedAs
+            )
+        """, data["registration"])
 
-    conn.commit()
+        # Insert meta info
+        cursor.execute("""
+            INSERT OR REPLACE INTO gleif_meta_info (
+                lei, publishDate
+            ) VALUES (
+                :lei, :publishDate
+            )
+        """, data["metaInfo"])
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()
