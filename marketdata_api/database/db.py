@@ -26,6 +26,33 @@ def get_db():
     finally:
         db.close()
 
+# Add table mapping to indicate where each field should be stored
+TABLE_MAPPING = {
+    'instruments': [
+        'FinInstrmGnlAttrbts_Id',
+        'FinInstrmGnlAttrbts_FullNm',
+        'FinInstrmGnlAttrbts_ShrtNm',
+        'FinInstrmGnlAttrbts_ClssfctnTp',
+        'FinInstrmGnlAttrbts_NtnlCcy',
+        'FinInstrmGnlAttrbts_CmmdtyDerivInd',
+        'Issr',
+        'TradgVnRltdAttrbts_Id',
+        'TradgVnRltdAttrbts_IssrReq',
+        'TradgVnRltdAttrbts_FrstTradDt',
+        'TechAttrbts_RlvntCmptntAuthrty',
+        'TechAttrbts_RlvntTradgVn',
+        'PblctnPrd_FrDt',
+        'TradgVnRltdAttrbts_TermntnDt'
+    ],
+    'debts': [
+        'DebtInstrmAttrbts_TtlIssdNmnlAmt',
+        'DebtInstrmAttrbts_MtrtyDt',
+        'DebtInstrmAttrbts_NmnlValPerUnit',
+        'DebtInstrmAttrbts_IntrstRate_Fxd',
+        'DebtInstrmAttrbts_DebtSnrty'
+    ]
+}
+
 # field mapping for the database
 # This mapping is used to rename the fields in the XML files to more user-friendly names
 FIELD_MAPPING = {
@@ -73,62 +100,79 @@ DEBT_FIELD_MAPPING = {
     "DebtInstrmAttrbts_DebtSnrty": "DebtSeniority"
 }
 
-CREATE_TABLE = """CREATE TABLE IF NOT EXISTS firds_e (
-    ISIN TEXT,
-    FullName TEXT,
-    ShortName TEXT,
-    CFICode TEXT,
-    Currency TEXT,
-    ComdtyDerInd BOOLEAN,
-    IssuerLEI TEXT,
-    TradingVenueId TEXT,
-    IssuerReq BOOLEAN,
-    FirstTradeDate DATETIME,
-    UnderlyingInstrm TEXT,
-    RlvntCmptntAuthrty TEXT,
-    RelevantTradingVenue TEXT,
-    FromDate DATE,
-    TerminationDate DATETIME
-);"""
+def create_tables(cursor):
+    # Base instrument reference data table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS instruments (
+            id TEXT PRIMARY KEY,
+            type TEXT NOT NULL,
+            symbol TEXT,
+            isin TEXT,
+            name TEXT,
+            lei_id TEXT,
+            additional_data JSON,
+            last_updated TIMESTAMP,
+            FOREIGN KEY (lei_id) REFERENCES legal_entities(lei),
+            UNIQUE (isin),
+            UNIQUE (symbol)
+        )
+    ''')
+    
+    # Legal entities table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS legal_entities (
+            lei TEXT PRIMARY KEY,
+            legal_name TEXT,
+            legal_jurisdiction TEXT,
+            legal_form_id TEXT,
+            registered_as TEXT,
+            category TEXT,
+            status TEXT,
+            bic TEXT,
+            mic TEXT,
+            creation_date TIMESTAMP
+        )
+    ''')
 
-# Add OpenFIGI table creation SQL
-CREATE_OPENFIGI_TABLE = """CREATE TABLE IF NOT EXISTS isin_figi_map (
-    ISIN TEXT PRIMARY KEY,
-    FIGI TEXT,
-    CompositeFIGI TEXT,
-    ShareClassFIGI TEXT,
-    Ticker TEXT,
-    SecurityType TEXT,
-    MarketSector TEXT,
-    SecurityDescription TEXT,
-    LastUpdated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (ISIN) REFERENCES firds_e (ISIN)
-);"""
+    # Equity specific data
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS equities (
+            instrument_id TEXT PRIMARY KEY,
+            shares_outstanding REAL,
+            market_cap REAL,
+            exchange TEXT,
+            sector TEXT,
+            industry TEXT,
+            FOREIGN KEY (instrument_id) REFERENCES instruments(id)
+        )
+    ''')
 
-# Create table for debt instruments
-CREATE_TABLE_DEBT = """CREATE TABLE IF NOT EXISTS firds_d (
-    ISIN TEXT PRIMARY KEY,
-    FullName TEXT,
-    ShortName TEXT,
-    CFICode TEXT,
-    Currency TEXT,
-    ComdtyDerInd BOOLEAN,
-    IssuerLEI TEXT,
-    TradingVenueId TEXT,
-    IssuerReq BOOLEAN,
-    FirstTradeDate DATETIME,
-    RlvntCmptntAuthrty TEXT,
-    RelevantTradingVenue TEXT,
-    FromDate DATE,
-    TerminationDate DATETIME,
-    TotalIssuedNominalAmount DECIMAL,
-    MaturityDate DATE,
-    NominalValuePerUnit DECIMAL,
-    FixedInterestRate DECIMAL,
-    DebtSeniority TEXT
-);"""
+    # Debt specific data
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS debts (
+            instrument_id TEXT PRIMARY KEY,
+            maturity_date DATE,
+            coupon_rate REAL,
+            face_value REAL,
+            coupon_frequency TEXT,
+            credit_rating TEXT,
+            FOREIGN KEY (instrument_id) REFERENCES instruments(id)
+        )
+    ''')
 
-# Creates a filted and renamed dictionary based on the mapping in FIELD_MAPPING
+    # Create indexes for common queries
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_instruments_type ON instruments(type)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_instruments_lei ON instruments(lei_id)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_equities_sector ON equities(sector)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_debts_maturity ON debts(maturity_date)')
+
+def create_db(db_path):
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    create_tables(cursor)
+    conn.commit()
+    conn.close()
+
 def map_fields(data, field_mapping):
     # Create a new dictionary with only the mapped fields
     mapped_data = {}
@@ -139,51 +183,6 @@ def map_fields(data, field_mapping):
     
     return mapped_data
 
-def create_db(db_name):
-    """
-    Create an SQLite database file if it doesn't exist and ensure all required tables are created.
-    This function is safe to run on existing databases as it only creates tables that don't exist.
-    """
-    try:
-        # Connect to the database
-        conn = sqlite3.connect(db_name)
-        cursor = conn.cursor()
-        
-        # Check if FIRDS equity table exists
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='firds_e'")
-        if not cursor.fetchone():
-            print("Creating FIRDS equity table...")
-            cursor.execute(CREATE_TABLE)
-        
-        # Check if FIRDS debt table exists
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='firds_d'")
-        if not cursor.fetchone():
-            print("Creating FIRDS debt table...")
-            cursor.execute(CREATE_TABLE_DEBT)
-        
-        # Check if OpenFIGI table exists
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='isin_figi_map'")
-        if not cursor.fetchone():
-            print("Creating OpenFIGI table...")
-            cursor.execute(CREATE_OPENFIGI_TABLE)
-        
-        # Commit the changes
-        conn.commit()
-        
-        # Verify tables exist
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
-        tables = cursor.fetchall()
-        print("Existing tables:", [table[0] for table in tables])
-        
-        print(f"Database '{db_name}' initialization complete")
-        
-    except Exception as e:
-        print(f"Error initializing database: {str(e)}")
-        raise
-    finally:
-        conn.close()
-        Base.metadata.create_all(bind=engine)
-
 def create_db_table(db_name):
     """
     Create SQLite tables for storing the extracted XML elements and OpenFIGI data,
@@ -193,15 +192,7 @@ def create_db_table(db_name):
     cursor = conn.cursor()
 
     try:
-        # Create FIRDS table if it doesn't exist
-        print("Creating FIRDS table...")
-        cursor.execute(CREATE_TABLE)
-        
-        # Create OpenFIGI table if it doesn't exist
-        print("Creating OpenFIGI table...")
-        cursor.execute(CREATE_OPENFIGI_TABLE)
-        
-        # Commit the changes
+        create_tables(cursor)
         conn.commit()
         print("Tables created successfully")
         

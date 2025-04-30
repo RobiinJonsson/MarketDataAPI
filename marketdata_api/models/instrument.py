@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, JSON, DateTime, Float, Date, Enum, ForeignKey
+from sqlalchemy import Column, String, JSON, DateTime, Float, Date, Enum, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from ..database.db import Base
 import enum
@@ -14,15 +14,35 @@ class Instrument(Base):
         'polymorphic_on': 'type'
     }
 
+    # Base identification fields
     id = Column(String, primary_key=True)
     type = Column(String)
+    isin = Column(String, index=True)  # FinInstrmGnlAttrbts_Id
+    full_name = Column(String)         # FinInstrmGnlAttrbts_FullNm
+    short_name = Column(String)        # FinInstrmGnlAttrbts_ShrtNm
     symbol = Column(String, index=True)
-    isin = Column(String, index=True)
-    name = Column(String)
+    
+    # Common FIRDS fields
+    cfi_code = Column(String)          # FinInstrmGnlAttrbts_ClssfctnTp
+    currency = Column(String)          # FinInstrmGnlAttrbts_NtnlCcy
+    commodity_derivative = Column(Boolean)  # FinInstrmGnlAttrbts_CmmdtyDerivInd
+    trading_venue = Column(String)     # TradgVnRltdAttrbts_Id
+    issuer_req = Column(Boolean)       # TradgVnRltdAttrbts_IssrReq
+    first_trade_date = Column(Date)    # TradgVnRltdAttrbts_FrstTradDt
+    termination_date = Column(Date)    # TradgVnRltdAttrbts_TermntnDt
+    
+    # Technical fields
+    relevant_authority = Column(String)  # TechAttrbts_RlvntCmptntAuthrty
+    relevant_venue = Column(String)      # TechAttrbts_RlvntTradgVn
+    from_date = Column(Date)            # PblctnPrd_FrDt
+    
+    # Relationships
+    lei_id = Column(String, ForeignKey('legal_entities.lei'))  # Issr
+    legal_entity = relationship("LegalEntity", back_populates="instruments")
+    
+    # Additional data for flexibility
     additional_data = Column(JSON)
     last_updated = Column(DateTime)
-    lei_id = Column(String, ForeignKey('legal_entities.lei'))
-    legal_entity = relationship("LegalEntity", back_populates="instruments")
 
 class Equity(Instrument):
     __tablename__ = 'equities'
@@ -44,8 +64,14 @@ class Debt(Instrument):
     }
 
     id = Column(String, ForeignKey('instruments.id'), primary_key=True)
-    maturity_date = Column(Date)
-    coupon_rate = Column(Float)
-    face_value = Column(Float)
+    
+    # Debt-specific FIRDS fields
+    total_issued_nominal = Column(Float)    # DebtInstrmAttrbts_TtlIssdNmnlAmt
+    maturity_date = Column(Date)            # DebtInstrmAttrbts_MtrtyDt
+    nominal_value_per_unit = Column(Float)  # DebtInstrmAttrbts_NmnlValPerUnit
+    fixed_interest_rate = Column(Float)     # DebtInstrmAttrbts_IntrstRate_Fxd
+    debt_seniority = Column(String)         # DebtInstrmAttrbts_DebtSnrty
+    
+    # Additional debt fields from your schema
     coupon_frequency = Column(String)
     credit_rating = Column(String)
