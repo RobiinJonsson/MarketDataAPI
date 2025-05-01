@@ -1,8 +1,9 @@
 import pytest
+from datetime import date
 from marketdata_api.services.instrument_service import InstrumentService
 from marketdata_api.database.session import get_session
 from marketdata_api.database.base import Base, engine
-from marketdata_api.models.instrument import Instrument, Equity, Debt
+from marketdata_api.models import *  # This imports all models
 
 @pytest.fixture(scope="module")
 def setup_database():
@@ -26,7 +27,6 @@ def test_create_equity(setup_database, test_service):
     
     assert instrument.isin == 'SE0000108656'
     assert instrument.type == 'equity'
-    return instrument.id
 
 def test_create_debt(setup_database, test_service):
     data = {
@@ -40,6 +40,21 @@ def test_create_debt(setup_database, test_service):
     assert instrument.isin == 'XS2332219612'
     assert instrument.type == 'debt'
     assert instrument.fixed_interest_rate == 0.375
+
+def test_create_debt_invalid_date(setup_database, test_service):
+    """Test handling of invalid date format"""
+    data = {
+        'FinInstrmGnlAttrbts_Id': 'XS2332219612',
+        'DebtInstrmAttrbts_MtrtyDt': 'invalid-date',
+        'DebtInstrmAttrbts_IntrstRate_Fxd': '0.375'
+    }
+    
+    instrument = test_service.create_instrument(data, 'debt')
+    assert instrument.maturity_date is None  # Should skip invalid date conversion
+
+def test_create_instrument_with_relationships(setup_database, test_service):
+    """Test creation of instrument with FIGI and Legal Entity relationships"""
+    # Add relationship testing
 
 def test_get_instrument(test_service):
     service = test_service

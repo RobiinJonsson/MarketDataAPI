@@ -3,12 +3,9 @@ import os
 import sys
 from typing import Dict, Any
 from .base import Base, engine, DB_PATH, init_db
-from ..models.instrument import Instrument, Equity, Debt
-from .model_mapper import map_to_model
 from .session import get_session
+from .model_mapper import map_to_model, MODEL_FIELD_MAPPING
 from datetime import datetime
-from ..services.instrument_service import InstrumentService
-from model_mapper import MODEL_FIELD_MAPPING
 
 # Dynamically add the project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))

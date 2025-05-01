@@ -1,6 +1,6 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey
+from sqlalchemy import Column, String, DateTime
 from sqlalchemy.orm import relationship
-from ..database.db import Base
+from ..database.base import Base
 
 class LegalEntity(Base):
     __tablename__ = "legal_entities"

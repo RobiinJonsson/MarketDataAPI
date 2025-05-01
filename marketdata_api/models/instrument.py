@@ -1,3 +1,4 @@
+import uuid
 from sqlalchemy import Column, String, JSON, DateTime, Float, Date, Enum, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from ..database.base import Base
@@ -20,7 +21,7 @@ class Instrument(Base):
     }
 
     # Base identification fields
-    id = Column(String, primary_key=True)
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     type = Column(String)
     isin = Column(String, index=True)  # FinInstrmGnlAttrbts_Id
     full_name = Column(String)         # FinInstrmGnlAttrbts_FullNm
@@ -46,8 +47,8 @@ class Instrument(Base):
     lei_id = Column(String, ForeignKey('legal_entities.lei'))  # Issr
     legal_entity = relationship("LegalEntity", back_populates="instruments")
     
-    # Add FIGI relationship
-    figi_data = relationship("FigiMapping", back_populates="instrument", uselist=False)
+    # Fix duplicate FIGI relationship - remove duplicate
+    figi_mapping = relationship("FigiMapping", uselist=False, back_populates="instrument")
     
     # Additional data for flexibility
     additional_data = Column(JSON)
