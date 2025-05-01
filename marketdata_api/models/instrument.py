@@ -3,6 +3,7 @@ from sqlalchemy import Column, String, JSON, DateTime, Float, Date, Enum, Foreig
 from sqlalchemy.orm import relationship
 from ..database.base import Base
 import enum
+from .base_model import BaseModel
 
 class InstrumentType(enum.Enum):
     EQUITY = "equity"
@@ -13,7 +14,7 @@ class InstrumentType(enum.Enum):
     # Add more types as needed
 
 
-class Instrument(Base):
+class Instrument(BaseModel):
     __tablename__ = "instruments"
     __mapper_args__ = {
         'polymorphic_identity': 'instrument',
@@ -62,7 +63,7 @@ class Instrument(Base):
     
     # Additional data for flexibility
     additional_data = Column(JSON)
-    last_updated = Column(DateTime)
+
 
 class Equity(Instrument):
     __tablename__ = 'equities'

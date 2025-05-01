@@ -55,8 +55,6 @@ class InstrumentService:
                         Debt if instrument_type == "debt" else 
                         Instrument)(**model_data)
             
-            instrument.last_updated = datetime.now(UTC)
-            
             unmapped = {k: v for k, v in data.items() if k not in model_data}
             if unmapped:
                 instrument.additional_data = unmapped
@@ -133,7 +131,6 @@ class InstrumentService:
             for key, value in mapped_data.items():
                 setattr(instrument, key, value)
             
-            instrument.last_updated = datetime.now(UTC)
             session.commit()
             session.refresh(instrument)
             logger.info(f"Updated instrument with ID: {identifier}")

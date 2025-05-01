@@ -15,26 +15,19 @@ Completed
 ✓ Documentation and type hints
 ✓ Add cascade rules for relationships
 ✓ Complete FigiMapping and LegalEntity relationships
+✓ Fix polymorphic mapping issues
 
 In Progress
 -----------
 □ Add SQLAlchemy events for automatic timestamps
+□ Add missing indices for common queries
+□ Add constraints for required fields
 
 TODO
 ----
 High Priority:
-□ Add cascade rules for relationships
-□ Complete FigiMapping and LegalEntity relationships
-□ Add SQLAlchemy events for automatic timestamps
-□ Add proper error classes and exception handling
-□ Add logging with proper context
-
-Schema Improvements:
-□ Add missing indices for common queries
-□ Add constraints for required fields
 □ Add data validation using SQLAlchemy validators
 □ Add enum types for fixed value fields
-□ Add proper cascading delete rules
 
 Test Coverage:
 □ Add tests for error conditions
