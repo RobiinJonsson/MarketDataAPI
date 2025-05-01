@@ -1,0 +1,61 @@
+ORM Implementation Progress & TODO
+================================
+
+Completed
+---------
+✓ Basic SQLAlchemy setup with Base, Session management
+✓ Core models: Instrument, Equity, Debt
+✓ Basic CRUD operations in InstrumentService
+✓ Model mapping for FIRDS data
+✓ Date/type conversions for model fields
+✓ Basic test coverage for CRUD operations
+
+In Progress
+-----------
+□ Session management improvements
+□ Error handling and logging
+□ Input validation
+□ Documentation and type hints
+
+TODO
+----
+High Priority:
+□ Add cascade rules for relationships
+□ Complete FigiMapping and LegalEntity relationships
+□ Add SQLAlchemy events for automatic timestamps
+□ Add proper error classes and exception handling
+□ Add logging with proper context
+
+Schema Improvements:
+□ Add missing indices for common queries
+□ Add constraints for required fields
+□ Add data validation using SQLAlchemy validators
+□ Add enum types for fixed value fields
+□ Add proper cascading delete rules
+
+Test Coverage:
+□ Add tests for error conditions
+□ Add tests for model relationships
+□ Add tests for data validation
+□ Add tests for bulk operations
+□ Add integration tests for database operations
+□ Add performance tests for common queries
+
+API Integration:
+□ Add REST endpoints for CRUD operations
+□ Add bulk operation support
+□ Add filtering and pagination
+□ Add proper error responses
+□ Add OpenAPI/Swagger documentation
+
+Future Considerations:
+□ Add caching layer
+□ Add async support
+□ Add migration support
+□ Add audit logging
+□ Add soft delete support
+□ Add versioning support
+□ Add batch processing capabilities
+□ Add ETL pipeline integration
+□ Consider read/write splitting
+□ Performance optimization for large datasets
