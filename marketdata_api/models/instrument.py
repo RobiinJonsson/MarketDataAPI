@@ -17,7 +17,8 @@ class Instrument(Base):
     __tablename__ = "instruments"
     __mapper_args__ = {
         'polymorphic_identity': 'instrument',
-        'polymorphic_on': 'type'
+        'polymorphic_on': 'type',
+        'with_polymorphic': '*'
     }
 
     # Base identification fields
@@ -44,11 +45,20 @@ class Instrument(Base):
     from_date = Column(Date)            # PblctnPrd_FrDt
     
     # Relationships
-    lei_id = Column(String, ForeignKey('legal_entities.lei'))  # Issr
-    legal_entity = relationship("LegalEntity", back_populates="instruments")
+    lei_id = Column(String, ForeignKey('legal_entities.lei', ondelete='SET NULL'))  # Issr
+    legal_entity = relationship(
+        "LegalEntity",
+        back_populates="instruments",
+        cascade="save-update"
+    )
     
-    # Fix duplicate FIGI relationship - remove duplicate
-    figi_mapping = relationship("FigiMapping", uselist=False, back_populates="instrument")
+    figi_mapping = relationship(
+        "FigiMapping",
+        uselist=False,
+        back_populates="instrument",
+        cascade="all, delete-orphan",
+        single_parent=True
+    )
     
     # Additional data for flexibility
     additional_data = Column(JSON)
@@ -57,10 +67,11 @@ class Instrument(Base):
 class Equity(Instrument):
     __tablename__ = 'equities'
     __mapper_args__ = {
-        'polymorphic_identity': 'equity'
+        'polymorphic_identity': 'equity',
+        'polymorphic_load': 'inline'
     }
 
-    id = Column(String, ForeignKey('instruments.id'), primary_key=True)
+    id = Column(String, ForeignKey('instruments.id', ondelete='CASCADE'), primary_key=True)
     shares_outstanding = Column(Float)
     market_cap = Column(Float)
     exchange = Column(String)
@@ -70,10 +81,11 @@ class Equity(Instrument):
 class Debt(Instrument):
     __tablename__ = 'debts'
     __mapper_args__ = {
-        'polymorphic_identity': 'debt'
+        'polymorphic_identity': 'debt',
+        'polymorphic_load': 'inline'
     }
 
-    id = Column(String, ForeignKey('instruments.id'), primary_key=True)
+    id = Column(String, ForeignKey('instruments.id', ondelete='CASCADE'), primary_key=True)
     
     # Debt-specific FIRDS fields
     total_issued_nominal = Column(Float)    # DebtInstrmAttrbts_TtlIssdNmnlAmt

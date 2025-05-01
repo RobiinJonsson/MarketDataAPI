@@ -9,13 +9,16 @@ Completed
 ✓ Model mapping for FIRDS data
 ✓ Date/type conversions for model fields
 ✓ Basic test coverage for CRUD operations
+✓ Session management improvements
+✓ Error handling and logging
+✓ Input validation
+✓ Documentation and type hints
+✓ Add cascade rules for relationships
+✓ Complete FigiMapping and LegalEntity relationships
 
 In Progress
 -----------
-□ Session management improvements
-□ Error handling and logging
-□ Input validation
-□ Documentation and type hints
+□ Add SQLAlchemy events for automatic timestamps
 
 TODO
 ----
