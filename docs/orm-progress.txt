@@ -29,6 +29,17 @@ High Priority:
 □ Add data validation using SQLAlchemy validators
 □ Add enum types for fixed value fields
 
+Service Layer Organization:
+□ Refactor FIRDS data service to use new ORM models
+□ Update OpenFIGI service to integrate with instrument relationships
+□ Modernize GLEIF service with ORM patterns
+□ Add service interfaces/protocols for standardization
+□ Implement service factory pattern for different data sources
+□ Add service-level caching
+□ Add retry mechanisms for external services
+□ Add service health checks
+□ Improve error handling across services
+
 Test Coverage:
 □ Add tests for error conditions
 □ Add tests for model relationships

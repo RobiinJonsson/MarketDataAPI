@@ -4,6 +4,8 @@ import sys
 from typing import Dict, Any
 from .base import Base, engine, DB_PATH, init_db
 from .session import get_session
+from ..models import Instrument, Equity, Debt
+from ..services.instrument_service import InstrumentService
 from .model_mapper import map_to_model, MODEL_FIELD_MAPPING
 from datetime import datetime
 
