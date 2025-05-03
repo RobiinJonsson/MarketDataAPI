@@ -5,7 +5,7 @@ import tempfile
 import pandas as pd
 import os
 from tqdm import tqdm
-import utils as u
+import marketdata_api.services.esma_utils as u
 
 
 class EsmaDataLoader:

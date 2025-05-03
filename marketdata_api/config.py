@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from enum import Enum
+from pathlib import Path
 
 load_dotenv()  # Load environment variables from .env file
 
@@ -17,6 +18,10 @@ class Config:
 
     UPLOAD_FOLDER = 'uploads'
     MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500 MB max file size
+
+class esmaConfig:
+    # Convert string path to Path object
+    file_path = Path("C:\\Users\\robin\\Projects\\MarketDataAPI\\downloads\\esma")  # Adjust path as needed for esma data downloads
 
 # Exchange code mappings for OpenFIGI
 EXCHANGE_CODES = {

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from requests.models import Response
 from enum import Enum
 import logging
+from marketdata_api.config import esmaConfig
 
 
 class Utils:
@@ -96,7 +97,7 @@ class Utils:
             "/home/user/esma_data_py/my_data"
         """
 
-        main_folder = Path.home() / "esma_data_py" / folder
+        main_folder = esmaConfig.file_path
 
         if not main_folder.exists():
             main_folder.mkdir(parents=True)
