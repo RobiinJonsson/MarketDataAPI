@@ -5,7 +5,6 @@ from typing import Dict, Any
 from .base import Base, engine, DB_PATH, init_db
 from .session import get_session
 from ..models import Instrument, Equity, Debt
-from ..services.instrument_service import InstrumentService
 from .model_mapper import map_to_model, MODEL_FIELD_MAPPING
 from datetime import datetime
 
@@ -180,12 +179,13 @@ def insert_instrument_data(data: Dict[str, Any], instrument_type: str = "equity"
         return instrument
 
 # Update existing insert_into_db to use new method
-def insert_into_db(mapped_data, instrument_type="equity"):
-    """Legacy function updated to use InstrumentService"""
+def insert_into_db(data):
+    # Import at function level to avoid circular imports
+    from ..services.instrument_service import InstrumentService
+    service = InstrumentService()
     try:
-        service = InstrumentService()
-        instrument = service.create_instrument(mapped_data, instrument_type)
-        print(f"Successfully inserted {instrument_type} data with ID: {instrument.id}")
+        instrument = service.create_instrument(data)
+        print(f"Successfully inserted data with ID: {instrument.id}")
     except Exception as e:
         print(f"Error inserting data: {str(e)}")
         raise

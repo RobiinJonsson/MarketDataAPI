@@ -21,7 +21,9 @@ class Config:
 
 class esmaConfig:
     # Convert string path to Path object
-    file_path = Path("C:\\Users\\robin\\Projects\\MarketDataAPI\\downloads\\esma")  # Adjust path as needed for esma data downloads
+    file_path = Path("C:\\Users\\robin\\Projects\\MarketDataAPI\\downloads\\esma") # Path to ESMA data directory
+    start_date = "2025-04-26"  # Start date for data processing
+    end_date = "2025-04-26"    # End date for data processing
 
 # Exchange code mappings for OpenFIGI
 EXCHANGE_CODES = {
