@@ -5,7 +5,7 @@ from typing import Dict, Any
 from .base import Base, engine, DB_PATH, init_db
 from .session import get_session
 from ..models import Instrument, Equity, Debt
-from .model_mapper import map_to_model, MODEL_FIELD_MAPPING
+from .model_mapper import map_to_model
 from datetime import datetime
 
 # Dynamically add the project root to sys.path
@@ -152,31 +152,6 @@ def create_db_table(db_name):
     finally:
         conn.close()
 
-def insert_instrument_data(data: Dict[str, Any], instrument_type: str = "equity"):
-    """Insert data using SQLAlchemy models"""
-    with get_session() as session:
-        # Map the input data to model fields
-        model_data = map_to_model(data, instrument_type)
-        
-        # Create the appropriate instrument type
-        if instrument_type == "equity":
-            instrument = Equity(**model_data)
-        elif instrument_type == "debt":
-            instrument = Debt(**model_data)
-        else:
-            instrument = Instrument(**model_data)
-        
-        # Add creation timestamp
-        instrument.last_updated = datetime.utcnow()
-        
-        # Store unmapped data in additional_data
-        unmapped_fields = {k: v for k, v in data.items() 
-                         if k not in MODEL_FIELD_MAPPING['instruments']}
-        if unmapped_fields:
-            instrument.additional_data = unmapped_fields
-        
-        session.add(instrument)
-        return instrument
 
 # Update existing insert_into_db to use new method
 def insert_into_db(data):

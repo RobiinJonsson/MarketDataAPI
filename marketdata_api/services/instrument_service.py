@@ -2,8 +2,9 @@ import uuid
 import logging
 from typing import Dict, Any, Optional, NoReturn
 from ..database.session import get_session, SessionLocal
-from ..database.model_mapper import map_to_model  # Use this instead of map_firds_to_instrument
+from ..database.model_mapper import map_to_model, map_figi_data
 from ..models.instrument import Instrument, Equity, Debt
+from ..models.figi import FigiMapping  # Assuming this is the model for FIGI mapping
 from .esma_data_loader import EsmaDataLoader
 from .openfigi import search_openfigi
 from .gleif import fetch_lei_info
@@ -82,7 +83,7 @@ class InstrumentService:
         finally:
             session.close()
 
-    def get_instrument(self, identifier: str) -> Optional[Instrument]:
+    def get_instrument(self, identifier: str) -> tuple[SessionLocal, Optional[Instrument]]:
         """
         Retrieve an instrument by its identifier.
         
@@ -90,7 +91,7 @@ class InstrumentService:
             identifier: The unique identifier of the instrument
             
         Returns:
-            The Instrument instance if found, otherwise None
+            Tuple of (Session, Instrument): Active session and instrument if found
         """
         session = SessionLocal()
         try:
@@ -105,9 +106,10 @@ class InstrumentService:
             )
             if instrument:
                 session.refresh(instrument)
-            return instrument
-        finally:
+            return session, instrument
+        except:
             session.close()
+            raise
 
     def update_instrument(self, identifier: str, data: Dict[str, Any]) -> Optional[Instrument]:
         """
@@ -150,13 +152,25 @@ class InstrumentService:
             session.close()
 
     def get_or_create_instrument(self, identifier: str, instrument_type: str = "equity") -> Optional[Instrument]:
-        """Get instrument from database or create it from external sources if not found."""
-        instrument = self.get_instrument(identifier)
-        if instrument:
-            return instrument
-            
+        session = None
         try:
-            # 1. Get FIRDS data using EsmaDataLoader
+            session, instrument = self.get_instrument(identifier)
+            if instrument:
+                if not instrument.figi_mapping:
+                    try:
+                        figi_data = search_openfigi(identifier)
+                        if figi_data:
+                            figi_mapping = map_figi_data(figi_data, identifier)
+                            if figi_mapping:
+                                instrument.figi_mapping = figi_mapping
+                                session.add(figi_mapping)
+                                session.commit()
+                                self.logger.info(f"Added FIGI mapping for instrument {identifier}")
+                    except Exception as e:
+                        self.logger.error(f"Failed to fetch FIGI data: {str(e)}")
+                return instrument
+            
+            # Existing FIRDS data fetching logic
             list_files = self.esma_loader.load_mifid_file_list(['firds'])
             file_type = 'FULINS_E' if instrument_type == 'equity' else 'FULINS_D'
             fulins_files = list_files[list_files['download_link'].str.contains(file_type, na=False)]
@@ -183,12 +197,33 @@ class InstrumentService:
                 self.logger.warning(f"No FIRDS data found for {identifier}")
                 return None
 
-            # Use map_to_model instead of map_firds_to_instrument
-            return self.create_instrument(instrument_data, instrument_type)
+            # Fetch FIGI data before creating instrument
+            try:
+                figi_data = search_openfigi(identifier)
+                if figi_data:
+                    instrument_data['figi'] = figi_data[0].get('figi')
+            except Exception as e:
+                self.logger.error(f"Failed to fetch FIGI data: {str(e)}")
+
+            # Create instrument first
+            instrument = self.create_instrument(instrument_data, instrument_type)
+            
+            # Then create FIGI mapping if we have data
+            if figi_data:
+                figi_mapping = map_figi_data(figi_data, identifier)
+                if figi_mapping:
+                    instrument.figi_mapping = figi_mapping
+                    session.add(figi_mapping)
+                    session.commit()
+                    
+            return instrument
             
         except Exception as e:
             self.logger.error(f"Failed to fetch/create instrument {identifier}: {str(e)}")
             raise InstrumentServiceError(f"Failed to fetch/create instrument: {str(e)}")
+        finally:
+            if session:
+                session.close()
 
     def enrich_instrument(self, instrument: Instrument) -> Instrument:
         """

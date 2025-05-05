@@ -11,8 +11,8 @@ from marketdata_api.database.db import Base, engine
 from marketdata_api.database.initialize_db import init_database
 
 def run_tests():
-    # Initialize database properly with force recreation
-    init_database(force_recreate=True)
+    # Initialize database only if it doesn't exist
+    init_database(force_recreate=False)
     
     service = InstrumentService()
     
@@ -24,12 +24,19 @@ def run_tests():
 
 def test_equity(service):
     isin = "FR0000131104"  # BNP Paribas
+    session = None
     try:
         instrument = service.get_or_create_instrument(isin, "equity")
+        # Ensure we have all relationships loaded before closing session
+        if instrument and instrument.figi_mapping:
+            _ = instrument.figi_mapping.security_type  # Force load
         print_instrument_details(instrument, "Equity")
     except Exception as e:
         print(f"Error testing equity: {str(e)}")
         raise
+    finally:
+        if session:
+            session.close()
 
 def test_debt(service):
     isin = "XS2332219612"  # Example bond
@@ -57,13 +64,27 @@ def print_instrument_details(instrument, type_name):
     print(f"LEI: {instrument.lei_id}")
     print(f"FIGI: {instrument.figi}")
     
+    # Add FIGI mapping details
+    if hasattr(instrument, 'figi_mapping') and instrument.figi_mapping:
+        print("\nFIGI Mapping Details:")
+        print("-" * 25)
+        fm = instrument.figi_mapping
+        print(f"FIGI: {fm.figi}")
+        print(f"Composite FIGI: {fm.composite_figi}")
+        print(f"Share Class FIGI: {fm.share_class_figi}")
+        print(f"Ticker: {fm.ticker}")
+        print(f"Security Type: {fm.security_type}")
+        print(f"Market Sector: {fm.market_sector}")
+        print(f"Security Description: {fm.security_description}")
+        print(f"Last Updated: {fm.last_updated}")
+    
     if hasattr(instrument, 'price_multiplier'):
-        print(f"Price Multiplier: {instrument.price_multiplier}")
+        print(f"\nPrice Multiplier: {instrument.price_multiplier}")
     if hasattr(instrument, 'maturity_date'):
         print(f"Maturity Date: {instrument.maturity_date}")
         print(f"Fixed Interest Rate: {instrument.fixed_interest_rate}")
     
-    print(f"Additional Data: {instrument.additional_data}")
+    print(f"\nAdditional Data: {instrument.additional_data}")
 
 if __name__ == "__main__":
     run_tests()

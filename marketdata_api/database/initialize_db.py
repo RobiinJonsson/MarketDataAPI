@@ -6,15 +6,9 @@ from ..models import instrument, legal_entity  # Import all your model files
 
 logger = logging.getLogger(__name__)
 
-def drop_database():
-    """Drop the existing database file"""
-    try:
-        if os.path.exists(DB_PATH):
-            os.remove(DB_PATH)
-            logger.info(f"Removed existing database: {DB_PATH}")
-    except Exception as e:
-        logger.error(f"Failed to remove database: {str(e)}")
-        raise
+def database_exists():
+    """Check if database file exists"""
+    return os.path.exists(DB_PATH)
 
 def verify_tables():
     """Verify that all expected tables and columns exist"""
@@ -39,20 +33,24 @@ def verify_tables():
             
     return all_valid
 
-def init_database(force_recreate=True):
+def init_database(force_recreate=False):
     """Initialize database with all models"""
     try:
-        if force_recreate:
-            drop_database()
+        if force_recreate and database_exists():
+            logger.warning("Dropping existing database - ALL DATA WILL BE LOST")
+            os.remove(DB_PATH)
+        elif database_exists():
+            logger.info("Database exists, verifying tables...")
+            if verify_tables():
+                logger.info("Database structure is valid")
+                return
+            else:
+                logger.warning("Database structure is invalid but preserve_data=True, skipping recreation")
+                return
             
         # Create all tables
         Base.metadata.create_all(bind=engine)
-        
-        # Verify tables and columns
-        if verify_tables():
-            logger.info("Database initialization successful")
-        else:
-            logger.error("Database verification failed")
+        logger.info("Created new database with all tables")
             
     except Exception as e:
         logger.error(f"Database initialization failed: {str(e)}")

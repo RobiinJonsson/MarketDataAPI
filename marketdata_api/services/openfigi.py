@@ -57,7 +57,8 @@ def search_openfigi(isin: str, mic_code: str = None) -> list:
         if response.status_code == 200:
             data = response.json()
             if data and len(data) > 0 and 'data' in data[0]:
-                return data[0]['data']
+                # Return only the first item from data array
+                return [data[0]['data'][0]] if data[0]['data'] else []
         return []
         
     except Exception as e:

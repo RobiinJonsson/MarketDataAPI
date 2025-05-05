@@ -1,21 +1,8 @@
 from typing import Dict, Any
 from datetime import datetime
 from ..models.instrument import Instrument, Equity, Debt
+from ..models.figi import FigiMapping
 
-# Add model mapping to complement existing field mappings
-MODEL_FIELD_MAPPING = {
-    'instruments': {
-        'FinInstrmGnlAttrbts_Id': 'isin',  # Make sure ISIN is properly mapped
-        'FinInstrmGnlAttrbts_FullNm': 'full_name',
-        'FinInstrmGnlAttrbts_ShrtNm': 'short_name',
-        'Issr': 'lei_id'
-    },
-    'debts': {
-        'DebtInstrmAttrbts_TtlIssdNmnlAmt': ('total_issued_nominal', float),
-        'DebtInstrmAttrbts_MtrtyDt': ('maturity_date', lambda x: datetime.strptime(x, '%Y-%m-%d').date()),
-        'DebtInstrmAttrbts_IntrstRate_Fxd': ('fixed_interest_rate', float)
-    }
-}
 
 def map_to_model(data: Dict[str, Any], instrument_type: str = "equity") -> Dict[str, Any]:
     """Maps ESMA/FIRDS data to instrument model fields"""
@@ -27,7 +14,7 @@ def map_to_model(data: Dict[str, Any], instrument_type: str = "equity") -> Dict[
         'symbol': data.get('ShrtNm'),  # Using short name as symbol if no specific symbol
         'currency': data.get('NtnlCcy'),
         'cfi_code': data.get('ClssfctnTp'),
-        'commodity_derivative': data.get('CmmdtyDerivInd', False),
+        'commodity_derivative': str(data.get('CmmdtyDerivInd', 'false')).lower() == 'true',  # Proper boolean conversion
         'lei_id': data.get('Issr'),
         'trading_venue': data.get('Id_2'),
         'issuer_req': data.get('IssrReq', False),
@@ -97,3 +84,20 @@ def extract_underlying_isins(data: Dict[str, Any]) -> list:
         isins.append(isin)
         i += 1
     return isins if isins else None
+
+def map_figi_data(data: list, isin: str) -> FigiMapping:
+    """Maps OpenFIGI API response to FigiMapping model"""
+    if not data or len(data) == 0:
+        return None
+        
+    figi_data = data[0]  # Take first result
+    return FigiMapping(
+        isin=isin,
+        figi=figi_data.get('figi'),
+        composite_figi=figi_data.get('compositeFIGI'),
+        share_class_figi=figi_data.get('shareClassFIGI'),
+        ticker=figi_data.get('ticker'),
+        security_type=figi_data.get('securityType'),
+        market_sector=figi_data.get('marketSector'),
+        security_description=figi_data.get('securityDescription')
+    )
