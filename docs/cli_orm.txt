@@ -1,0 +1,42 @@
+CMD Prompts
+From root -> cd C:\Users\robin\Projects\MarketDataAPI>
+
+Market Data API CLI Tool
+=======================
+
+Basic Commands:
+    tables                              - List all database tables with schema
+    instrument <command>                - Instrument operations
+    entity <command>                    - Legal entity operations
+    batch <command> <file>             - Batch process instruments
+    filter <field> <value>             - Filter instruments by field
+    export <format> <table>            - Export data to CSV/JSON
+
+Instrument Commands:
+    get <id/isin>                      - Get basic instrument info
+    detail <isin>                      - Show detailed instrument info including FIGI and LEI data
+    create <type> <data>               - Create new instrument (type: equity|debt)
+    update <id> <data>                 - Update existing instrument
+    enrich <id>                        - Enrich with FIGI and LEI data
+    list                               - List all instruments
+
+Entity Commands:
+    get <lei>                          - Get legal entity info
+    create <lei>                       - Create new entity from GLEIF API
+    update <lei>                       - Update entity from GLEIF API
+    delete <lei>                       - Delete legal entity
+    list                               - List all legal entities
+
+Batch Operations:
+    batch create <file> [type]         - Create instruments from file (default: equity)
+    batch enrich <file>                - Enrich instruments from file with FIGI/LEI
+
+Export Commands:
+    export json instruments            - Export instruments to JSON
+    export csv instruments             - Export instruments to CSV
+
+Examples:
+    python scripts/cli.py instrument detail DE000A1EWWW0
+    python scripts/cli.py batch create isins.txt equity
+    python scripts/cli.py entity create 549300PPETP6IPXYTE40
+    python scripts/cli.py filter type equity

@@ -20,34 +20,33 @@ def get_exchange_code(isin):
     # Get exchange code from config
     return EXCHANGE_CODES.get(country_code, DEFAULT_EXCHANGE_CODE)
 
-def search_openfigi(isin: str, instrument_type, mic_code: str = None) -> list:
+def search_openfigi(isin: str, instrument_type) -> list:
     """Search OpenFIGI for an ISIN and return the results."""
     url = "https://api.openfigi.com/v3/mapping"
     headers = {
         "Content-Type": "application/json",
         "X-OPENFIGI-APIKEY": OPENFIGI_API_KEY
     }
-    
+    exch_code = get_exchange_code(isin)
     # Use MIC code if provided for equity
     if instrument_type == "equity":
         payload = [
             {
                 "idType": "ID_ISIN",
                 "idValue": isin,
-                "micCode": mic_code
+                "exchCode": exch_code
             }
         ]
-        print(f"Searching OpenFIGI for ISIN: {isin} with MIC code: {mic_code}")  # Debug
+        print(f"Searching OpenFIGI for ISIN: {isin} with MIC code: {exch_code}")  # Debug
     # Else exclude MIC code in payload for debt
     else:
-        exch_code = get_exchange_code(isin)
         payload = [
             {
                 "idType": "ID_ISIN",
                 "idValue": isin
             }
         ]
-        print(f"Searching OpenFIGI for ISIN: {isin} with exchange code: {exch_code}")  # Debug  
+        print(f"Searching OpenFIGI for ISIN: {isin}")  # Debug  
     
     try:
         response = requests.post(url, headers=headers, json=payload)

@@ -56,6 +56,11 @@ EXCHANGE_CODES = {
     'PL': 'WA',  # Poland (Warsaw)
     'CZ': 'PR',  # Czech Republic (Prague)
     'HU': 'BU',  # Hungary (Budapest)
+
+    # Other
+    'XS': 'XS',  # Global (SIX Swiss Exchange)
+    'XX': 'XX',  # Global (Global Market)
+    'OTC': 'OTC',  # Over-the-Counter
 }
 
 # Default exchange code if no country code is provided

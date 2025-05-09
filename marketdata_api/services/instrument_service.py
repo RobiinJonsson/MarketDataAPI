@@ -213,7 +213,7 @@ class InstrumentService:
             # Enrich with FIGI if not present
             if not instrument.figi_mapping:
                 try:
-                    figi_data = search_openfigi(instrument.isin, instrument.type, instrument.trading_venue)
+                    figi_data = search_openfigi(instrument.isin, instrument.type)
                     if figi_data:
                         figi_mapping = map_figi_data(figi_data, instrument.isin)
                         if figi_mapping:
@@ -224,6 +224,25 @@ class InstrumentService:
                             self.logger.info(f"Added FIGI mapping for instrument {instrument.isin}")
                 except Exception as e:
                     self.logger.error(f"Failed to fetch FIGI data: {str(e)}")
+
+            # Enrich with Legal Entity data if LEI is present but not linked
+            if instrument.lei_id and not instrument.legal_entity:
+                try:
+                    from .legal_entity_service import LegalEntityService
+                    lei_service = LegalEntityService()
+                    lei_session, entity = lei_service.create_or_update_entity(instrument.lei_id)
+                    if entity:
+                        # Merge the entity into our current session
+                        entity = session.merge(entity)
+                        instrument.legal_entity = entity
+                        session.commit()
+                        session.refresh(instrument)
+                        self.logger.info(f"Linked legal entity for instrument {instrument.isin}")
+                    if lei_session:
+                        lei_session.close()
+                except Exception as e:
+                    self.logger.error(f"Failed to fetch/link legal entity data: {str(e)}")
+                    raise  # Re-raise to see the full error in development
                     
             return session, instrument
             
