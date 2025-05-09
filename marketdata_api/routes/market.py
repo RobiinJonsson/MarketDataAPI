@@ -4,16 +4,18 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'
 from flask import Blueprint, jsonify, request, render_template
 from marketdata_api.services.openfigi import search_openfigi, batch_search_openfigi
 from marketdata_api.services.firds import get_firds_file_names
-from marketdata_api.database.db import insert_into_db, map_fields, FIELD_MAPPING, DEBT_FIELD_MAPPING, insert_figi_data, get_figi_data, insert_lei_data
-from marketdata_api.services.firds import process_all_xml_files_cli, downloads_dir
-from scripts.frontend import search_isin_frontend, list_all_entries_frontend
-from marketdata_api.database.db import get_db_connection
-from marketdata_api.services.gleif import fetch_lei_info, map_lei_record
+from marketdata_api.services.gleif import fetch_lei_info
 from ..services.instrument_service import InstrumentService
 from ..models.instrument import Instrument, Equity, Debt
+from sqlalchemy.exc import SQLAlchemyError
 
 # Create a Blueprint for the market routes
 market_bp = Blueprint("market", __name__)
+
+# Error handler for database errors
+@market_bp.errorhandler(SQLAlchemyError)
+def handle_db_error(error):
+    return jsonify({"error": "A database error occurred"}), 500
 
 # Route for the home page
 @market_bp.route("/", methods=["GET"])
@@ -71,47 +73,58 @@ def firds_lookup():
     # If it's not an AJAX request, render the page with file names
     return render_template('index.html', file_names=file_names)
 
-# Route to handle database operations list all db entries
-@market_bp.route('/api/list', methods=['GET'])
-def list_db_entries():
-    """List all entries in the database with their FIGI data."""
-    print("Starting list_db_entries")  # Debug
-    entries = list_all_entries_frontend()
-    print(f"List results: {entries}")  # Debug
-    if entries:
-        return jsonify(entries)
-    else:
-        return jsonify({"message": "No data found in database"}), 200
 
 # Route to handle database operations search db entry by ISIN
 @market_bp.route('/api/search/<string:isin>', methods=['GET'])
 def search_db_entry(isin):
     """Handle search requests from the frontend."""
     try:
-        print(f"Received search request for ISIN: {isin}")
+        service = InstrumentService()
+        session, instrument = service.get_instrument(isin)
         
-        # Validate ISIN format
-        if not isin or len(isin) != 12:
-            return jsonify({"message": "Invalid ISIN format"}), 400
+        if not instrument:
+            return jsonify({"message": f"No data found for ISIN: {isin}"}), 404
             
-        # Search using the updated frontend function
-        try:
-            entry = search_isin_frontend(isin)
-            print(f"Search result: {entry}")  # Debug log
+        result = {
+            "instrument": {
+                "id": instrument.id,
+                "type": instrument.type,
+                "isin": instrument.isin,
+                "full_name": instrument.full_name,
+                "short_name": instrument.short_name,
+                "symbol": instrument.symbol,
+                "cfi_code": instrument.cfi_code,
+                "currency": instrument.currency,
+                "trading_venue": instrument.trading_venue,
+                "relevant_authority": instrument.relevant_authority,
+                "relevant_venue": instrument.relevant_venue,
+                "commodity_derivative": instrument.commodity_derivative
+            }
+        }
+        
+        if instrument.figi_mapping:
+            result["figi"] = {
+                "figi": instrument.figi_mapping.figi,
+                "composite_figi": instrument.figi_mapping.composite_figi,
+                "share_class_figi": instrument.figi_mapping.share_class_figi,
+                "security_type": instrument.figi_mapping.security_type,
+                "market_sector": instrument.figi_mapping.market_sector
+            }
             
-            if not entry:
-                return jsonify({"message": f"No data found for ISIN: {isin}"}), 404
-                
-            # Return the complete dataset
-            return jsonify(entry), 200
+        if instrument.legal_entity:
+            result["lei"] = {
+                "lei": instrument.legal_entity.lei,
+                "name": instrument.legal_entity.name,
+                "jurisdiction": instrument.legal_entity.jurisdiction,
+                "legal_form": instrument.legal_entity.legal_form,
+                "status": instrument.legal_entity.status
+            }
             
-        except Exception as e:
-            print(f"Database error: {str(e)}")
-            return jsonify({"error": "Database error occurred"}), 500
+        session.close()
+        return jsonify(result), 200
         
     except Exception as e:
-        print(f"Route error: {str(e)}")
-        return jsonify({"error": "An unexpected error occurred"}), 500
+        return jsonify({"error": str(e)}), 500
 
 # Route to handle database operations fetch and insert from frontend
 @market_bp.route('/api/fetch', methods=['POST'])
@@ -119,49 +132,35 @@ def fetch_and_insert_frontend():
     """Fetch and insert data using SQLAlchemy models"""
     try:
         data = request.get_json()
-        identifier = data.get('identifier')
-        instrument_type = data.get('instrument_type', 'equity')
+        identifier = data.get('Id')
+        instrument_type = data.get('type', 'equity')
         
         if not identifier:
             return jsonify({'error': 'Missing identifier'}), 400
 
         service = InstrumentService()
-        instrument = service.create_instrument(data, instrument_type)
+        instrument = service.get_or_create_instrument(identifier, instrument_type)
         
+        if not instrument:
+            return jsonify({'error': 'Unable to fetch or create instrument'}), 404
+            
+        # Enrich the instrument with FIGI and LEI data
+        session, enriched = service.enrich_instrument(instrument)
+        if session:
+            session.close()
+
         return jsonify({
-            'message': f'Data successfully stored as {instrument_type}',
-            'instrument_id': instrument.id,
-            'instrument_type': instrument_type
+            'message': f'Successfully fetched/created and enriched {instrument_type} instrument',
+            'instrument_id': enriched.id,
+            'instrument_type': enriched.type,
+            'isin': enriched.isin,
+            'figi': enriched.figi_mapping.figi if enriched.figi_mapping else None,
+            'lei': enriched.legal_entity.lei if enriched.legal_entity else None
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@market_bp.route('/api/figi/<string:figi>', methods=['GET'])
-def get_isin_by_figi(figi):
-    """Look up ISIN by FIGI in the isin_figi_map table."""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # Check if isin_figi_map table exists
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='isin_figi_map'")
-        if not cursor.fetchone():
-            return jsonify({"error": "isin_figi_map table does not exist"}), 404
-            
-        # Look up ISIN by FIGI
-        cursor.execute("SELECT ISIN FROM isin_figi_map WHERE FIGI = ?", (figi,))
-        result = cursor.fetchone()
-        
-        if result:
-            return jsonify({"ISIN": result[0]})
-        else:
-            return jsonify({"error": f"No ISIN found for FIGI: {figi}"}), 404
-            
-    except Exception as e:
-        print(f"Error in get_isin_by_figi: {str(e)}")  # Debug
-        return jsonify({"error": str(e)}), 500
-    finally:
-        conn.close()
+
 
 @market_bp.route("/api/gleif", methods=["POST"])
 def get_lei_info():
@@ -174,23 +173,6 @@ def get_lei_info():
     result = fetch_lei_info(lei_code)
     return jsonify(result)
 
-@market_bp.route('/api/instruments', methods=['GET'])
-def list_instruments():
-    """List all instruments using SQLAlchemy"""
-    try:
-        service = InstrumentService()
-        with get_session() as session:
-            instruments = session.query(Instrument).all()
-            return jsonify([{
-                'id': i.id,
-                'type': i.type,
-                'isin': i.isin,
-                'name': i.full_name,
-                'symbol': i.symbol,
-                'last_updated': i.last_updated.isoformat() if i.last_updated else None
-            } for i in instruments])
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 @market_bp.route('/api/instruments/<identifier>', methods=['GET'])
 def get_instrument(identifier):

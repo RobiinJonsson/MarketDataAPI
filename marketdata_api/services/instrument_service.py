@@ -200,53 +200,66 @@ class InstrumentService:
                 session.close()
 
     def enrich_instrument(self, instrument: Instrument) -> tuple[Session, Instrument]:
-        """
-        Enrich existing instrument with additional data from external sources.
-        Returns tuple of (session, instrument) to keep session alive.
-        """
+        """Enrich existing instrument with additional data from external sources."""
         session = SessionLocal()
+        lei_session = None
+        
         try:
-            # Reattach instrument to new session
             instrument = session.merge(instrument)
             session.refresh(instrument)
             
             # Enrich with FIGI if not present
             if not instrument.figi_mapping:
                 try:
-                    figi_data = search_openfigi(instrument.isin, instrument.type)
-                    if figi_data:
-                        figi_mapping = map_figi_data(figi_data, instrument.isin)
-                        if figi_mapping:
-                            instrument.figi_mapping = figi_mapping
-                            session.add(figi_mapping)
-                            session.commit()
-                            session.refresh(instrument)
-                            self.logger.info(f"Added FIGI mapping for instrument {instrument.isin}")
+                    self._enrich_figi(session, instrument)
                 except Exception as e:
-                    self.logger.error(f"Failed to fetch FIGI data: {str(e)}")
-
-            # Enrich with Legal Entity data if LEI is present but not linked
+                    self.logger.error(f"FIGI enrichment failed: {str(e)}")
+                    # Continue with other enrichments even if FIGI fails
+            
+            # Enrich with Legal Entity data if LEI present
             if instrument.lei_id and not instrument.legal_entity:
                 try:
-                    from .legal_entity_service import LegalEntityService
-                    lei_service = LegalEntityService()
-                    lei_session, entity = lei_service.create_or_update_entity(instrument.lei_id)
-                    if entity:
-                        # Merge the entity into our current session
-                        entity = session.merge(entity)
-                        instrument.legal_entity = entity
-                        session.commit()
-                        session.refresh(instrument)
-                        self.logger.info(f"Linked legal entity for instrument {instrument.isin}")
-                    if lei_session:
-                        lei_session.close()
+                    self._enrich_legal_entity(session, instrument)
                 except Exception as e:
-                    self.logger.error(f"Failed to fetch/link legal entity data: {str(e)}")
-                    raise  # Re-raise to see the full error in development
-                    
+                    self.logger.error(f"Legal entity enrichment failed: {str(e)}")
+                    session.rollback()
+                    raise InstrumentServiceError(f"Legal entity enrichment failed: {str(e)}")
+            
             return session, instrument
             
         except Exception as e:
-            self.logger.error(f"Failed to enrich instrument {instrument.id}: {str(e)}")
+            self.logger.error(f"Enrichment failed for {instrument.id}: {str(e)}")
             session.rollback()
-            raise
+            raise InstrumentServiceError(f"Enrichment failed: {str(e)}")
+        finally:
+            if lei_session:
+                lei_session.close()
+
+    def _enrich_figi(self, session: Session, instrument: Instrument) -> None:
+        """Helper method to handle FIGI enrichment"""
+        figi_data = search_openfigi(instrument.isin, instrument.type)
+        if figi_data:
+            figi_mapping = map_figi_data(figi_data, instrument.isin)
+            if figi_mapping:
+                instrument.figi_mapping = figi_mapping
+                session.add(figi_mapping)
+                session.commit()
+                session.refresh(instrument)
+                self.logger.info(f"Added FIGI mapping for {instrument.isin}")
+
+    def _enrich_legal_entity(self, session: Session, instrument: Instrument) -> None:
+        """Helper method to handle legal entity enrichment"""
+        from .legal_entity_service import LegalEntityService
+        lei_service = LegalEntityService()
+        
+        lei_session, entity = lei_service.create_or_update_entity(instrument.lei_id)
+        try:
+            if entity:
+                entity = session.merge(entity)
+                instrument.legal_entity = entity
+                session.commit()
+                session.refresh(instrument)
+                self.logger.info(f"Linked legal entity for {instrument.isin}")
+        finally:
+            if lei_session:
+                lei_session.close()

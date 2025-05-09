@@ -33,44 +33,40 @@ async function searchAndDisplay() {
             return;
         }
 
-        if (!data || (!data.equity && !data.debt && !data.figi)) {
+        if (!data || (!data.instrument && !data.figi && !data.lei)) {
             showResultsError("No data found for this ISIN");
             return;
         }
 
         const sections = {
             instrumentDetails: {
-                "ISIN": data.equity?.ISIN || data.debt?.ISIN || 'N/A',
-                "Type": data.equity ? 'Equity' : 'Debt',
-                "Full Name": data.equity?.FullName || data.debt?.FullName || 'N/A',
-                "Short Name": data.equity?.ShortName || data.debt?.ShortName || 'N/A',
-                "CFI Code": data.equity?.CFICode || data.debt?.CFICode || 'N/A',
-                "Currency": data.equity?.Currency || data.debt?.Currency || 'N/A',
-                "First Trade Date": formatDateResults(data.equity?.FirstTradeDate || data.debt?.FirstTradeDate) || 'N/A',
-                "FIGI": data.figi?.FIGI || 'N/A',
-                "Security Type": data.figi?.SecurityType || 'N/A',
-                "Market Sector": data.figi?.MarketSector || 'N/A',
-                "Security Description": data.figi?.SecurityDescription || 'N/A'
+                "ISIN": data.instrument?.isin || 'N/A',
+                "Type": data.instrument?.type || 'N/A',
+                "Full Name": data.instrument?.full_name || 'N/A',
+                "Short Name": data.instrument?.short_name || 'N/A',
+                "Symbol": data.instrument?.symbol || 'N/A',
+                "CFI Code": data.instrument?.cfi_code || 'N/A',
+                "Currency": data.instrument?.currency || 'N/A',
+                "First Trade Date": formatDateResults(data.instrument?.first_trade_date) || 'N/A',
+                "FIGI": data.figi?.figi || 'N/A',
+                "Security Type": data.figi?.security_type || 'N/A',
+                "Market Sector": data.figi?.market_sector || 'N/A'
             },
             issuerData: {
                 "LEI": data.lei?.lei || 'N/A',
-                "Legal Name": data.lei?.legalName || 'N/A',
-                "Legal Jurisdiction": data.lei?.legalJurisdiction || 'N/A',
-                "Registered As": data.lei?.registeredAs || 'N/A',
-                "Category": data.lei?.category || 'N/A',
-                "Subcategory": data.lei?.subCategory || 'N/A',
-                "Conformity Flag": data.lei?.conformityFlag || 'N/A',
-                "Creation Date": formatDateResults(data.lei?.creationDate) || 'N/A'
+                "Name": data.lei?.name || 'N/A',
+                "Jurisdiction": data.lei?.jurisdiction || 'N/A',
+                "Legal Form": data.lei?.legal_form || 'N/A',
+                "Status": data.lei?.status || 'N/A',
+                "Creation Date": formatDateResults(data.lei?.creation_date) || 'N/A'
             },
             tradingVenue: {
-                "Trading Venue": data.equity?.TradingVenueId || data.debt?.TradingVenueId || 'N/A',
-                "Relevant Trading Venue": data.equity?.RelevantTradingVenue || data.debt?.RelevantTradingVenue || 'N/A',
-                "Relevant Authority": data.equity?.RlvntCmptntAuthrty || data.debt?.RlvntCmptntAuthrty || 'N/A',
-                "Ticker": data.figi?.Ticker || 'N/A'
+                "Trading Venue": data.instrument?.trading_venue || 'N/A',
+                "Relevant Venue": data.instrument?.relevant_venue || 'N/A',
+                "Relevant Authority": data.instrument?.relevant_authority || 'N/A'
             },
             underlyingInstruments: {
-                "Underlying Instrument": data.equity?.UnderlyingInstrm === 'None' ? 'N/A' : (data.equity?.UnderlyingInstrm || 'N/A'),
-                "Commodity Derivative": String(data.equity?.ComdtyDerInd || data.debt?.ComdtyDerInd) === 'true' ? 'Yes' : 'No'
+                "Commodity Derivative": data.instrument?.commodity_derivative ? 'Yes' : 'No'
             }
         };
 

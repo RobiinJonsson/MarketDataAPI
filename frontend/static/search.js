@@ -106,42 +106,46 @@ async function fetchAndInsert() {
     try {
         document.getElementById("spinner").style.display = "block";
 
+        const payload = {
+            Id: isin,
+            type: 'equity'
+        };
+
         const response = await fetch('/api/fetch', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({
-                identifier: isin,
-                identifier_type: 'ISIN'
-            })
+            body: JSON.stringify(payload)
         });
 
         const result = await response.json();
-
-        document.getElementById("spinner").style.display = "none";
-
+        
         if (response.ok) {
-            const instrumentType = result.instrument_type || 'equity';
             const toast = document.getElementById("toast");
-            toast.textContent = `${result.message} (${instrumentType} instrument)`;
+            const enrichmentStatus = [];
+            if (result.figi) enrichmentStatus.push('FIGI');
+            if (result.lei) enrichmentStatus.push('LEI');
+            
+            const enrichmentText = enrichmentStatus.length ? 
+                ` (enriched with ${enrichmentStatus.join(', ')})` : '';
+                
+            toast.textContent = `Successfully processed ${isin}${enrichmentText}`;
             toast.className = "toast success show";
             setTimeout(() => toast.className = "toast", 3000);
 
-            searchAndDisplay();
+            await searchAndDisplay();
         } else {
-            const toast = document.getElementById("toast");
-            toast.textContent = result.error || 'Failed to fetch and insert data';
-            toast.className = "toast error show";
-            setTimeout(() => toast.className = "toast", 3000);
+            throw new Error(result.error || 'Failed to process request');
         }
     } catch (error) {
         console.error('Error:', error);
-        document.getElementById("spinner").style.display = "none";
         const toast = document.getElementById("toast");
-        toast.textContent = 'An error occurred while processing your request';
+        toast.textContent = error.message;
         toast.className = "toast error show";
         setTimeout(() => toast.className = "toast", 3000);
+    } finally {
+        document.getElementById("spinner").style.display = "none";
     }
 }
 

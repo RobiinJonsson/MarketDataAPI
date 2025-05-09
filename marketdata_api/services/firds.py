@@ -8,7 +8,6 @@ import sys
 from typing import Dict, Any
 # Dynamically add the project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))) #during development
-from marketdata_api.database.db import insert_into_db, map_fields, FIELD_MAPPING
 
 # Add the project root to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))

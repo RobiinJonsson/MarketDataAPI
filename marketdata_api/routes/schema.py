@@ -1,6 +1,5 @@
 import yaml
 from flask import Blueprint, jsonify, request
-from marketdata_api.database.db import DB_PATH
 import sqlite3
 from typing import Dict, Any, Tuple, List, Set, Union
 from marketdata_api.config import SCHEMA_REGISTRY, SCHEMA_TO_DB_MAPPING, SchemaField, SchemaDefinition

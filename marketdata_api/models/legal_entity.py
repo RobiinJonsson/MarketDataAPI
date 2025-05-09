@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, Integer, ForeignKey
+from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, CheckConstraint, Index
 from sqlalchemy.orm import relationship
 from ..database.base import Base
 from datetime import datetime, UTC
@@ -6,17 +6,22 @@ from datetime import datetime, UTC
 class LegalEntity(Base):
     __tablename__ = "legal_entities"
     
-    lei = Column(String, primary_key=True)
-    name = Column(String)  # Changed from legal_name
-    jurisdiction = Column(String)  # Changed from legal_jurisdiction
-    legal_form = Column(String)  # Changed from legal_form_id
-    registered_as = Column(String)  # Added
-    status = Column(String)
-    bic = Column(String)  # Added
-    next_renewal_date = Column(DateTime)  # Added
-    registration_status = Column(String)  # Added
-    managing_lou = Column(String)  # Added
-    creation_date = Column(DateTime, default=lambda: datetime.now(UTC))
+    lei = Column(String, primary_key=True, nullable=False)
+    name = Column(String, nullable=False)
+    jurisdiction = Column(String, nullable=False)
+    legal_form = Column(String, nullable=False)
+    registered_as = Column(String, nullable=False)
+    status = Column(String, nullable=False)
+    bic = Column(String)
+    next_renewal_date = Column(DateTime)
+    registration_status = Column(String, nullable=False)
+    managing_lou = Column(String, nullable=False)
+    creation_date = Column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
+
+    __table_args__ = (
+        Index('idx_lei_status', 'lei', 'status'),
+        CheckConstraint(status.in_(['ACTIVE', 'INACTIVE', 'PENDING']), name='ck_status_values')
+    )
     
     # Relationships
     addresses = relationship("EntityAddress", back_populates="entity", cascade="all, delete-orphan")
@@ -27,13 +32,13 @@ class EntityAddress(Base):
     __tablename__ = "entity_addresses"
     
     id = Column(Integer, primary_key=True)
-    lei = Column(String, ForeignKey('legal_entities.lei', ondelete='CASCADE'))
-    type = Column(String)  # Changed from address_type
-    address_lines = Column(String)  # Added
-    country = Column(String)
-    city = Column(String)
-    region = Column(String)  # Added
-    postal_code = Column(String)  # Added
+    lei = Column(String, ForeignKey('legal_entities.lei', ondelete='CASCADE'), nullable=False)
+    type = Column(String, nullable=False)
+    address_lines = Column(String, nullable=False)
+    country = Column(String, nullable=False)
+    city = Column(String, nullable=False)
+    region = Column(String)
+    postal_code = Column(String, nullable=False)
     
     entity = relationship("LegalEntity", back_populates="addresses")
 
