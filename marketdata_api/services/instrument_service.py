@@ -1,6 +1,7 @@
 import uuid
 import logging
-from typing import Dict, Any, Optional, NoReturn
+from typing import Dict, Any, Optional, NoReturn, Tuple
+from sqlalchemy.orm import Session
 from ..database.session import get_session, SessionLocal
 from ..database.model_mapper import map_to_model, map_figi_data
 from ..models.instrument import Instrument, Equity, Debt
@@ -83,7 +84,7 @@ class InstrumentService:
         finally:
             session.close()
 
-    def get_instrument(self, identifier: str) -> tuple[SessionLocal, Optional[Instrument]]:
+    def get_instrument(self, identifier: str) -> tuple[Session, Optional[Instrument]]:
         """
         Retrieve an instrument by its identifier.
         
@@ -154,23 +155,12 @@ class InstrumentService:
     def get_or_create_instrument(self, identifier: str, instrument_type: str = "equity") -> Optional[Instrument]:
         session = None
         try:
+            # First check if instrument exists
             session, instrument = self.get_instrument(identifier)
             if instrument:
-                if not instrument.figi_mapping:
-                    try:
-                        figi_data = search_openfigi(identifier)
-                        if figi_data:
-                            figi_mapping = map_figi_data(figi_data, identifier)
-                            if figi_mapping:
-                                instrument.figi_mapping = figi_mapping
-                                session.add(figi_mapping)
-                                session.commit()
-                                self.logger.info(f"Added FIGI mapping for instrument {identifier}")
-                    except Exception as e:
-                        self.logger.error(f"Failed to fetch FIGI data: {str(e)}")
                 return instrument
             
-            # Existing FIRDS data fetching logic
+            # If not found, fetch FIRDS data first
             list_files = self.esma_loader.load_mifid_file_list(['firds'])
             file_type = 'FULINS_E' if instrument_type == 'equity' else 'FULINS_D'
             fulins_files = list_files[list_files['download_link'].str.contains(file_type, na=False)]
@@ -179,6 +169,7 @@ class InstrumentService:
                 self.logger.warning(f"No {file_type} files found")
                 return None
 
+            # Get FIRDS data
             instrument_data = None
             for _, file_info in fulins_files.iterrows():
                 link = file_info['download_link']
@@ -197,25 +188,8 @@ class InstrumentService:
                 self.logger.warning(f"No FIRDS data found for {identifier}")
                 return None
 
-            # Fetch FIGI data before creating instrument
-            try:
-                figi_data = search_openfigi(identifier)
-                if figi_data:
-                    instrument_data['figi'] = figi_data[0].get('figi')
-            except Exception as e:
-                self.logger.error(f"Failed to fetch FIGI data: {str(e)}")
-
-            # Create instrument first
+            # Create instrument with FIRDS data only
             instrument = self.create_instrument(instrument_data, instrument_type)
-            
-            # Then create FIGI mapping if we have data
-            if figi_data:
-                figi_mapping = map_figi_data(figi_data, identifier)
-                if figi_mapping:
-                    instrument.figi_mapping = figi_mapping
-                    session.add(figi_mapping)
-                    session.commit()
-                    
             return instrument
             
         except Exception as e:
@@ -225,25 +199,35 @@ class InstrumentService:
             if session:
                 session.close()
 
-    def enrich_instrument(self, instrument: Instrument) -> Instrument:
+    def enrich_instrument(self, instrument: Instrument) -> tuple[Session, Instrument]:
         """
         Enrich existing instrument with additional data from external sources.
+        Returns tuple of (session, instrument) to keep session alive.
         """
+        session = SessionLocal()
         try:
+            # Reattach instrument to new session
+            instrument = session.merge(instrument)
+            session.refresh(instrument)
+            
             # Enrich with FIGI if not present
-            if not instrument.figi:
-                figi_data = search_openfigi(instrument.isin)
-                if figi_data:
-                    self.update_instrument(instrument.id, figi_data)
+            if not instrument.figi_mapping:
+                try:
+                    figi_data = search_openfigi(instrument.isin, instrument.type, instrument.trading_venue)
+                    if figi_data:
+                        figi_mapping = map_figi_data(figi_data, instrument.isin)
+                        if figi_mapping:
+                            instrument.figi_mapping = figi_mapping
+                            session.add(figi_mapping)
+                            session.commit()
+                            session.refresh(instrument)
+                            self.logger.info(f"Added FIGI mapping for instrument {instrument.isin}")
+                except Exception as e:
+                    self.logger.error(f"Failed to fetch FIGI data: {str(e)}")
                     
-            # Enrich with LEI data if not in additional_data
-            if instrument.lei_id and 'lei_data' not in (instrument.additional_data or {}):
-                lei_data = fetch_lei_info(instrument.lei_id)
-                if lei_data and 'error' not in lei_data:
-                    self.update_instrument(instrument.id, {'lei_data': lei_data})
-                    
-            return instrument
+            return session, instrument
             
         except Exception as e:
             self.logger.error(f"Failed to enrich instrument {instrument.id}: {str(e)}")
-            return instrument
+            session.rollback()
+            raise

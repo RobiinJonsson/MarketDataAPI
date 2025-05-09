@@ -2,17 +2,22 @@
 import os
 import sys
 
-# Add the project root to Python path
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+# Get the absolute path to the project root
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(script_dir, '..'))
 sys.path.insert(0, project_root)
 
 from marketdata_api.services.instrument_service import InstrumentService
+from marketdata_api.services.legal_entity_service import LegalEntityService
 from marketdata_api.database.db import Base, engine
 from marketdata_api.database.initialize_db import init_database
 
 def run_tests():
-    # Initialize database only if it doesn't exist
-    init_database(force_recreate=False)
+    # Initialize database with force recreate to apply schema changes
+    init_database(force_recreate=True)  # Changed to True
+    
+    print("\nTesting Legal Entity Service...")
+    test_legal_entities()
     
     service = InstrumentService()
     
@@ -22,15 +27,59 @@ def run_tests():
     print("\nTesting Debt Instrument...")
     test_debt(service)
 
+def test_legal_entities():
+    service = LegalEntityService()
+    session = None
+    
+    try:
+        # Test create/update
+        print("\nTesting create/update legal entity...")
+        lei = "R0MUWSFPU8MPRO8K5P83"  # BNP Paribas LEI
+        session, entity = service.create_or_update_entity(lei)
+        
+        if entity:
+            print(f"Created/Updated entity: {entity.lei}")
+            print(f"Name: {entity.name}")
+            print(f"Jurisdiction: {entity.jurisdiction}")
+            print(f"Status: {entity.status}")
+            print(f"BIC: {entity.bic}")
+            if entity.addresses:
+                print("\nAddresses:")
+                for addr in entity.addresses:
+                    print(f"- {addr.type}: {addr.city}, {addr.country}")
+                    if addr.address_lines:
+                        print(f"  Address: {addr.address_lines}")
+
+        # Test get
+        print("\nTesting get entity...")
+        get_session, retrieved = service.get_entity(lei)
+        if retrieved:
+            print(f"Retrieved entity: {retrieved.lei}")
+            get_session.close()
+        
+        # Test get all
+        print("\nTesting get all entities...")
+        all_session, all_entities = service.get_all_entities()
+        print(f"Total entities: {len(all_entities)}")
+        all_session.close()
+        
+    except Exception as e:
+        print(f"Error creating/updating entity: {str(e)}")
+        raise
+    finally:
+        if session:
+            session.close()
+
 def test_equity(service):
     isin = "FR0000131104"  # BNP Paribas
     session = None
     try:
+        # First get/create the basic instrument
         instrument = service.get_or_create_instrument(isin, "equity")
-        # Ensure we have all relationships loaded before closing session
-        if instrument and instrument.figi_mapping:
-            _ = instrument.figi_mapping.security_type  # Force load
-        print_instrument_details(instrument, "Equity")
+        if instrument:
+            # Then enrich it with additional data
+            session, instrument = service.enrich_instrument(instrument)
+            print_instrument_details(session, instrument, "Equity")
     except Exception as e:
         print(f"Error testing equity: {str(e)}")
         raise
@@ -40,19 +89,31 @@ def test_equity(service):
 
 def test_debt(service):
     isin = "XS2332219612"  # Example bond
+    session = None
     try:
+        # First get/create the basic instrument
         instrument = service.get_or_create_instrument(isin, "debt")
-        print_instrument_details(instrument, "Debt")
+        if instrument:
+            # Then enrich it with additional data
+            session, instrument = service.enrich_instrument(instrument)
+            print_instrument_details(session, instrument, "Debt")
     except Exception as e:
         print(f"Error testing debt: {str(e)}")
         raise
+    finally:
+        if session:
+            session.close()
 
-def print_instrument_details(instrument, type_name):
+def print_instrument_details(session, instrument, type_name):
+    """Print instrument details using active session"""
     print(f"\n{type_name} Instrument Details:")
     print("-" * 25)
     if not instrument:
         print("No instrument found or created")
         return
+
+    # Use the active session to refresh and access relationships
+    session.refresh(instrument)
         
     print(f"ID: {instrument.id}")
     print(f"ISIN: {instrument.isin}")

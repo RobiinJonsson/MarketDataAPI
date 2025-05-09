@@ -20,7 +20,7 @@ def get_exchange_code(isin):
     # Get exchange code from config
     return EXCHANGE_CODES.get(country_code, DEFAULT_EXCHANGE_CODE)
 
-def search_openfigi(isin: str, mic_code: str = None) -> list:
+def search_openfigi(isin: str, instrument_type, mic_code: str = None) -> list:
     """Search OpenFIGI for an ISIN and return the results."""
     url = "https://api.openfigi.com/v3/mapping"
     headers = {
@@ -29,7 +29,7 @@ def search_openfigi(isin: str, mic_code: str = None) -> list:
     }
     
     # Use MIC code if provided for equity
-    if mic_code:
+    if instrument_type == "equity":
         payload = [
             {
                 "idType": "ID_ISIN",
