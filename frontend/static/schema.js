@@ -73,35 +73,15 @@ function displaySchemaResults(data) {
     const schemaOutput = document.getElementById("schema-output");
     schemaOutput.textContent = JSON.stringify(data.results, null, 2);
 
-    // Update results table with dynamic fields based on schema
-    const table = document.getElementById("results-table");
-    if (data.results && data.results.length > 0) {
-        const result = data.results[0];
-        const fields = Object.keys(result);
-        
-        // Create table headers based on fields
-        table.innerHTML = `
-            <thead>
-                <tr>
-                    ${fields.map(field => `<th>${field}</th>`).join('')}
-                </tr>
-            </thead>
-            <tbody>
-            </tbody>
-        `;
-
-        // Add data rows
-        const tbody = table.querySelector('tbody');
-        data.results.forEach(result => {
-            const row = `
-                <tr>
-                    ${fields.map(field => `<td>${result[field] || 'N/A'}</td>`).join('')}
-                </tr>
-            `;
-            tbody.innerHTML += row;
-        });
+    // Update unmapped fields display if available
+    const unmappedFieldsOutput = document.getElementById("unmapped-fields");
+    if (data.unmapped_fields && data.unmapped_fields.length > 0) {
+        unmappedFieldsOutput.textContent = JSON.stringify({
+            unmapped_fields: data.unmapped_fields,
+            count: data.unmapped_fields.length
+        }, null, 2);
     } else {
-        table.innerHTML = `<tr><td>No results found</td></tr>`;
+        unmappedFieldsOutput.textContent = '';
     }
 }
 
