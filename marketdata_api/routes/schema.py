@@ -4,6 +4,9 @@ import sqlite3
 from typing import Dict, Any, Tuple, List, Set, Union
 from marketdata_api.config import SCHEMA_REGISTRY, SCHEMA_TO_DB_MAPPING, SchemaField, SchemaDefinition
 import os
+from ..schema.schema_mapper import SchemaMapper
+from ..database.session import get_session
+from ..models.instrument import Instrument
 
 schema_bp = Blueprint("schema", __name__)
 
@@ -163,32 +166,29 @@ def schema_search():
         if not data or 'filters' not in data:
             return jsonify({"error": "No filters provided"}), 400
 
-        print(f"Received request data: {data}")  # Debug print
+        schema_name = data.get('schema_type', 'base')
+        mapper = SchemaMapper()
 
-        # Get the schema from the request
-        if 'schema' not in data:
-            return jsonify({"error": "No schema provided"}), 400
+        with get_session() as session:
+            # Get instrument
+            instrument = session.query(Instrument).filter(
+                Instrument.isin == data['filters']['identifier']
+            ).first()
 
-        # Parse the schema from the request
-        try:
-            schema = load_schema(data['schema'])
-        except ValueError as e:
-            return jsonify({"error": str(e)}), 400
+            if not instrument:
+                return jsonify({"error": "Instrument not found"}), 404
 
-        # Validate the schema
-        is_valid, error_message = validate_schema(schema)
-        if not is_valid:
-            return jsonify({"error": f"Invalid schema: {error_message}"}), 400
-        
-        # Perform the search
-        results, unmapped_fields = search_by_schema(schema, data['filters'])
-        
-        return jsonify({
-            "count": len(results),
-            "results": results,
-            "unmapped_fields": unmapped_fields
-        })
+            # Map to requested schema
+            try:
+                result = mapper.map_to_schema(instrument, schema_name)
+            except ValueError as e:
+                return jsonify({"error": str(e)}), 400
+
+            return jsonify({
+                "results": [result],
+                "count": 1,
+                "schema": schema_name
+            })
 
     except Exception as e:
-        print(f"Error in schema_search: {str(e)}")  # Debug print
-        return jsonify({"error": str(e)}), 500 
+        return jsonify({"error": str(e)}), 500

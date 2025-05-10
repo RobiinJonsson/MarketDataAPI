@@ -1,0 +1,65 @@
+version: "1.0"
+name: "base"
+description: "Base schema mapping for all instrument types"
+fields:
+  - name: "identifier"
+    source: "isin"
+    type: "string"
+    required: true
+    description: "ISIN identifier"
+  
+  - name: "full_name"
+    source: "full_name"
+    type: "string"
+    required: true
+    description: "Full instrument name"
+  
+  - name: "short_name"
+    source: "short_name"
+    type: "string"
+    required: false
+    description: "Short name or symbol"
+
+  - name: "symbol"
+    source: "symbol"
+    type: "string"
+    required: false
+    description: "Trading symbol"
+
+  - name: "cfi_code"
+    source: "cfi_code"
+    type: "string"
+    required: false
+    description: "CFI classification code"
+
+  - name: "currency"
+    source: "currency"
+    type: "string"
+    required: false
+    description: "Trading currency"
+
+  - name: "trading_venue"
+    source: "trading_venue"
+    type: "string"
+    required: false
+    description: "Trading venue ID"
+
+  - name: "first_trade_date"
+    source: "first_trade_date"
+    type: "date"
+    required: false
+    description: "First trading date"
+    transformation: "format(YYYY-MM-DD)"
+
+  - name: "termination_date"
+    source: "termination_date"
+    type: "date"
+    required: false
+    description: "Termination date"
+    transformation: "format(YYYY-MM-DD)"
+
+  - name: "commodity_derivative"
+    source: "commodity_derivative"
+    type: "boolean"
+    required: false
+    description: "Is commodity derivative"

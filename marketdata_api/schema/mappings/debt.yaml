@@ -1,0 +1,50 @@
+version: "1.0"
+name: "debt"
+description: "Debt instrument schema mapping"
+extends: "base"
+fields:
+  - name: "total_issued_nominal"
+    source: "total_issued_nominal"
+    type: "number"
+    required: false
+    description: "Total issued nominal amount"
+    transformation: "round(2)"
+
+  - name: "maturity_date"
+    source: "maturity_date"
+    type: "date"
+    required: true
+    description: "Maturity date"
+    transformation: "format(YYYY-MM-DD)"
+
+  - name: "nominal_value_per_unit"
+    source: "nominal_value_per_unit"
+    type: "number"
+    required: false
+    description: "Nominal value per unit"
+    transformation: "round(2)"
+
+  - name: "fixed_interest_rate"
+    source: "fixed_interest_rate"
+    type: "number"
+    required: true
+    description: "Fixed interest rate"
+    transformation: "round(4)"
+
+  - name: "debt_seniority"
+    source: "debt_seniority"
+    type: "string"
+    required: false
+    description: "Debt seniority type"
+
+  - name: "coupon_frequency"
+    source: "coupon_frequency"
+    type: "string"
+    required: false
+    description: "Coupon payment frequency"
+
+  - name: "credit_rating"
+    source: "credit_rating"
+    type: "string"
+    required: false
+    description: "Credit rating"

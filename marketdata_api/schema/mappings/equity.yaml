@@ -1,0 +1,56 @@
+version: "1.0"
+name: "equity"
+description: "Equity instrument schema mapping"
+extends: "base"
+fields:
+  - name: "price_multiplier"
+    source: "price_multiplier"
+    type: "number"
+    required: false
+    description: "Price multiplier"
+    transformation: "round(4)"
+
+  - name: "market_cap"
+    source: "market_cap"
+    type: "number"
+    required: false
+    description: "Market capitalization"
+    transformation: "round(2)"
+  
+  - name: "shares_outstanding"
+    source: "shares_outstanding"
+    type: "number"
+    required: false
+    description: "Number of shares outstanding"
+    transformation: "round(0)"
+  
+  - name: "exchange"
+    source: "exchange"
+    type: "string"
+    required: false
+    description: "Exchange code"
+  
+  - name: "sector"
+    source: "sector"
+    type: "string"
+    required: false
+    description: "Business sector"
+  
+  - name: "industry"
+    source: "industry"
+    type: "string"
+    required: false
+    description: "Industry classification"
+
+  - name: "asset_class"
+    source: "asset_class"
+    type: "string"
+    required: false
+    description: "Asset classification"
+
+  - name: "admission_approval_date"
+    source: "admission_approval_date"
+    type: "date"
+    required: false
+    description: "Admission approval date"
+    transformation: "format(YYYY-MM-DD)"

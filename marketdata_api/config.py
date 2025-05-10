@@ -66,132 +66,18 @@ EXCHANGE_CODES = {
 # Default exchange code if no country code is provided
 DEFAULT_EXCHANGE_CODE = 'SS'
 
-# Schema configuration for handling different financial instruments as requested by application formats
-class FieldType(Enum):
-    STRING = "string"
-    NUMBER = "number"
-    BOOLEAN = "boolean"
-    DATE = "date"
-    ENUM = "enum"
+# Update SCHEMA_REGISTRY to use new mapping system
+from .schema.schema_mapper import SchemaMapper
 
-@dataclass
-class SchemaField:
-    name: str
-    field_type: FieldType
-    required: bool
-    description: str
-    validation_rules: Optional[Dict[str, Any]] = None
-    enum_values: Optional[List[str]] = None
+schema_mapper = SchemaMapper()
+SCHEMA_REGISTRY = schema_mapper.mappings
 
-@dataclass
-class SchemaDefinition:
-    name: str
-    description: str
-    version: str
-    fields: List[SchemaField]
-    extends: Optional[str] = None  # Name of schema to extend
-    custom_validators: Optional[Dict[str, Any]] = None
-
-# Schema Registry - defines all supported schemas
-SCHEMA_REGISTRY = {
-    "firds_e": SchemaDefinition(
-        name="firds_e",
-        description="FIRDS European schema for instrument data",
-        version="1.0",
-        fields=[
-            SchemaField(
-                name="identifier",
-                field_type=FieldType.STRING,
-                required=True,
-                description="Unique identifier for the instrument (ISIN, FIGI, etc.)"
-            ),
-            SchemaField(
-                name="full_name",
-                field_type=FieldType.STRING,
-                required=True,
-                description="Full name of the instrument"
-            ),
-            SchemaField(
-                name="short_name",
-                field_type=FieldType.STRING,
-                required=True,
-                description="Short name or ticker symbol"
-            ),
-            SchemaField(
-                name="classification_type",
-                field_type=FieldType.STRING,
-                required=True,
-                description="Classification type (e.g., CFICode)"
-            ),
-            SchemaField(
-                name="currency",
-                field_type=FieldType.STRING,
-                required=False,
-                description="Currency of the instrument"
-            ),
-            SchemaField(
-                name="issuer_lei",
-                field_type=FieldType.STRING,
-                required=False,
-                description="Legal Entity Identifier of the issuer"
-            ),
-            SchemaField(
-                name="trading_venue_id",
-                field_type=FieldType.STRING,
-                required=False,
-                description="Trading venue identifier"
-            )
-        ]
-    ),
-    "equity": SchemaDefinition(
-        name="equity",
-        description="Schema for equity instruments",
-        version="1.0",
-        extends="firds_e",  # Inherits from firds_e schema
-        fields=[
-            SchemaField(
-                name="market_cap",
-                field_type=FieldType.NUMBER,
-                required=False,
-                description="Market capitalization"
-            ),
-            SchemaField(
-                name="dividend_yield",
-                field_type=FieldType.NUMBER,
-                required=False,
-                description="Dividend yield percentage"
-            )
-        ]
-    ),
-    "bond": SchemaDefinition(
-        name="bond",
-        description="Schema for bond instruments",
-        version="1.0",
-        extends="firds_e",  # Inherits from firds_e schema
-        fields=[
-            SchemaField(
-                name="coupon_rate",
-                field_type=FieldType.NUMBER,
-                required=True,
-                description="Annual coupon rate"
-            ),
-            SchemaField(
-                name="maturity_date",
-                field_type=FieldType.DATE,
-                required=True,
-                description="Bond maturity date"
-            )
-        ]
-    )
-}
-
-# Define mapping between schema fields and database columns
+# Keep the mapping dictionary for backward compatibility
 SCHEMA_TO_DB_MAPPING = {
-    "identifier": "ISIN",
-    "currency": "Currency",
-    "full_name": "FullName",
-    "short_name": "ShortName",
-    "classification_type": "CFICode",
-    "issuer_lei": "IssuerLEI",
-    "trading_venue_id": "TradingVenueId"
+    "identifier": "isin",
+    "full_name": "full_name",
+    "short_name": "short_name",
+    "currency": "currency",
+    "trading_venue": "trading_venue",
+    # ...existing mappings...
 }
