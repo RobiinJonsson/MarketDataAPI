@@ -107,11 +107,22 @@ MarketDataAPI/
 
 - Python 3.8+
 - Flask
-- SQLAlchemy
+- SQLAlchemy 2.0+
 - OpenFIGI API
 - GLEIF API
-- SQLite
+- SQLite (with PostgreSQL support planned)
 - JavaScript/HTML/CSS
+- Alembic for migrations
+- Pytest for testing
+
+## Requirements
+
+- Python 3.8 or higher
+- SQLite 3
+- Git
+- Virtual environment (recommended)
+
+See `requirements.txt` for complete Python package dependencies.
 
 ## Contributing
 

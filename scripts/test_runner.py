@@ -9,7 +9,6 @@ sys.path.insert(0, project_root)
 
 from marketdata_api.services.instrument_service import InstrumentService
 from marketdata_api.services.legal_entity_service import LegalEntityService
-from marketdata_api.database.db import Base, engine
 from marketdata_api.database.initialize_db import init_database
 
 def run_tests():

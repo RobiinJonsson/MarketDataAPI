@@ -121,7 +121,7 @@ def instrument_operations():
     
     if len(sys.argv) < 3:
         print("Usage: python scripts/cli.py instrument <command> [args]")
-        print("Commands: get <id/isin>, create <type> <data>, update <id> <data>, enrich <id>, list, detail <isin>")
+        print("Commands: get <id/isin>, create <type> <data>, update <id> <data>, delete <id/isin>, enrich <id>, list, detail <isin>")
         return
 
     command = sys.argv[2]
@@ -149,6 +149,13 @@ def instrument_operations():
                 print(f"Updated instrument: {instrument.__dict__}")
             else:
                 print("Instrument not found")
+                
+        elif command == "delete" and len(sys.argv) == 4:
+            identifier = sys.argv[3]
+            if service.delete_instrument(identifier):
+                print(f"Successfully deleted instrument: {identifier}")
+            else:
+                print(f"Instrument not found: {identifier}")
                 
         elif command == "enrich" and len(sys.argv) == 4:
             session, instrument = service.get_instrument(sys.argv[3])
@@ -358,6 +365,7 @@ Instrument Commands:
     detail <isin>                      - Show detailed instrument info including FIGI and LEI data
     create <type> <data>               - Create new instrument (type: equity|debt)
     update <id> <data>                 - Update existing instrument
+    delete <id/isin>                   - Delete instrument by ID or ISIN
     enrich <id>                        - Enrich with FIGI and LEI data
     list                               - List all instruments
 

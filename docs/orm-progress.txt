@@ -24,18 +24,18 @@ Completed
 ✓ Improve entity relationship handling
 ✓ Add basic indices for performance
 ✓ Split enrichment logic into separate methods
+✓ Add service interfaces/protocols
+✓ Add retry mechanism for external services
 
 In Progress
 -----------
 □ Fix session conflicts in enrichment process
-□ Add retry mechanism for external services
 □ Improve error handling in service layer
-□ Add service interfaces/protocols
+□ Add SQLAlchemy validators for data validation
 
 TODO
 ----
 High Priority:
-□ Add SQLAlchemy validators for data validation
 □ Add proper transaction management for batch operations
 □ Add session pooling for better performance
 □ Add health checks for external services

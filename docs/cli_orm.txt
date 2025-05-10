@@ -15,8 +15,9 @@ Basic Commands:
 Instrument Commands:
     get <id/isin>                      - Get basic instrument info
     detail <isin>                      - Show detailed instrument info including FIGI and LEI data
-    create <type> <data>               - Create new instrument (type: equity|debt)
+    create <type> <data>               - Create new instrument (type: equity|debt) <--- Important - Manual creation not via FIRDS!
     update <id> <data>                 - Update existing instrument
+    delete <id/isin>                   - Delete instrument by ID or ISIN
     enrich <id>                        - Enrich with FIGI and LEI data
     list                               - List all instruments
 

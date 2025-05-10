@@ -1,13 +1,18 @@
 import os
 import sys
+import logging
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
 from flask import Blueprint, jsonify, request, render_template
 from marketdata_api.services.openfigi import search_openfigi, batch_search_openfigi
 from marketdata_api.services.firds import get_firds_file_names
 from marketdata_api.services.gleif import fetch_lei_info
+from marketdata_api.database.session import get_session
 from ..services.instrument_service import InstrumentService
 from ..models.instrument import Instrument, Equity, Debt
 from sqlalchemy.exc import SQLAlchemyError
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 # Create a Blueprint for the market routes
 market_bp = Blueprint("market", __name__)
@@ -129,38 +134,41 @@ def search_db_entry(isin):
 # Route to handle database operations fetch and insert from frontend
 @market_bp.route('/api/fetch', methods=['POST'])
 def fetch_and_insert_frontend():
-    """Fetch and insert data using SQLAlchemy models"""
+    """Fetch and insert data using SQLAlchemy models."""
     try:
         data = request.get_json()
         identifier = data.get('Id')
-        instrument_type = data.get('type', 'equity')
         
         if not identifier:
             return jsonify({'error': 'Missing identifier'}), 400
 
         service = InstrumentService()
-        instrument = service.get_or_create_instrument(identifier, instrument_type)
-        
-        if not instrument:
-            return jsonify({'error': 'Unable to fetch or create instrument'}), 404
+        with get_session() as session:
+            # Get or create the instrument
+            instrument = service.get_or_create_instrument(identifier)
+            if not instrument:
+                logger.warning(f"Unable to fetch or create instrument: {identifier}")
+                return jsonify({'error': 'Unable to fetch or create instrument'}), 404
+
+            # Enrich the instrument
+            session, enriched = service.enrich_instrument(instrument)
             
-        # Enrich the instrument with FIGI and LEI data
-        session, enriched = service.enrich_instrument(instrument)
-        if session:
-            session.close()
+            # Build response with enrichment status
+            response_data = {
+                'message': f'Successfully processed instrument',
+                'instrument_id': enriched.id,
+                'instrument_type': enriched.type,
+                'isin': enriched.isin,
+                'figi': enriched.figi_mapping.figi if enriched.figi_mapping else None,
+                'lei': enriched.legal_entity.lei if enriched.legal_entity else None
+            }
+            
+            logger.info(f"Successfully processed instrument {identifier}")
+            return jsonify(response_data)
 
-        return jsonify({
-            'message': f'Successfully fetched/created and enriched {instrument_type} instrument',
-            'instrument_id': enriched.id,
-            'instrument_type': enriched.type,
-            'isin': enriched.isin,
-            'figi': enriched.figi_mapping.figi if enriched.figi_mapping else None,
-            'lei': enriched.legal_entity.lei if enriched.legal_entity else None
-        })
     except Exception as e:
+        logger.error(f"Error in fetch_and_insert: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
-
 
 @market_bp.route("/api/gleif", methods=["POST"])
 def get_lei_info():

@@ -1,13 +1,18 @@
-from typing import List, Optional
+import logging
+from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from ..models.legal_entity import LegalEntity, EntityAddress, EntityRegistration
 from ..database.model_mapper import map_lei_record, flatten_address
 from ..database.session import get_session, SessionLocal
 from .gleif import fetch_lei_info
 
+class LegalEntityServiceError(Exception):
+    """Base exception for legal entity service errors."""
+    pass
+
 class LegalEntityService:
     def __init__(self):
-        pass
+        self.logger = logging.getLogger(__name__)
 
     def get_entity(self, lei: str) -> tuple[Session, Optional[LegalEntity]]:
         session = SessionLocal()
@@ -30,46 +35,54 @@ class LegalEntityService:
             raise
 
     def create_or_update_entity(self, lei: str) -> tuple[Session, Optional[LegalEntity]]:
+        """Create or update legal entity from GLEIF data."""
         gleif_data = fetch_lei_info(lei)
         if not gleif_data:
+            self.logger.warning(f"No GLEIF data found for LEI: {lei}")
             return None, None
 
-        session = SessionLocal()
-        try:
-            # Map the data to our models
-            mapped_data = map_lei_record(gleif_data)
-            entity_data = mapped_data["lei_record"]
-            addresses_data = mapped_data["addresses"]
-            registration_data = mapped_data["registration"]
+        with get_session() as session:
+            try:
+                mapped_data = map_lei_record(gleif_data)
+                entity = self._update_entity_from_data(session, mapped_data)
+                return session, entity
+            except Exception as e:
+                self.logger.error(f"Failed to create/update entity {lei}: {str(e)}")
+                raise LegalEntityServiceError(f"Failed to create/update entity: {str(e)}")
 
-            # Create or update the entity
-            entity = session.query(LegalEntity).filter(LegalEntity.lei == lei).first()
-            if not entity:
-                entity = LegalEntity(**entity_data)
-                session.add(entity)
-            else:
-                for key, value in entity_data.items():
-                    setattr(entity, key, value)
+    def _update_entity_from_data(self, session: Session, mapped_data: Dict[str, Any]) -> LegalEntity:
+        """Helper to update entity from mapped data."""
+        entity_data = mapped_data["lei_record"]
+        lei = entity_data["lei"]
 
-            # Clear existing addresses and add new ones
-            entity.addresses = []
-            for addr_data in addresses_data:
-                address = EntityAddress(**addr_data)
-                entity.addresses.append(address)
+        entity = session.query(LegalEntity).filter(LegalEntity.lei == lei).first()
+        if not entity:
+            entity = LegalEntity(**entity_data)
+            session.add(entity)
+        else:
+            for key, value in entity_data.items():
+                setattr(entity, key, value)
 
-            # Update registration
-            if entity.registration:
-                for key, value in registration_data.items():
-                    setattr(entity.registration, key, value)
-            else:
-                entity.registration = EntityRegistration(**registration_data)
+        # Update relationships
+        self._update_entity_addresses(entity, mapped_data["addresses"])
+        self._update_entity_registration(entity, mapped_data["registration"])
+        
+        return entity
 
-            session.commit()
-            session.refresh(entity)
-            return session, entity
-        except:
-            session.rollback()
-            raise
+    def _update_entity_addresses(self, entity: LegalEntity, addresses_data: List[Dict[str, Any]]) -> None:
+        """Helper to update entity addresses."""
+        entity.addresses = []
+        for addr_data in addresses_data:
+            address = EntityAddress(**addr_data)
+            entity.addresses.append(address)
+
+    def _update_entity_registration(self, entity: LegalEntity, registration_data: Dict[str, Any]) -> None:
+        """Helper to update entity registration."""
+        if entity.registration:
+            for key, value in registration_data.items():
+                setattr(entity.registration, key, value)
+        else:
+            entity.registration = EntityRegistration(**registration_data)
 
     def delete_entity(self, lei: str) -> bool:
         with get_session() as session:

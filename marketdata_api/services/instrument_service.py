@@ -37,7 +37,8 @@ class InstrumentService:
         missing = [f for f in required_fields if f not in data]
         if missing:
             raise InstrumentValidationError(f"Missing required fields: {', '.join(missing)}")
-
+    
+    # Create a new instrument in the database manually, not using FIRDS data
     def create_instrument(self, data: Dict[str, Any], instrument_type: str = "equity") -> Instrument:
         """
         Create a new instrument in the database.
@@ -152,52 +153,77 @@ class InstrumentService:
         finally:
             session.close()
 
-    def get_or_create_instrument(self, identifier: str, instrument_type: str = "equity") -> Optional[Instrument]:
-        session = None
+    def delete_instrument(self, identifier: str) -> bool:
+        """Delete an instrument by its identifier."""
+        session = SessionLocal()
         try:
-            # First check if instrument exists
-            session, instrument = self.get_instrument(identifier)
+            instrument = (
+                session.query(Instrument)
+                .filter(
+                    (Instrument.id == identifier) |
+                    (Instrument.isin == identifier) |
+                    (Instrument.symbol == identifier)
+                )
+                .first()
+            )
             if instrument:
+                session.delete(instrument)
+                session.commit()
+                return True
+            return False
+        except Exception as e:
+            session.rollback()
+            self.logger.error(f"Failed to delete instrument: {str(e)}")
+            raise
+        finally:
+            session.close()
+
+    def get_or_create_instrument(self, identifier: str, instrument_type: str = "equity") -> Optional[Instrument]:
+        """Get existing instrument or create from FIRDS data."""
+        with get_session() as session:
+            try:
+                # Check if instrument exists
+                instrument = (
+                    session.query(Instrument)
+                    .filter(Instrument.isin == identifier)
+                    .first()
+                )
+                if instrument:
+                    return instrument
+
+                # If not found, get FIRDS data and create
+                instrument_data = self._get_firds_data(identifier, instrument_type)
+                if not instrument_data:
+                    return None
+
+                instrument = self.create_instrument(instrument_data, instrument_type)
                 return instrument
-            
-            # If not found, fetch FIRDS data first
+
+            except Exception as e:
+                self.logger.error(f"Failed to get/create instrument {identifier}: {str(e)}")
+                raise InstrumentServiceError(f"Failed to get/create instrument: {str(e)}")
+
+    def _get_firds_data(self, identifier: str, instrument_type: str) -> Optional[Dict[str, Any]]:
+        """Helper method to fetch FIRDS data."""
+        try:
             list_files = self.esma_loader.load_mifid_file_list(['firds'])
             file_type = 'FULINS_E' if instrument_type == 'equity' else 'FULINS_D'
             fulins_files = list_files[list_files['download_link'].str.contains(file_type, na=False)]
             
             if fulins_files.empty:
-                self.logger.warning(f"No {file_type} files found")
                 return None
 
-            # Get FIRDS data
-            instrument_data = None
             for _, file_info in fulins_files.iterrows():
-                link = file_info['download_link']
-                self.logger.info(f"Processing file: {link}")
-                
-                df = self.esma_loader.download_file(link)
-                if df.empty:
-                    continue
-                    
-                isin_data = df[df['Id'] == identifier]
-                if not isin_data.empty:
-                    instrument_data = isin_data.iloc[0].to_dict()
-                    break
-            
-            if not instrument_data:
-                self.logger.warning(f"No FIRDS data found for {identifier}")
-                return None
+                df = self.esma_loader.download_file(file_info['download_link'])
+                if not df.empty:
+                    isin_data = df[df['Id'] == identifier]
+                    if not isin_data.empty:
+                        return isin_data.iloc[0].to_dict()
+            return None
 
-            # Create instrument with FIRDS data only
-            instrument = self.create_instrument(instrument_data, instrument_type)
-            return instrument
-            
         except Exception as e:
-            self.logger.error(f"Failed to fetch/create instrument {identifier}: {str(e)}")
-            raise InstrumentServiceError(f"Failed to fetch/create instrument: {str(e)}")
-        finally:
-            if session:
-                session.close()
+            self.logger.error(f"Error fetching FIRDS data: {str(e)}")
+            return None
 
     def enrich_instrument(self, instrument: Instrument) -> tuple[Session, Instrument]:
         """Enrich existing instrument with additional data from external sources."""
