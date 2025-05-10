@@ -23,35 +23,28 @@ async function searchBySchema() {
     }
 
     try {
-        // Read the schema file
         const schemaText = await schemaFile.text();
-        
         let searchIdentifier = identifier;
         
-        // If identifier type is FIGI, look up the corresponding ISIN
         if (identifierType === 'FIGI') {
             try {
                 searchIdentifier = await getIsinByFigi(identifier);
-                console.log(`Found ISIN ${searchIdentifier} for FIGI ${identifier}`);
             } catch (error) {
                 alert(`Error looking up ISIN for FIGI ${identifier}: ${error.message}`);
                 return;
             }
         }
-        
-        // Create the request payload
+
         const payload = {
             filters: {
-                identifier: searchIdentifier,
-                identifier_type: 'ISIN'  // Always use ISIN for the actual search
+                identifier: searchIdentifier
             },
-            schema: schemaText
+            schema_type: 'equity',  // Use the schema type from the uploaded file
+            format: 'json'
         };
 
-        // Show loading spinner
         document.getElementById("spinner").style.display = "block";
 
-        // Make the API request
         const response = await fetch("/api/schema/search", {
             method: "POST",
             headers: {
@@ -61,72 +54,84 @@ async function searchBySchema() {
         });
 
         const data = await response.json();
-
-        // Hide loading spinner
         document.getElementById("spinner").style.display = "none";
 
-        // Display results
-        const schemaOutput = document.getElementById("schema-output");
-        schemaOutput.textContent = JSON.stringify(data.results, null, 2);
-
-        // Display unmapped fields
-        const unmappedFieldsOutput = document.getElementById("unmapped-fields");
-        if (data.unmapped_fields && data.unmapped_fields.length > 0) {
-            unmappedFieldsOutput.textContent = JSON.stringify({
-                unmapped_fields: data.unmapped_fields,
-                count: data.unmapped_fields.length
-            }, null, 2);
-        } else {
-            unmappedFieldsOutput.textContent = JSON.stringify({
-                unmapped_fields: [],
-                count: 0
-            }, null, 2);
+        if (data.error) {
+            throw new Error(data.error);
         }
 
-        // Also update the main results table
-        const table = document.getElementById("results-table");
+        // Display results
+        displaySchemaResults(data);
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Error performing schema search: ' + error.message);
+        document.getElementById("spinner").style.display = "none";
+    }
+}
+
+function displaySchemaResults(data) {
+    const schemaOutput = document.getElementById("schema-output");
+    schemaOutput.textContent = JSON.stringify(data.results, null, 2);
+
+    // Update results table with dynamic fields based on schema
+    const table = document.getElementById("results-table");
+    if (data.results && data.results.length > 0) {
+        const result = data.results[0];
+        const fields = Object.keys(result);
+        
+        // Create table headers based on fields
         table.innerHTML = `
             <thead>
                 <tr>
-                    <th>ISIN</th>
-                    <th>Full Name</th>
-                    <th>Short Name</th>
-                    <th>CFI Code</th>
-                    <th>Currency</th>
-                    <th>Issuer LEI</th>
-                    <th>Trading Venue</th>
+                    ${fields.map(field => `<th>${field}</th>`).join('')}
                 </tr>
             </thead>
             <tbody>
             </tbody>
         `;
 
-        if (data.results && data.results.length > 0) {
-            const tbody = table.querySelector('tbody');
-            data.results.forEach(result => {
-                const row = `
-                    <tr>
-                        <td>${result.identifier || 'N/A'}</td>
-                        <td>${result.full_name || 'N/A'}</td>
-                        <td>${result.short_name || 'N/A'}</td>
-                        <td>${result.classification_type || 'N/A'}</td>
-                        <td>${result.currency || 'N/A'}</td>
-                        <td>${result.issuer_lei || 'N/A'}</td>
-                        <td>${result.trading_venue_id || 'N/A'}</td>
-                    </tr>
-                `;
-                tbody.innerHTML += row;
-            });
-        } else {
-            table.querySelector('tbody').innerHTML = `
-                <tr><td colspan="7">No results found</td></tr>
+        // Add data rows
+        const tbody = table.querySelector('tbody');
+        data.results.forEach(result => {
+            const row = `
+                <tr>
+                    ${fields.map(field => `<td>${result[field] || 'N/A'}</td>`).join('')}
+                </tr>
             `;
-        }
+            tbody.innerHTML += row;
+        });
+    } else {
+        table.innerHTML = `<tr><td>No results found</td></tr>`;
+    }
+}
 
+// Add example schema loading
+async function loadExampleSchema() {
+    try {
+        // Update path to match where we store our example schemas
+        const response = await fetch('/api/schema/examples/frontend_equity.yaml');
+        const schemaText = await response.text();
+        
+        // Create a file object from the schema text
+        const file = new File([schemaText], 'frontend_equity.yaml', {
+            type: 'application/x-yaml'
+        });
+        
+        // Set the file in the file input
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(file);
+        document.getElementById('schema-file').files = dataTransfer.files;
+        
+        // Trigger the change event
+        document.getElementById('schema-file').dispatchEvent(new Event('change'));
+        
+        // Show success message
+        const fileNameDisplay = document.querySelector('.file-name-display');
+        fileNameDisplay.textContent = 'Example schema loaded: frontend_equity.yaml';
+        fileNameDisplay.style.display = 'block';
     } catch (error) {
-        console.error('Error:', error);
-        alert('An error occurred while performing the schema search');
-        document.getElementById("spinner").style.display = "none";
+        console.error('Error loading example schema:', error);
+        alert('Failed to load example schema. Please try uploading manually.');
     }
 }
 

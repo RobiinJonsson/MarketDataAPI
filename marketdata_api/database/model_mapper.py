@@ -1,11 +1,59 @@
-from typing import Dict, Any
+import logging
+from typing import Dict, Any, Type, Optional
 from datetime import datetime
 from ..models.instrument import Instrument, Equity, Debt
 from ..models.figi import FigiMapping
+from ..schema.schema_mapper import SchemaMapper
 
+# Setup logging
+logger = logging.getLogger(__name__)
 
 def map_to_model(data: Dict[str, Any], instrument_type: str = "equity") -> Dict[str, Any]:
     """Maps ESMA/FIRDS data to instrument model fields"""
+    # First convert FIRDS field names to our schema fields
+    firds_mapping = {
+        'Id': 'isin',
+        'FullNm': 'full_name',
+        'ShrtNm': 'short_name',
+        'NtnlCcy': 'currency',
+        'ClssfctnTp': 'cfi_code',
+        'CmmdtyDerivInd': 'commodity_derivative',
+        'PricMltplr': 'price_multiplier'
+    }
+    
+    # Map FIRDS fields to our field names
+    mapped_data = {}
+    for firds_key, model_key in firds_mapping.items():
+        if firds_key in data:
+            mapped_data[model_key] = data[firds_key]
+    
+    try:
+        # Get schema mapper instance
+        schema_mapper = SchemaMapper()
+        schema_type = instrument_type if instrument_type in schema_mapper.type_mapping else "base"
+        
+        # Add schema-based mapping
+        schema_fields = schema_mapper.get_schema_fields(schema_type)
+        for field in schema_fields:
+            if field.source in mapped_data:
+                value = mapped_data[field.source]
+                if value is not None:
+                    if field.type == "date":
+                        value = parse_date(value)
+                    elif field.type == "number":
+                        value = parse_float(value)
+                    elif field.type == "boolean":
+                        value = str(value).lower() == "true"
+                    mapped_data[field.source] = value
+        
+        return {k: v for k, v in mapped_data.items() if v is not None}
+        
+    except Exception as e:
+        logger.error(f"Schema mapping failed: {str(e)}, falling back to legacy mapping")
+        return _legacy_map_to_model(data, instrument_type)
+
+def _legacy_map_to_model(data: Dict[str, Any], instrument_type: str = "equity") -> Dict[str, Any]:
+    """Legacy mapping function as fallback"""
     # Base instrument fields
     mapped = {
         'isin': data.get('Id'),

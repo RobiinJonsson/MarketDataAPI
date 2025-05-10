@@ -33,13 +33,25 @@ properties:
 
 Supported Schema Types
 ---------------------
-The system supports different schema types for different instrument categories:
+The system supports three base schema types:
 
-1. firds_e: Basic FIRDS European instrument data
-2. equity: Equity-specific data (extends firds_e)
-3. bond: Bond-specific data (extends firds_e)
+1. base: Common instrument fields shared by all types
+2. equity: Equity instrument data (extends base)
+3. debt: Debt/Bond instrument data (extends base)
 
-Each schema type has its own set of required and optional fields. When using a schema that extends another (like equity or bond), you get access to all fields from both schemas.
+Field Types and Transformations
+------------------------------
+The system supports the following field types:
+- string: Text values
+- number: Numeric values with optional rounding
+- date: Date values with format transformation
+- boolean: True/false values
+
+Transformations available:
+- round(n): Round numbers to n decimal places
+- format(pattern): Format dates (e.g., YYYY-MM-DD)
+- upper(): Convert text to uppercase
+- lower(): Convert text to lowercase
 
 How to Use the Schema
 --------------------
@@ -129,4 +141,4 @@ If you get an error:
 
 Need Help?
 ----------
-If you need help creating or modifying a schema, contact your system administrator or refer to the example schemas provided. 
+If you need help creating or modifying a schema, contact your system administrator or refer to the example schemas provided.

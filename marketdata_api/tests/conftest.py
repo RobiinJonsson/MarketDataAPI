@@ -5,6 +5,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from ..database.base import Base
 from ..models import *  # This ensures all models are loaded
+from datetime import datetime
+from ..models.instrument import Equity, Debt
+from ..schema.schema_mapper import SchemaMapper
 
 # Add the project root to Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
@@ -39,3 +42,44 @@ def setup_database(test_engine, test_session):
     Base.metadata.create_all(bind=test_engine)
     yield test_session
     Base.metadata.drop_all(bind=test_engine)
+
+@pytest.fixture
+def schema_mapper():
+    return SchemaMapper()
+
+@pytest.fixture
+def sample_equity():
+    return Equity(
+        isin="SE0000108656",
+        full_name="Test Equity",
+        short_name="TEST",
+        symbol="TEST",
+        currency="USD",
+        market_cap=1000000.00,
+        sector="Technology",
+        price_multiplier=1.0
+    )
+
+@pytest.fixture
+def sample_debt():
+    return Debt(
+        isin="XS2332219612",
+        full_name="Test Bond",
+        short_name="TBOND",
+        currency="EUR",
+        maturity_date=datetime(2025, 1, 1).date(),
+        fixed_interest_rate=0.05,
+        total_issued_nominal=1000000.00
+    )
+
+@pytest.fixture
+def sample_firds_data():
+    return {
+        'Id': 'SE0000108656',
+        'FullNm': 'Test Equity',
+        'ShrtNm': 'TEST',
+        'NtnlCcy': 'USD',
+        'ClssfctnTp': 'ESVUFR',
+        'CmmdtyDerivInd': 'false',
+        'PricMltplr': '1.0'
+    }

@@ -1,0 +1,90 @@
+version: "1.0"
+name: "equity"
+description: "Complete equity instrument schema for frontend use"
+extends: "base"
+fields:
+  # Base fields (inherited)
+  - name: "identifier"
+    source: "isin"
+    type: "string"
+    required: true
+    description: "ISIN identifier"
+
+  - name: "full_name"
+    source: "full_name"
+    type: "string"
+    required: true
+    description: "Full instrument name"
+
+  - name: "short_name"
+    source: "short_name"
+    type: "string"
+    required: false
+    description: "Trading name"
+
+  - name: "currency"
+    source: "currency"
+    type: "string"
+    required: true
+    description: "Trading currency"
+
+  # Market data fields
+  - name: "market_cap"
+    source: "market_cap"
+    type: "number"
+    required: false
+    description: "Market capitalization"
+    transformation: "round(2)"
+
+  - name: "price_multiplier"
+    source: "price_multiplier"
+    type: "number"
+    required: false
+    description: "Price multiplier"
+    transformation: "round(4)"
+
+  # Classification fields
+  - name: "sector"
+    source: "sector"
+    type: "string"
+    required: false
+    description: "Business sector"
+
+  - name: "industry"
+    source: "industry"
+    type: "string"
+    required: false
+    description: "Industry classification"
+
+  - name: "cfi_code"
+    source: "cfi_code"
+    type: "string"
+    required: false
+    description: "CFI classification code"
+
+  # Trading venue info
+  - name: "trading_venue"
+    source: "trading_venue"
+    type: "string"
+    required: false
+    description: "Primary trading venue"
+
+  - name: "first_trade_date"
+    source: "first_trade_date"
+    type: "date"
+    required: false
+    description: "First trading date"
+    transformation: "format(YYYY-MM-DD)"
+
+  # Additional fields
+  - name: "commodity_derivative"
+    source: "commodity_derivative"
+    type: "boolean"
+    required: false
+    description: "Is commodity derivative"
+
+  - name: "issuer_lei"
+    source: "lei_id"
+    type: "string"
+    required: false
+    description: "Issuer LEI code"

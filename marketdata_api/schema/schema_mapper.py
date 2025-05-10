@@ -1,10 +1,11 @@
 import os
 import yaml
 import logging
-from typing import Dict, Any, List, Optional, Type, Union
+from typing import Dict, Any, List, Optional, Type, Union, Tuple
 from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime, date
+from functools import lru_cache
 from ..models.instrument import Instrument, Equity, Debt
 
 logger = logging.getLogger(__name__)
@@ -34,56 +35,98 @@ class SchemaMapper:
             "debt": Debt,
             "base": Instrument
         }
+        self._schema_cache = {}
         self.load_mappings()
+    
+    @lru_cache(maxsize=32)
+    def get_schema_version(self, schema_name: str) -> Tuple[str, SchemaMapping]:
+        """Get latest version of a schema"""
+        if schema_name not in self.mappings:
+            raise ValueError(f"Unknown schema: {schema_name}")
+        return self.mappings[schema_name].version, self.mappings[schema_name]
+
+    def get_schema_fields(self, schema_name: str) -> List[SchemaField]:
+        """Get fields for a schema including inherited fields"""
+        if schema_name not in self.mappings:
+            raise ValueError(f"Unknown schema: {schema_name}")
+            
+        return self._get_all_fields(schema_name)
     
     def load_mappings(self) -> None:
         """Load all schema mappings from YAML files"""
         mapping_dir = Path(__file__).parent / "mappings"
+        if not mapping_dir.exists():
+            raise ValueError(f"Schema mapping directory not found: {mapping_dir}")
+            
+        loaded = {}
+        # Load base schema first
+        base_path = mapping_dir / "base.yaml"
+        if base_path.exists():
+            loaded["base"] = self._load_schema_file(base_path)
+            
+        # Load other schemas
         for file in mapping_dir.glob("*.yaml"):
-            with open(file) as f:
-                data = yaml.safe_load(f)
+            if file.stem != "base":
+                loaded[file.stem] = self._load_schema_file(file)
+                
+        self.mappings = loaded
+    
+    def _load_schema_file(self, path: Path) -> SchemaMapping:
+        """Load and validate a single schema file"""
+        with open(path) as f:
+            data = yaml.safe_load(f)
+            try:
                 fields = [SchemaField(**field) for field in data["fields"]]
-                self.mappings[data["name"]] = SchemaMapping(
+                return SchemaMapping(
                     version=data["version"],
                     name=data["name"],
                     description=data["description"],
                     fields=fields,
                     extends=data.get("extends")
                 )
+            except (KeyError, TypeError) as e:
+                logger.error(f"Error loading schema from {path}: {e}")
+                raise ValueError(f"Invalid schema file: {path}")
 
-    def map_to_schema(self, instrument: Instrument, schema_name: str) -> Dict[str, Any]:
+    def map_to_schema(self, instrument: Union[Instrument, Dict[str, Any]], schema_name: str) -> Dict[str, Any]:
         """Map instrument data to requested schema format"""
         if schema_name not in self.mappings:
             raise ValueError(f"Unknown schema: {schema_name}")
 
-        # Validate instrument type matches schema
+        # Handle both dict and model instances
+        if isinstance(instrument, dict):
+            return self._map_dict_to_schema(instrument, schema_name)
+        else:
+            return self._map_model_to_schema(instrument, schema_name)
+
+    def _map_dict_to_schema(self, data: Dict[str, Any], schema_name: str) -> Dict[str, Any]:
+        """Map dictionary data to schema format"""
+        mapping = self.mappings[schema_name]
+        result = {}
+        fields = self._get_all_fields(schema_name)
+        
+        for field in fields:
+            try:
+                value = data.get(field.source)
+                if value is not None and field.transformation:
+                    value = self._apply_transformation(value, field.transformation)
+                if value is not None or field.required:
+                    result[field.name] = value
+            except Exception as e:
+                logger.error(f"Error processing field {field.name}: {str(e)}")
+                if field.required:
+                    raise
+                result[field.name] = None
+
+        return result
+
+    def _map_model_to_schema(self, instrument: Instrument, schema_name: str) -> Dict[str, Any]:
+        """Map model instance to schema format"""
         expected_type = self.type_mapping.get(schema_name)
         if expected_type and not isinstance(instrument, expected_type):
             raise ValueError(f"Invalid instrument type for schema {schema_name}")
 
-        try:
-            mapping = self.mappings[schema_name]
-            result = {}
-            fields = self._get_all_fields(schema_name)
-            
-            for field in fields:
-                try:
-                    value = self._get_field_value(instrument, field)
-                    if not self.validate_value(value, field):
-                        logger.warning(f"Invalid value for field {field.name}: {value}")
-                        value = None
-                    if value is not None or field.required:
-                        result[field.name] = value
-                except Exception as e:
-                    logger.error(f"Error processing field {field.name}: {str(e)}")
-                    if field.required:
-                        raise
-                    result[field.name] = None
-
-            return result
-        except Exception as e:
-            logger.error(f"Error mapping schema {schema_name}: {str(e)}")
-            raise
+        return self._map_dict_to_schema(instrument.__dict__, schema_name)
 
     def _get_all_fields(self, schema_name: str, visited=None) -> List[SchemaField]:
         """Get all fields including from extended schemas"""
@@ -162,3 +205,9 @@ class SchemaMapper:
         except Exception as e:
             logger.error(f"Validation error for field {field.name}: {str(e)}")
             return False
+
+    def output_as_xml(self, data: Dict[str, Any]) -> str:
+        """Convert mapped data to XML format"""
+        from dicttoxml import dicttoxml
+        xml_bytes = dicttoxml(data, custom_root='instrument', attr_type=False)
+        return xml_bytes.decode('utf-8')  # Convert bytes to string
