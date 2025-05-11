@@ -38,7 +38,7 @@ class InstrumentService:
         if missing:
             raise InstrumentValidationError(f"Missing required fields: {', '.join(missing)}")
     
-    # Create a new instrument in the database manually, not using FIRDS data
+    
     def create_instrument(self, data: Dict[str, Any], instrument_type: str = "equity") -> Instrument:
         """
         Create a new instrument in the database.
@@ -228,64 +228,89 @@ class InstrumentService:
     def enrich_instrument(self, instrument: Instrument) -> tuple[Session, Instrument]:
         """Enrich existing instrument with additional data from external sources."""
         session = SessionLocal()
-        lei_session = None
         
         try:
+            self.logger.info(f"Starting enrichment for instrument {instrument.isin}")
+            self.logger.debug(f"Initial instrument state: {instrument.__dict__}")
+            
+            # Keep instrument bound to this session
+            self.logger.info("Merging instrument into session...")
             instrument = session.merge(instrument)
-            session.refresh(instrument)
+            self.logger.debug(f"Post-merge instrument state: {instrument.__dict__}")
+            
+            # Log session state
+            self.logger.debug(f"Session identity map: {session.identity_map.keys()}")
+            
+            # Verify session binding
+            self.logger.debug(f"Is instrument in session: {instrument in session}")
+            self.logger.debug(f"Instrument session: {session.object_session(instrument)}")
             
             # Enrich with FIGI if not present
             if not instrument.figi_mapping:
                 try:
+                    self.logger.info("Starting FIGI enrichment...")
                     self._enrich_figi(session, instrument)
                 except Exception as e:
                     self.logger.error(f"FIGI enrichment failed: {str(e)}")
-                    # Continue with other enrichments even if FIGI fails
             
-            # Enrich with Legal Entity data if LEI present
-            if instrument.lei_id and not instrument.legal_entity:
+            # Check for LEI
+            self.logger.debug(f"Checking LEI. Current lei_id: {getattr(instrument, 'lei_id', None)}")
+            if instrument.lei_id:
+                self.logger.info(f"Found LEI {instrument.lei_id} for instrument {instrument.isin}")
                 try:
                     self._enrich_legal_entity(session, instrument)
+                    self.logger.debug(f"Post-LEI enrichment state: {instrument.__dict__}")
                 except Exception as e:
                     self.logger.error(f"Legal entity enrichment failed: {str(e)}")
-                    session.rollback()
-                    raise InstrumentServiceError(f"Legal entity enrichment failed: {str(e)}")
+                    self.logger.exception(e)  # This will log the full stack trace
+                    raise
+            else:
+                self.logger.warning(f"No LEI found for instrument {instrument.isin}")
+                self.logger.debug(f"Full instrument state: {instrument.__dict__}")
             
+            self.logger.info("Committing changes...")
+            session.commit()
+            self.logger.info("Enrichment completed successfully")
             return session, instrument
             
         except Exception as e:
             self.logger.error(f"Enrichment failed for {instrument.id}: {str(e)}")
+            self.logger.exception(e)  # Log full stack trace
             session.rollback()
             raise InstrumentServiceError(f"Enrichment failed: {str(e)}")
-        finally:
-            if lei_session:
-                lei_session.close()
 
     def _enrich_figi(self, session: Session, instrument: Instrument) -> None:
         """Helper method to handle FIGI enrichment"""
+        self.logger.debug(f"Starting FIGI enrichment for {instrument.isin}")
         figi_data = search_openfigi(instrument.isin, instrument.type)
         if figi_data:
+            self.logger.debug(f"Received FIGI data: {figi_data}")
             figi_mapping = map_figi_data(figi_data, instrument.isin)
             if figi_mapping:
+                self.logger.info(f"Created FIGI mapping for {instrument.isin}")
                 instrument.figi_mapping = figi_mapping
                 session.add(figi_mapping)
-                session.commit()
-                session.refresh(instrument)
-                self.logger.info(f"Added FIGI mapping for {instrument.isin}")
+                self.logger.debug(f"FIGI mapping added to session")
 
     def _enrich_legal_entity(self, session: Session, instrument: Instrument) -> None:
         """Helper method to handle legal entity enrichment"""
         from .legal_entity_service import LegalEntityService
         lei_service = LegalEntityService()
         
+        self.logger.info(f"Starting legal entity enrichment for LEI: {instrument.lei_id}")
+        self.logger.debug(f"Current instrument state: {instrument.__dict__}")
+        
         lei_session, entity = lei_service.create_or_update_entity(instrument.lei_id)
         try:
             if entity:
+                self.logger.info(f"Found legal entity data for LEI {instrument.lei_id}")
+                self.logger.debug(f"Entity data: {entity.__dict__}")
                 entity = session.merge(entity)
                 instrument.legal_entity = entity
-                session.commit()
-                session.refresh(instrument)
-                self.logger.info(f"Linked legal entity for {instrument.isin}")
+                session.flush()
+                self.logger.debug(f"Post-enrichment instrument state: {instrument.__dict__}")
+            else:
+                self.logger.warning(f"No legal entity data found for LEI {instrument.lei_id}")
         finally:
             if lei_session:
                 lei_session.close()

@@ -21,7 +21,7 @@ def test_service():
 
 def test_get_or_create_equity(setup_database, test_service):
     """Test getting or creating an equity instrument"""
-    isin = "FR0000131104"  # Use a known ISIN (e.g., BNP Paribas)
+    isin = "SE0000113250"  # Use a known ISIN (e.g., BNP Paribas)
     
     try:
         instrument = test_service.get_or_create_instrument(isin, "equity")

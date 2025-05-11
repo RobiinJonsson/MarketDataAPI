@@ -8,7 +8,7 @@ from ..schema.schema_mapper import SchemaMapper
 # Setup logging
 logger = logging.getLogger(__name__)
 
-def map_to_model(data: Dict[str, Any], instrument_type: str = "equity") -> Dict[str, Any]:
+def map_to_schema(data: Dict[str, Any], instrument_type: str = "equity") -> Dict[str, Any]:
     """Maps ESMA/FIRDS data to instrument model fields"""
     # First convert FIRDS field names to our schema fields
     firds_mapping = {
@@ -50,9 +50,9 @@ def map_to_model(data: Dict[str, Any], instrument_type: str = "equity") -> Dict[
         
     except Exception as e:
         logger.error(f"Schema mapping failed: {str(e)}, falling back to legacy mapping")
-        return _legacy_map_to_model(data, instrument_type)
+        return map_to_model(data, instrument_type)
 
-def _legacy_map_to_model(data: Dict[str, Any], instrument_type: str = "equity") -> Dict[str, Any]:
+def map_to_model(data: Dict[str, Any], instrument_type: str = "equity") -> Dict[str, Any]:
     """Legacy mapping function as fallback"""
     # Base instrument fields
     mapped = {

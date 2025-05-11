@@ -1,0 +1,49 @@
+[2025-05-11 17:48:43,137] INFO in __init__: Initializing database...
+[2025-05-11 17:48:43,140] INFO in __init__: Database initialization complete
+[2025-05-11 17:48:44,183] WARNING in _internal:  * Debugger is active!
+[2025-05-11 17:48:44,185] INFO in _internal:  * Debugger PIN: 142-296-335
+[2025-05-11 17:48:50,634] ERROR in session: Session rollback due to error: Instance <Equity at 0x242cbcd78c0> is not bound to a Session; attribute refresh operation cannot proceed (Background on this error at: https://sqlalche.me/e/20/bhk3)
+[2025-05-11 17:48:50,634] ERROR in market: Error in fetch_and_insert: Instance <Equity at 0x242cbcd78c0> is not bound to a Session; attribute refresh operation cannot proceed (Background on this error at: https://sqlalche.me/e/20/bhk3)
+[2025-05-11 17:48:50,644] INFO in _internal: 127.0.0.1 - - [11/May/2025 17:48:50] "[35m[1mPOST /api/fetch HTTP/1.1[0m" 500 -
+[2025-05-11 17:52:35,123] INFO in _internal:  * Detected change in 'C:\\Users\\robin\\Projects\\MarketDataAPI\\marketdata_api\\services\\instrument_service.py', reloading
+[2025-05-11 17:52:36,384] INFO in __init__: Initializing database...
+[2025-05-11 17:52:36,386] INFO in __init__: Database initialization complete
+[2025-05-11 17:52:37,334] WARNING in _internal:  * Debugger is active!
+[2025-05-11 17:52:37,337] INFO in _internal:  * Debugger PIN: 142-296-335
+[2025-05-11 18:04:22,177] INFO in _internal:  * Detected change in 'C:\\Users\\robin\\Projects\\MarketDataAPI\\marketdata_api\\tests\\test_instrument_service.py', reloading
+[2025-05-11 18:04:23,377] INFO in __init__: Initializing database...
+[2025-05-11 18:04:23,452] INFO in __init__: Database initialization complete
+[2025-05-11 18:04:24,467] WARNING in _internal:  * Debugger is active!
+[2025-05-11 18:04:24,469] INFO in _internal:  * Debugger PIN: 142-296-335
+[2025-05-11 18:04:26,509] INFO in _internal:  * Detected change in 'C:\\Users\\robin\\Projects\\MarketDataAPI\\marketdata_api\\services\\instrument_service.py', reloading
+[2025-05-11 18:04:27,412] INFO in __init__: Initializing database...
+[2025-05-11 18:04:27,416] INFO in __init__: Database initialization complete
+[2025-05-11 18:04:28,285] WARNING in _internal:  * Debugger is active!
+[2025-05-11 18:04:28,288] INFO in _internal:  * Debugger PIN: 142-296-335
+[2025-05-11 18:12:35,670] INFO in _internal:  * Detected change in 'C:\\Users\\robin\\Projects\\MarketDataAPI\\marketdata_api\\database\\model_mapper.py', reloading
+[2025-05-11 18:12:36,883] INFO in __init__: Initializing database...
+[2025-05-11 18:12:36,928] INFO in __init__: Database initialization complete
+[2025-05-11 18:12:38,024] WARNING in _internal:  * Debugger is active!
+[2025-05-11 18:12:38,027] INFO in _internal:  * Debugger PIN: 142-296-335
+[2025-05-11 18:18:49,425] INFO in _internal:  * Detected change in 'C:\\Users\\robin\\Projects\\MarketDataAPI\\marketdata_api\\database\\model_mapper.py', reloading
+[2025-05-11 18:18:50,414] INFO in __init__: Initializing database...
+[2025-05-11 18:18:50,418] INFO in __init__: Database initialization complete
+[2025-05-11 18:18:51,439] WARNING in _internal:  * Debugger is active!
+[2025-05-11 18:18:51,442] INFO in _internal:  * Debugger PIN: 142-296-335
+[2025-05-11 18:23:00,647] INFO in _internal:  * Detected change in 'C:\\Users\\robin\\Projects\\MarketDataAPI\\marketdata_api\\database\\model_mapper.py', reloading
+[2025-05-11 18:23:01,795] INFO in __init__: Initializing database...
+[2025-05-11 18:23:01,798] INFO in __init__: Database initialization complete
+[2025-05-11 18:23:02,911] WARNING in _internal:  * Debugger is active!
+[2025-05-11 18:23:02,913] INFO in _internal:  * Debugger PIN: 142-296-335
+[2025-05-11 18:23:08,001] INFO in _internal:  * Detected change in 'C:\\Users\\robin\\Projects\\MarketDataAPI\\marketdata_api\\services\\instrument_service.py', reloading
+[2025-05-11 18:23:09,170] INFO in __init__: Initializing database...
+[2025-05-11 18:23:09,173] INFO in __init__: Database initialization complete
+[2025-05-11 18:23:10,267] WARNING in _internal:  * Debugger is active!
+[2025-05-11 18:23:10,271] INFO in _internal:  * Debugger PIN: 142-296-335
+[2025-05-11 18:23:20,121] INFO in _internal: 127.0.0.1 - - [11/May/2025 18:23:20] "[33mGET /api/search/SE0000113250 HTTP/1.1[0m" 404 -
+[2025-05-11 18:23:24,288] DEBUG in connectionpool: Starting new HTTPS connection (1): registers.esma.europa.eu:443
+[2025-05-11 18:23:24,450] DEBUG in connectionpool: https://registers.esma.europa.eu:443 "GET /solr/esma_registers_firds_files/select?q=*&fq=publication_date:%5B2025-04-26T00:00:00Z+TO+2025-04-26T23:59:59Z%5D&wt=xml&indent=true&start=0&rows=10000 HTTP/1.1" 200 None
+[2025-05-11 18:23:27,347] INFO in instrument_service: Created new equity instrument with ID: 534bca0e-1fc9-4ff0-bcf1-263587753d59
+[2025-05-11 18:23:27,351] INFO in instrument_service: Starting enrichment for instrument SE0000113250
+[2025-05-11 18:23:27,352] DEBUG in instrument_service: Initial instrument state: {'_sa_instance_state': <sqlalchemy.orm.state.InstanceState object at 0x000002647F4BD190>, 'sector': None, 'base_product': None, 'admission_approval_date': None, 'first_trade_date': None, 'updated_at': datetime.datetime(2025, 5, 11, 16, 23, 27, 329602), 'short_name': 'SKANSKA/SH B', 'admission_request_date': None, 'sub_product': None, 'symbol': 'SKANSKA/SH B', 'industry': None, 'termination_date': None, 'figi': None, 'underlying_isins': [nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan, nan], 'relevant_authority': 'SE', 'additional_sub_product': None, 'price_multiplier': None, 'precious_metal': None, 'cfi_code': 'ESVUFR', 'metal_type': None, 'relevant_venue': 'DSTO', 'currency': 'SEK', 'asset_class': None, 'shares_outstanding': None, 'from_date': datetime.datetime(2020, 12, 1, 0, 0), 'commodity_product': None, 'market_cap': None, 'type': 'equity', 'commodity_derivative': False, 'lei_id': '549300UINV5RINHGMG07', 'energy_type': None, 'isin': 'SE0000113250', 'exchange': None, 'additional_data': {'RefData': None, 'FinInstrmGnlAttrbts': None, 'Id': 'SE0000113250', 'FullNm': 'Skanska AB', 'ShrtNm': 'SKANSKA/SH B', 'ClssfctnTp': 'ESVUFR', 'NtnlCcy': 'SEK', 'CmmdtyDerivInd': 'false', 'Issr': '549300UINV5RINHGMG07', 'TradgVnRltdAttrbts': None, 'Id_2': 'AQEA', 'IssrReq': 'false', 'FrstTradDt': '2020-11-12T00:00:00Z', 'DerivInstrmAttrbts': nan, 'UndrlygInstrm': nan, 'Sngl': nan, 'ISIN': nan, 'TechAttrbts': None, 'RlvntCmptntAuthrty': 'SE', 'PblctnPrd': None, 'FrDt': '2020-12-01', 'RlvntTradgVn': 'DSTO', 'AdmssnApprvlDtByIssr': nan, 'ReqForAdmssnDt': nan, 'TermntnDt': nan, 'PricMltplr': nan, 'Bskt': nan, 'ISIN_2': nan, 'ISIN_3': nan, 'Indx': nan, 'Nm': nan, 'RefRate': nan, 'Nm_2': nan, 'ISIN_4': nan, 'ISIN_5': nan, 'ISIN_6': nan, 'ISIN_7': nan, 'ISIN_8': nan, 'ISIN_9': nan, 'ISIN_10': nan, 'ISIN_11': nan, 'ISIN_12': nan, 'ISIN_13': nan, 'ISIN_14': nan, 'ISIN_15': nan, 'ISIN_16': nan, 'ISIN_17': nan, 'ISIN_18': nan, 'ISIN_19': nan, 'ISIN_20': nan, 'ISIN_21': nan, 'ISIN_22': nan, 'ISIN_23': nan, 'ISIN_24': nan, 'ISIN_25': nan, 'ISIN_26': nan, 'ISIN_27': nan, 'ISIN_28': nan, 'ISIN_29': nan, 'ISIN_30': nan, 'ISIN_31': nan, 'ISIN_32': nan, 'ISIN_33': nan, 'ISIN_34': nan, 'ISIN_35': nan, 'ISIN_36': nan, 'ISIN_37': nan, 'ISIN_38': nan, 'AsstClssSpcfcAttrbts': nan, 'Cmmdty': nan, 'Pdct': nan, 'Nrgy': nan, 'Oil': nan, 'BasePdct': nan, 'SubPdct': nan, 'AddtlSubPdct': nan, 'Metl': nan, 'Prcs': nan, 'LEI': nan, 'LEI_2': nan, 'LEI_3': nan, 'LEI_4': nan, 'LEI_5': nan, 'LEI_6': nan, 'LEI_7': nan, 'LEI_8': nan, 'LEI_9': nan, 'LEI_10': nan, 'LEI_11': nan, 'LEI_12': nan, 'LEI_13': nan, 'LEI_14': nan, 'LEI_15': nan, 'LEI_16': nan, 'LEI_17': nan, 'LEI_18': nan}, 'trading_venue': 'AQEA', 'created_at': datetime.datetime(2025, 5, 11, 16, 23, 27, 329596), 'issuer_req': 'false', 'id': '534bca0e-1fc9-4ff0-bcf1-263587753d59', 'full_name': 'Skanska AB', 'oil_type': None}
+[2025-05-11 18:23:27,352] INFO in instrument_service: Merging instrument into session...
