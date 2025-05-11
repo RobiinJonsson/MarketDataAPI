@@ -1,0 +1,30 @@
+version: "1.0"
+name: "demo_equity"
+description: "Demo equity schema for testing"
+extends: "base"
+fields:
+  - name: "identifier"
+    source: "isin"
+    type: "string"
+    required: true
+    description: "ISIN code"
+
+  - name: "company_name"
+    source: "full_name"
+    type: "string"
+    required: true
+    description: "Company full name"
+
+  - name: "ticker"
+    source: "short_name"
+    type: "string"
+    required: false
+    description: "Trading symbol"
+    transformation: "upper"
+
+  - name: "market_data"
+    source: "price_multiplier"
+    type: "number"
+    required: false
+    description: "Price multiplier"
+    transformation: "round(4)"

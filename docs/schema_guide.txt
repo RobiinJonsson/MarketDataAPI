@@ -1,144 +1,98 @@
 Schema Guide for Market Data API
 =============================
 
-This guide explains how to use the schema system to search for instrument data.
-
 What is a Schema?
 ----------------
-A schema is like a template that describes what kind of data you want to search for and how you want it formatted. It's written in a format called YAML, which is a simple way to write structured data.
+A schema defines how you want to receive instrument data. It maps database fields to your desired output format using YAML.
 
-Basic Schema Structure
----------------------
-Here's a simple example of a schema:
-
-```yaml
-type: firds_e
-properties:
-  identifier:
-    type: string
-    description: "Instrument identifier (ISIN or FIGI)"
-  full_name:
-    type: string
-    description: "Full name of the instrument"
-  short_name:
-    type: string
-    description: "Short name of the instrument"
-  classification_type:
-    type: string
-    description: "Classification type (CFI code)"
-  currency:
-    type: string
-    description: "National currency"
-```
-
-Supported Schema Types
----------------------
-The system supports three base schema types:
-
-1. base: Common instrument fields shared by all types
-2. equity: Equity instrument data (extends base)
-3. debt: Debt/Bond instrument data (extends base)
-
-Field Types and Transformations
-------------------------------
-The system supports the following field types:
-- string: Text values
-- number: Numeric values with optional rounding
-- date: Date values with format transformation
-- boolean: True/false values
-
-Transformations available:
-- round(n): Round numbers to n decimal places
-- format(pattern): Format dates (e.g., YYYY-MM-DD)
-- upper(): Convert text to uppercase
-- lower(): Convert text to lowercase
-
-How to Use the Schema
---------------------
-1. In the web interface:
-   - Enter an instrument identifier (e.g., ISIN)
-   - Select the identifier type (ISIN or FIGI)
-   - Upload your schema file (must be a .yaml file)
-
-2. The system will:
-   - Validate your schema against the schema registry
-   - Check that all required fields are present
-   - Search for the instrument
-   - Return the data matching your schema format
-
-Common Fields You Can Use
-------------------------
-- identifier: The instrument's ISIN or FIGI
-- full_name: The instrument's full name
-- short_name: The instrument's short name
-- classification_type: The CFI code
-- currency: The instrument's currency
-- issuer_lei: The issuer's Legal Entity Identifier
-- trading_venue_id: The trading venue identifier
-
-Additional Fields for Specific Types
-----------------------------------
-Equity-specific fields:
-- market_cap: Market capitalization
-- dividend_yield: Dividend yield percentage
-
-Bond-specific fields:
-- coupon_rate: Annual coupon rate
-- maturity_date: Bond maturity date
-
-Handling Unmapped Fields
------------------------
-When you request fields that are not yet mapped to the database:
-
-1. The system will still accept your schema
-2. Unmapped fields will be returned as `null` in the results
-3. You can still use these fields in your schema for future compatibility
-4. The system will log which fields are unmapped for future reference
-
-Example of handling unmapped fields:
-```yaml
-type: equity
-properties:
-  identifier: true
-  full_name: true
-  market_cap: true  # This might be unmapped initially
-  dividend_yield: true  # This might be unmapped initially
-```
-
-The result might look like:
-```json
-{
-  "identifier": "SE0000115446",
-  "full_name": "Telefonaktiebolaget LM Ericsson (publ) B",
-  "market_cap": null,  # Unmapped field returns null
-  "dividend_yield": null  # Unmapped field returns null
-}
-```
-
-Example Schema Files
--------------------
-You can find example schema files in the `examples/schemas` directory:
-- firds_e_schema.yaml: Example schema for FIRDS E data
-- equity_schema.yaml: Example schema for equity instruments
-- bond_schema.yaml: Example schema for bond instruments
-
-Tips for Creating Your Own Schema
---------------------------------
-1. Start with the example schema and modify it
-2. Always include the `type` field at the root level
-3. List all fields directly under `properties`
-4. Make sure to use the correct field names
-5. Save your file with a .yaml extension
-
-Troubleshooting
+Schema Structure
 --------------
-If you get an error:
-1. Check that your schema file is valid YAML
-2. Verify that you've specified a valid schema type
-3. Make sure all required fields are present
-4. Check that your instrument identifier exists in the database
-5. Verify that you've selected the correct identifier type
+```yaml
+version: "1.0"
+name: "my_schema"
+description: "Custom equity schema"
+extends: "base"    # Inherit from base schema
+fields:
+  - name: "security_id"    # Your chosen output name
+    source: "isin"         # Must match database field
+    type: "string"
+    required: true
+    description: "Security identifier"
+    transformation: null    # Optional transformation
 
-Need Help?
-----------
-If you need help creating or modifying a schema, contact your system administrator or refer to the example schemas provided.
+  - name: "price"
+    source: "price_multiplier"
+    type: "number"
+    required: false
+    description: "Price data"
+    transformation: "round(4)"
+```
+
+Schema Management
+---------------
+1. Create a new schema:
+```bash
+curl -X POST http://localhost:5000/api/schema \
+  -H "Content-Type: application/x-yaml" \
+  --data-binary "@my_schema.yaml"
+```
+
+2. Update existing schema:
+```bash
+curl -X PUT http://localhost:5000/api/schema/my_schema \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my_schema",
+    "description": "Updated schema",
+    "extends": "base",
+    "fields": [...]
+  }'
+```
+
+3. Check versions:
+```bash
+curl http://localhost:5000/api/schema/my_schema/versions
+```
+
+4. Delete schema:
+```bash
+curl -X DELETE http://localhost:5000/api/schema/my_schema
+```
+
+Available Database Fields
+----------------------
+Base Instrument fields (source: field):
+- isin: ISIN identifier
+- full_name: Full instrument name
+- short_name: Short name/symbol
+- currency: Trading currency
+- cfi_code: CFI classification
+- trading_venue: Trading venue ID
+
+Equity-specific fields:
+- price_multiplier: Price multiplier
+- market_cap: Market capitalization
+- shares_outstanding: Shares outstanding
+
+Supported Transformations
+-----------------------
+- round(n): Round numbers to n decimals
+- format(pattern): Format dates (YYYY-MM-DD)
+- upper: Convert to uppercase
+- lower: Convert to lowercase
+
+Version Control
+-------------
+- Each schema starts at version 1.0
+- Updates increment minor version (1.0 -> 1.1)
+- Version history is preserved
+- Each version can be retrieved
+
+Tips & Best Practices
+-------------------
+1. Always extend from "base" schema
+2. Source fields must match database model
+3. Output names (name:) can be customized
+4. Use transformations for formatting
+5. Include proper descriptions
+6. Mark required fields appropriately

@@ -26,6 +26,8 @@ class SchemaMapping:
     description: str
     fields: List[SchemaField]
     extends: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
 
 class SchemaMapper:
     def __init__(self):
@@ -36,6 +38,8 @@ class SchemaMapper:
             "base": Instrument
         }
         self._schema_cache = {}
+        self._version_history = {}  # Store version history
+        self._dependents = {}  # Track schema dependencies
         self.load_mappings()
     
     @lru_cache(maxsize=32)
@@ -63,14 +67,35 @@ class SchemaMapper:
         base_path = mapping_dir / "base.yaml"
         if base_path.exists():
             loaded["base"] = self._load_schema_file(base_path)
+            # Initialize version history for base schema
+            self._version_history["base"] = {
+                loaded["base"].version: self._schema_to_dict(loaded["base"])
+            }
             
         # Load other schemas
         for file in mapping_dir.glob("*.yaml"):
             if file.stem != "base":
-                loaded[file.stem] = self._load_schema_file(file)
+                schema = self._load_schema_file(file)
+                loaded[file.stem] = schema
+                # Initialize version history for each schema
+                self._version_history[file.stem] = {
+                    schema.version: self._schema_to_dict(schema)
+                }
                 
         self.mappings = loaded
-    
+
+    def _schema_to_dict(self, schema: SchemaMapping) -> Dict[str, Any]:
+        """Convert SchemaMapping to dictionary for version history"""
+        return {
+            "version": schema.version,
+            "name": schema.name,
+            "description": schema.description,
+            "fields": [vars(f) for f in schema.fields],
+            "extends": schema.extends,
+            "created_at": schema.created_at,
+            "updated_at": schema.updated_at
+        }
+
     def _load_schema_file(self, path: Path) -> SchemaMapping:
         """Load and validate a single schema file"""
         with open(path) as f:
@@ -82,7 +107,9 @@ class SchemaMapper:
                     name=data["name"],
                     description=data["description"],
                     fields=fields,
-                    extends=data.get("extends")
+                    extends=data.get("extends"),
+                    created_at=data.get("created_at"),
+                    updated_at=data.get("updated_at")
                 )
             except (KeyError, TypeError) as e:
                 logger.error(f"Error loading schema from {path}: {e}")
@@ -211,3 +238,169 @@ class SchemaMapper:
         from dicttoxml import dicttoxml
         xml_bytes = dicttoxml(data, custom_root='instrument', attr_type=False)
         return xml_bytes.decode('utf-8')  # Convert bytes to string
+
+    def _save_schema_to_file(self, schema_data: Dict[str, Any], version: str) -> None:
+        """Save schema to filesystem with version"""
+        name = schema_data['name']
+        mapping_dir = Path(__file__).parent / "mappings"
+        mapping_dir.mkdir(exist_ok=True)  # Ensure directory exists
+        
+        # Save current version
+        schema_path = mapping_dir / f"{name}.yaml"
+        with open(schema_path, 'w') as f:
+            yaml.dump(schema_data, f, sort_keys=False, default_flow_style=False)
+            
+        # Save versioned copy
+        versions_dir = mapping_dir / "versions" / name
+        versions_dir.mkdir(parents=True, exist_ok=True)
+        version_path = versions_dir / f"{name}_v{version}.yaml"
+        with open(version_path, 'w') as f:
+            yaml.dump(schema_data, f, sort_keys=False, default_flow_style=False)
+
+    def add_schema(self, schema_data: Dict[str, Any]) -> None:
+        """Add new schema to registry"""
+        name = schema_data.get('name')
+        if not name:
+            raise ValueError("Schema must have a name")
+            
+        # Store initial version
+        schema_data['version'] = '1.0'
+        schema_data['created_at'] = datetime.now().isoformat()
+        
+        # Save to filesystem with versioning
+        self._save_schema_to_file(schema_data, '1.0')
+            
+        # Add to memory
+        self.mappings[name] = SchemaMapping(**schema_data)
+        self._version_history[name] = {
+            '1.0': schema_data.copy()
+        }
+        
+        # Track dependencies
+        if schema_data.get('extends'):
+            parent = schema_data['extends']
+            if parent not in self._dependents:
+                self._dependents[parent] = set()
+            self._dependents[parent].add(name)
+
+    def update_schema(self, name: str, schema_data: Dict[str, Any]) -> None:
+        """Update existing schema with version increment"""
+        if name not in self.mappings:
+            raise ValueError(f"Schema '{name}' not found")
+            
+        try:
+            logger.info(f"Updating schema {name}")
+            
+            # Initialize version history if it doesn't exist
+            if name not in self._version_history:
+                self._version_history[name] = {
+                    self.mappings[name].version: self.mappings[name].__dict__
+                }
+            
+            # Get current version and increment
+            current = self.mappings[name].version
+            major, minor = current.split('.')
+            new_version = f"{major}.{int(minor) + 1}"
+            logger.info(f"Incrementing version from {current} to {new_version}")
+            
+            # Update metadata but preserve created_at if it exists
+            schema_data['version'] = new_version
+            schema_data['updated_at'] = datetime.now().isoformat()
+            if hasattr(self.mappings[name], 'created_at'):
+                schema_data['created_at'] = self.mappings[name].created_at
+            
+            try:
+                # Convert raw field dicts to SchemaField objects
+                fields = []
+                for field_data in schema_data.get('fields', []):
+                    logger.debug(f"Processing field: {field_data}")
+                    field = SchemaField(
+                        name=field_data['name'],
+                        source=field_data['source'],
+                        type=field_data['type'],
+                        required=field_data['required'],
+                        description=field_data['description'],
+                        transformation=field_data.get('transformation')
+                    )
+                    fields.append(field)
+            except Exception as field_error:
+                logger.error(f"Field processing error: {field_error}")
+                raise ValueError(f"Invalid field data: {field_error}")
+
+            try:
+                # Create new schema mapping
+                new_mapping = SchemaMapping(
+                    version=new_version,
+                    name=schema_data['name'],
+                    description=schema_data['description'],
+                    fields=fields,
+                    extends=schema_data.get('extends'),
+                    created_at=schema_data.get('created_at'),
+                    updated_at=schema_data['updated_at']
+                )
+                logger.info(f"Created new mapping object: {new_mapping}")
+            except Exception as mapping_error:
+                logger.error(f"Schema mapping creation error: {mapping_error}")
+                raise ValueError(f"Invalid schema mapping: {mapping_error}")
+
+            # Save to filesystem
+            self._save_schema_to_file(schema_data, new_version)
+            
+            # Update memory storage
+            self.mappings[name] = new_mapping
+            self._version_history[name][new_version] = schema_data
+
+        except Exception as e:
+            logger.error(f"Schema update error for {name}: {str(e)}", exc_info=True)
+            raise ValueError(f"Failed to update schema: {str(e)}")
+
+    def get_schema_by_version(self, name: str, version: str) -> Optional[SchemaMapping]:
+        """Get specific version of a schema"""
+        if name not in self._version_history:
+            return None
+        schema_data = self._version_history[name].get(version)
+        return SchemaMapping(**schema_data) if schema_data else None
+
+    def get_schema_versions(self, name: str) -> List[Dict[str, Any]]:
+        """Get version history for a schema"""
+        if name not in self._version_history:
+            return []
+        
+        versions = []
+        for version, schema in self._version_history[name].items():
+            versions.append({
+                'version': version,
+                'timestamp': schema.get('updated_at', schema.get('created_at', '')),
+                'description': schema.get('description', ''),
+                'extends': schema.get('extends'),
+                'fields_count': len(schema.get('fields', [])),
+                'created_at': schema.get('created_at', ''),
+                'updated_at': schema.get('updated_at', '')
+            })
+        return sorted(versions, key=lambda x: x['version'])
+
+    def has_dependents(self, name: str) -> bool:
+        """Check if schema has dependent schemas"""
+        return name in self._dependents and bool(self._dependents[name])
+
+    def delete_schema(self, name: str) -> None:
+        """Delete schema from registry"""
+        if name not in self.mappings:
+            raise ValueError(f"Schema {name} not found")
+            
+        # Check dependencies first
+        if self.has_dependents(name):
+            raise ValueError(f"Cannot delete schema {name}: has dependent schemas")
+            
+        # Get parent info before deletion
+        schema = self.mappings[name]
+        parent = schema.extends
+            
+        # Remove from main registry
+        del self.mappings[name]
+        
+        # Update dependencies
+        if parent and parent in self._dependents:
+            self._dependents[parent].remove(name)
+        if name in self._dependents:
+            del self._dependents[name]

@@ -1,0 +1,18 @@
+name: demo_equity
+description: Updated demo equity schema
+extends: base
+fields:
+- name: identifier
+  source: isin
+  type: string
+  required: true
+  description: ISIN identifier
+- name: price_data
+  source: price_multiplier
+  type: number
+  required: false
+  description: Updated price field
+  transformation: round(4)
+version: '1.5'
+updated_at: '2025-05-11T15:56:15.460892'
+created_at: null
