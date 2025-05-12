@@ -11,6 +11,7 @@ from marketdata_api.services.legal_entity_service import LegalEntityService
 from marketdata_api.database.session import get_session
 from marketdata_api.database.base import Base
 from sqlalchemy import inspect
+from marketdata_api.models.utils.cfi import CFI
 
 def list_tables():
     """List all tables in the database with their columns."""
@@ -348,6 +349,35 @@ def export_data():
                         writer.writerow({'id': item.id, 'isin': item.isin, 
                                        'type': item.type, 'full_name': item.full_name})
 
+def decode_cfi():
+    """Decode CFI code and display human-readable description."""
+    if len(sys.argv) < 3:
+        print("Usage: python scripts/cli.py cfi <code>")
+        print("Example: python scripts/cli.py cfi ESVUFR")
+        return
+
+    try:
+        cfi_code = sys.argv[2].upper()
+        cfi = CFI(cfi_code)
+        result = cfi.describe()
+        
+        print("\n=== CFI Code Analysis ===")
+        print(f"Code: {result['cfi_code']}")
+        print(f"Category: {result['category']} - {result['category_description']}")
+        print(f"Group: {result['group']} - {result['group_description']}")
+        
+        if isinstance(result['attributes'], dict):
+            print("\nAttributes:")
+            for key, value in result['attributes'].items():
+                print(f"  {key}: {value}")
+        else:
+            print(f"\nAttributes: {result['attributes']}")
+            
+    except ValueError as e:
+        print(f"Error: {str(e)}")
+    except Exception as e:
+        print(f"Error decoding CFI code: {str(e)}")
+
 def print_usage():
     print("""
 Market Data API CLI Tool
@@ -360,6 +390,7 @@ Basic Commands:
     batch <command> <file>             - Batch process instruments
     filter <field> <value>             - Filter instruments by field
     export <format> <table>            - Export data to CSV/JSON
+    cfi <code>                         - Decode CFI code
 
 Instrument Commands:
     get <id/isin>                      - Get basic instrument info
@@ -390,6 +421,7 @@ Examples:
     python scripts/cli.py batch create isins.txt equity
     python scripts/cli.py entity create 549300PPETP6IPXYTE40
     python scripts/cli.py filter type equity
+    python scripts/cli.py cfi ESVUFR
     """)
 
 def main():
@@ -411,6 +443,8 @@ def main():
         filter_instruments()
     elif command == "export":
         export_data()
+    elif command == "cfi":
+        decode_cfi()
     else:
         print("Invalid command")
         print_usage()
