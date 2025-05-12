@@ -4,6 +4,17 @@ from marketdata_api.database.base import init_db
 import logging
 from logging.handlers import RotatingFileHandler
 import os
+import atexit
+import glob
+
+def cleanup_logs():
+    """Remove all log files when server shuts down"""
+    log_files = glob.glob('logs/*.log*')
+    for log_file in log_files:
+        try:
+            os.remove(log_file)
+        except OSError:
+            pass  # Ignore errors if file is locked or already deleted
 
 def create_app():
     app = Flask(__name__,
@@ -11,9 +22,10 @@ def create_app():
                 static_folder="../frontend/static")
     app.config["ENV"] = FLASK_ENV
 
-    # Set up logging
+    # Set up logging and register cleanup
     if not os.path.exists('logs'):
         os.mkdir('logs')
+    atexit.register(cleanup_logs)
     
     formatter = logging.Formatter(
         '[%(asctime)s] %(levelname)s in %(module)s: %(message)s'

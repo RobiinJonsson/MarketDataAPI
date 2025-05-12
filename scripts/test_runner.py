@@ -13,7 +13,7 @@ from marketdata_api.database.initialize_db import init_database
 
 def run_tests():
     # Initialize database with force recreate to apply schema changes
-    init_database(force_recreate=False)  # Changed to True
+    init_database(force_recreate=False)  # Changed to False to prevent data loss
     
     print("\nTesting Legal Entity Service...")
     test_legal_entities()

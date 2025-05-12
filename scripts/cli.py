@@ -57,6 +57,7 @@ def print_instrument_detail(instrument):
     print(f"CFI Code: {instrument.cfi_code}")
     print(f"Currency: {instrument.currency}")
     print(f"Trading Venue: {instrument.trading_venue}")
+    print(f"First Trade Date: {instrument.first_trade_date}")
     
     if instrument.first_trade_date:
         print(f"First Trade Date: {instrument.first_trade_date}")

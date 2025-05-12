@@ -28,6 +28,10 @@ async function searchAndDisplay() {
         const response = await fetch(`/api/search/${isin}`);
         const data = await response.json();
 
+        // Add debug logging
+        console.log("Raw API response:", data);
+        console.log("First trade date:", data.instrument?.first_trade_date);
+
         if (!response.ok) {
             showResultsError(data.message || "Error fetching data");
             return;
@@ -47,7 +51,8 @@ async function searchAndDisplay() {
                 "Symbol": data.instrument?.symbol || 'N/A',
                 "CFI Code": data.instrument?.cfi_code || 'N/A',
                 "Currency": data.instrument?.currency || 'N/A',
-                "First Trade Date": formatDateResults(data.instrument?.first_trade_date) || 'N/A',
+                "First Trade Date": data.instrument?.first_trade_date ? 
+                    formatDateResults(data.instrument.first_trade_date) : 'N/A',
                 "FIGI": data.figi?.figi || 'N/A',
                 "Security Type": data.figi?.security_type || 'N/A',
                 "Market Sector": data.figi?.market_sector || 'N/A'
@@ -58,7 +63,8 @@ async function searchAndDisplay() {
                 "Jurisdiction": data.lei?.jurisdiction || 'N/A',
                 "Legal Form": data.lei?.legal_form || 'N/A',
                 "Status": data.lei?.status || 'N/A',
-                "Creation Date": formatDateResults(data.lei?.creation_date) || 'N/A'
+                "Creation Date": data.lei?.creation_date ? 
+                    formatDateResults(data.lei.creation_date) : 'N/A'
             },
             tradingVenue: {
                 "Trading Venue": data.instrument?.trading_venue || 'N/A',
@@ -119,11 +125,30 @@ function renderTable(data) {
 }
 
 function formatDateResults(dateString) {
-    if (!dateString || dateString === 'None') return 'N/A';
+    console.log("Formatting date:", dateString);
+    if (!dateString || dateString === 'None' || dateString === null) {
+        console.log("Date is null/None/empty");
+        return 'N/A';
+    }
     try {
-        return new Date(dateString).toLocaleString();
+        const date = new Date(dateString);
+        console.log("Parsed date object:", date);
+        
+        if (isNaN(date.getTime())) {
+            console.log("Invalid date - NaN");
+            return 'N/A';
+        }
+        
+        const formatted = date.toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+        });
+        console.log("Formatted date:", formatted);
+        return formatted;
     } catch (e) {
-        return dateString;
+        console.error('Error formatting date:', dateString, e);
+        return 'N/A';
     }
 }
 

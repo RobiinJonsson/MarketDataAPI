@@ -108,8 +108,13 @@ def parse_date(date_str: str) -> datetime.date:
     if not date_str:
         return None
     try:
+        # First try ISO format with timezone
+        if 'T' in date_str:
+            return datetime.fromisoformat(date_str.replace('Z', '+00:00')).date()
+        # Fallback to simple YYYY-MM-DD format
         return datetime.strptime(date_str, '%Y-%m-%d').date()
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as e:
+        logger.debug(f"Date parsing failed for {date_str}: {str(e)}")
         return None
 
 def parse_float(value: Any) -> float:
@@ -201,6 +206,7 @@ def map_lei_record(response: Dict[str, Any]) -> Dict[str, Any]:
             "legal_form": entity.get("legalForm", {}).get("id"),
             "registered_as": entity.get("registeredAs"),
             "status": entity.get("status"),
+            "creation_date": parse_iso_date(registration.get("initialRegistrationDate")),
             "bic": safe_list_to_str(attributes.get("bic")),
             "next_renewal_date": parse_iso_date(registration.get("nextRenewalDate")),
             "registration_status": registration.get("status"),
@@ -228,7 +234,6 @@ def map_lei_record(response: Dict[str, Any]) -> Dict[str, Any]:
         ],
         "registration": {
             "lei": data.get("id"),
-            "initial_date": parse_iso_date(registration.get("initialRegistrationDate")),
             "last_update": parse_iso_date(registration.get("lastUpdateDate")),
             "status": registration.get("status"),
             "next_renewal": parse_iso_date(registration.get("nextRenewalDate")),

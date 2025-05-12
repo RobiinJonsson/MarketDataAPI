@@ -103,7 +103,8 @@ def search_db_entry(isin):
                 "trading_venue": instrument.trading_venue,
                 "relevant_authority": instrument.relevant_authority,
                 "relevant_venue": instrument.relevant_venue,
-                "commodity_derivative": instrument.commodity_derivative
+                "commodity_derivative": instrument.commodity_derivative,
+                "first_trade_date": instrument.first_trade_date.isoformat() if instrument.first_trade_date else None
             }
         }
         
@@ -122,7 +123,8 @@ def search_db_entry(isin):
                 "name": instrument.legal_entity.name,
                 "jurisdiction": instrument.legal_entity.jurisdiction,
                 "legal_form": instrument.legal_entity.legal_form,
-                "status": instrument.legal_entity.status
+                "status": instrument.legal_entity.status,
+                "creation_date": instrument.legal_entity.creation_date.isoformat() if instrument.legal_entity.creation_date else None
             }
             
         session.close()

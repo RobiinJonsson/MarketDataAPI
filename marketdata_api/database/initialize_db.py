@@ -36,8 +36,18 @@ def verify_tables():
 def init_database(force_recreate=False):
     """Initialize database with all models"""
     try:
+        # Add environment check to prevent accidental resets
+        if force_recreate and os.environ.get('FLASK_ENV') == 'production':
+            logger.error("Cannot force recreate database in production environment")
+            return False
+            
         if force_recreate and database_exists():
-            logger.warning("Dropping existing database - ALL DATA WILL BE LOST")
+            logger.warning("⚠️ WARNING: About to drop existing database - ALL DATA WILL BE LOST")
+            user_input = input("Are you sure you want to reset the database? (yes/no): ")
+            if user_input.lower() != 'yes':
+                logger.info("Database reset cancelled")
+                return False
+            logger.warning("Dropping existing database")
             os.remove(DB_PATH)
         elif database_exists():
             logger.info("Database exists, verifying tables...")
