@@ -17,7 +17,7 @@ function switchTab(tabName) {
 }
 
 async function searchAndDisplay() {
-    const isin = document.getElementById("isin-input").value;
+    const isin = document.getElementById("search-isin-input").value;  // Updated ID
     if (!isin) {
         alert("Please enter an ISIN");
         return;

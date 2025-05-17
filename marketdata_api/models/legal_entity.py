@@ -2,6 +2,7 @@ from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, CheckConst
 from sqlalchemy.orm import relationship
 from ..database.base import Base
 from datetime import datetime, UTC
+import uuid
 
 class LegalEntity(Base):
     __tablename__ = "legal_entities"
@@ -31,12 +32,12 @@ class LegalEntity(Base):
 class EntityAddress(Base):
     __tablename__ = "entity_addresses"
     
-    id = Column(Integer, primary_key=True)
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     lei = Column(String, ForeignKey('legal_entities.lei', ondelete='CASCADE'), nullable=False)
     type = Column(String, nullable=False)
-    address_lines = Column(String, nullable=False)
-    country = Column(String, nullable=False)
-    city = Column(String, nullable=False)
+    address_lines = Column(String)
+    country = Column(String)
+    city = Column(String)
     region = Column(String)
     postal_code = Column(String, nullable=False)
     

@@ -15,12 +15,9 @@ branch_labels = None
 depends_on = None
 
 def upgrade() -> None:
-    with op.batch_alter_table('figi_mappings') as batch_op:
-        batch_op.add_column(sa.Column('id', sa.String(), nullable=False))
-        batch_op.add_column(sa.Column('last_updated', sa.DateTime(), nullable=True))
-        batch_op.create_primary_key('pk_figi_mappings', ['id'])
+    # Only add last_updated column since id is already there
+    op.add_column('figi_mappings', sa.Column('last_updated', sa.DateTime(), nullable=True))
 
 def downgrade() -> None:
     with op.batch_alter_table('figi_mappings') as batch_op:
         batch_op.drop_column('last_updated')
-        batch_op.drop_column('id')

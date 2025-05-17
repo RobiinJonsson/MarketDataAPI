@@ -140,14 +140,17 @@ def fetch_and_insert_frontend():
     try:
         data = request.get_json()
         identifier = data.get('Id')
+        instrument_type = data.get('Category')
         
         if not identifier:
             return jsonify({'error': 'Missing identifier'}), 400
+        if not instrument_type:
+            return jsonify({'error': 'Missing instrument category'}), 400
 
         service = InstrumentService()
         with get_session() as session:
-            # Get or create the instrument
-            instrument = service.get_or_create_instrument(identifier)
+            # Get or create the instrument with specified type
+            instrument = service.get_or_create_instrument(identifier, instrument_type)
             if not instrument:
                 logger.warning(f"Unable to fetch or create instrument: {identifier}")
                 return jsonify({'error': 'Unable to fetch or create instrument'}), 404
@@ -165,7 +168,7 @@ def fetch_and_insert_frontend():
                 'lei': enriched.legal_entity.lei if enriched.legal_entity else None
             }
             
-            logger.info(f"Successfully processed instrument {identifier}")
+            logger.info(f"Successfully processed {instrument_type} instrument {identifier}")
             return jsonify(response_data)
 
     except Exception as e:

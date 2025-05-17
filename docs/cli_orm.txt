@@ -39,7 +39,7 @@ Export Commands:
     export csv instruments             - Export instruments to CSV
 
 Examples:
-    python scripts/cli.py instrument detail DE000A1EWWW0
+    python scripts/cli.py instrument detail SE0000242455
     python scripts/cli.py batch create futures.txt future
     python scripts/cli.py entity create 549300PPETP6IPXYTE40
     python scripts/cli.py filter type equity

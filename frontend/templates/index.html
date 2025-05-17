@@ -16,21 +16,41 @@
 
         <!-- Search Section -->
         <section class="search-section">
-            <form class="search-form" onsubmit="searchAndDisplay(); return false;">
+            <form class="search-form" onsubmit="event.preventDefault(); searchAndDisplay();">
+                <h3>Search Existing Instrument</h3>
                 <div class="input-group">
                     <input
                         type="text"
-                        id="isin-input"
+                        id="search-isin-input"
                         class="input-field"
-                        placeholder="Enter ISIN"
+                        placeholder="Enter ISIN to search"
                         pattern="^[A-Z]{2}[A-Z0-9]{9}\d$"
                         title="Please enter a valid 12-character ISIN"
                         required
                     />
-                </div>
-                <div class="button-group">
                     <button type="submit" class="btn btn-primary">Search</button>
-                    <button type="button" class="btn btn-tertiary" onclick="fetchAndInsert()">Fetch & Insert</button>
+                </div>
+            </form>
+
+            <form class="insert-form" onsubmit="event.preventDefault(); fetchAndInsert();">
+                <h3>Create New Instrument</h3>
+                <div class="input-group">
+                    <input
+                        type="text"
+                        id="insert-isin-input"
+                        class="input-field"
+                        placeholder="Enter ISIN to create"
+                        pattern="^[A-Z]{2}[A-Z0-9]{9}\d$"
+                        title="Please enter a valid 12-character ISIN"
+                        required
+                    />
+                    <select id="cfi-category" class="input-field" required>
+                        <option value="">Select Instrument Type</option>
+                        <option value="equity">Equity</option>
+                        <option value="debt">Debt</option>
+                        <option value="future">Future</option>
+                    </select>
+                    <button type="submit" class="btn btn-tertiary">Create & Enrich</button>
                 </div>
             </form>
         </section>

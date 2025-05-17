@@ -22,14 +22,40 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Setup arguments
+cfi = "E"  # Replace with your desired CFI code
+isin = "SE0020845014"  # Replace with specific ISIN if needed
+
 # instantiate edl
 edl = EsmaDataLoader('2025-04-26', '2025-04-26')
 
-# Specify the CFI code you want to process
-cfi = "F"  # Replace with your desired CFI code
+# If ISIN is provided, look for specific instrument
+if isin:
+    logger.info(f"\nSearching for ISIN: {isin}")
+    list_files = edl.load_mifid_file_list(['firds'])
+    
+    # If CFI is provided, only search relevant files
+    if cfi:
+        list_files = list_files[list_files['download_link'].str.contains(f'FULINS_{cfi}', na=False)]
+    
+    for idx, file_info in list_files.iterrows():
+        try:
+            df = edl.download_file(file_info['download_link'], update=False)
+            if 'Id' in df.columns and isin in df['Id'].values:
+                logger.info(f"\nFound ISIN {isin} in file: {file_info['download_link']}")
+                isin_data = df[df['Id'] == isin].iloc[0]
+                for column, value in isin_data.items():
+                    if pd.notna(value):  # Only print non-null values
+                        logger.info(f"{column}: {value}")
+                break
+        except Exception as e:
+            logger.error(f"Error processing file: {str(e)}")
+            continue
+    else:
+        logger.warning(f"ISIN {isin} not found in any files")
 
-# Process specific CFI code
-if cfi:
+# Process specific CFI code if no ISIN is provided
+elif cfi:
     logger.info(f"\nProcessing CFI code: {cfi}")
     
     # Load available FIRDS files for this CFI

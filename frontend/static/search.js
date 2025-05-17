@@ -1,8 +1,23 @@
-
-async function fetchAndInsert() {
-    const isin = document.getElementById("isin-input").value;
+async function searchAndDisplay() {
+    const isin = document.getElementById("search-isin-input").value;
     if (!isin) {
         alert("Please enter an ISIN");
+        return;
+    }
+    // ...existing search code...
+}
+
+async function fetchAndInsert() {
+    const isin = document.getElementById("insert-isin-input").value;
+    const category = document.getElementById("cfi-category").value;
+    
+    if (!isin) {
+        alert("Please enter an ISIN");
+        return;
+    }
+    
+    if (!category) {
+        alert("Please select an instrument category");
         return;
     }
 
@@ -11,7 +26,7 @@ async function fetchAndInsert() {
 
         const payload = {
             Id: isin,
-            type: 'equity'
+            Category: category  // This matches the database polymorphic identity
         };
 
         const response = await fetch('/api/fetch', {

@@ -180,7 +180,7 @@ class InstrumentService:
         finally:
             session.close()
 
-    def get_or_create_instrument(self, identifier: str, instrument_type: str = "equity") -> Optional[Instrument]:
+    def get_or_create_instrument(self, identifier: str, instrument_type: str) -> Optional[Instrument]:
         """Get existing instrument or create from FIRDS data."""
         with get_session() as session:
             try:
