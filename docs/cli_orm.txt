@@ -1,7 +1,7 @@
 CMD Prompts
 From root -> cd C:\Users\robin\Projects\MarketDataAPI>
 
-MMarket Data API CLI Tool
+Market Data API CLI Tool
 =======================
 
 Basic Commands:
@@ -15,11 +15,12 @@ Basic Commands:
 
 Instrument Commands:
     get <id/isin>                      - Get basic instrument info
-    detail <isin>                      - Show detailed instrument info including FIGI and LEI data
-    create <type> <data>               - Create new instrument (type: equity|debt)
+    create-ext <type> <isin>           - Create instrument from external source (FIRDS)
+    create-int <type> <data>           - Create instrument from provided data
     update <id> <data>                 - Update existing instrument
     delete <id/isin>                   - Delete instrument by ID or ISIN
     enrich <id>                        - Enrich with FIGI and LEI data
+    detail <isin>                      - List instrument detailed data
     list                               - List all instruments
 
 Entity Commands:
@@ -39,7 +40,7 @@ Export Commands:
 
 Examples:
     python scripts/cli.py instrument detail DE000A1EWWW0
-    python scripts/cli.py batch create isins.txt equity
+    python scripts/cli.py batch create futures.txt future
     python scripts/cli.py entity create 549300PPETP6IPXYTE40
     python scripts/cli.py filter type equity
     python scripts/cli.py cfi ESVUFR

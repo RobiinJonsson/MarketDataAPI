@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, JSON, DateTime, Float, Date, Enum, ForeignKey, Boolean
+from sqlalchemy import Column, String, JSON, DateTime, Float, Date, Enum, ForeignKey, Boolean, Integer, Index
 from sqlalchemy.orm import relationship
 from ..database.base import Base
 import enum
@@ -13,6 +13,36 @@ class InstrumentType(enum.Enum):
     COMMODITY = "commodity"
     CURRENCY = "currency"
     # Add more types as needed
+
+
+class IsinRelationType(enum.Enum):
+    PRIMARY = "primary"      # For ISIN_1
+    SECONDARY = "secondary"  # For ISIN_2-10 (31-4 occurrences)
+    TERTIARY = "tertiary"   # For ISIN_11-38 (3-2 occurrences)
+    OTHER = "other"         # For ISIN_39-100 (1 occurrence)
+
+
+class RelatedIsin(Base):
+    __tablename__ = "related_isins"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    primary_instrument_id = Column(String, ForeignKey('instruments.id', ondelete='CASCADE'))
+    related_isin = Column(String, nullable=False)
+    sequence_number = Column(Integer, nullable=False)
+    relationship_type = Column(Enum(IsinRelationType), nullable=False)
+    
+    # Relationship back to the primary instrument
+    primary_instrument = relationship("Instrument", back_populates="related_isins")
+    
+    created_at = Column(DateTime, default=lambda: datetime.now(UTC))
+    updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+
+    # Add indexes for better query performance
+    __table_args__ = (
+        Index('idx_related_isins_primary_instrument', 'primary_instrument_id'),
+        Index('idx_related_isins_isin', 'related_isin'),
+        Index('idx_related_isins_type', 'relationship_type'),
+    )
 
 
 class Instrument(BaseModel):
@@ -55,6 +85,9 @@ class Instrument(BaseModel):
     additional_data = Column(JSON)
     created_at = Column(DateTime, default=lambda: datetime.now(UTC))
     updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
+    
+    # Add relationship to related ISINs
+    related_isins = relationship("RelatedIsin", back_populates="primary_instrument")
 
 
 class Equity(Instrument):
@@ -112,3 +145,26 @@ class Debt(Instrument):
     # Additional debt fields from your schema
     coupon_frequency = Column(String)
     credit_rating = Column(String)
+
+
+class Future(Instrument):
+    __tablename__ = 'futures'
+    __mapper_args__ = {
+        'polymorphic_identity': 'future',
+        'polymorphic_load': 'inline'
+    }
+
+    id = Column(String, ForeignKey('instruments.id', ondelete='CASCADE'), primary_key=True)
+    
+    # Future-specific fields from FIRDS
+    admission_approval_date = Column(Date)
+    admission_request_date = Column(Date)
+    expiration_date = Column(Date)
+    final_settlement_date = Column(Date)
+    delivery_type = Column(String)
+    settlement_method = Column(String)
+    contract_size = Column(Float)
+    contract_unit = Column(String)
+    price_multiplier = Column(Float)
+    settlement_currency = Column(String)
+    contract_details = Column(JSON)  # Add proper JSON column type

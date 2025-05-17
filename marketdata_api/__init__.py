@@ -4,17 +4,7 @@ from marketdata_api.database.base import init_db
 import logging
 from logging.handlers import RotatingFileHandler
 import os
-import atexit
 import glob
-
-def cleanup_logs():
-    """Remove all log files when server shuts down"""
-    log_files = glob.glob('logs/*.log*')
-    for log_file in log_files:
-        try:
-            os.remove(log_file)
-        except OSError:
-            pass  # Ignore errors if file is locked or already deleted
 
 def create_app():
     app = Flask(__name__,
@@ -25,14 +15,19 @@ def create_app():
     # Set up logging and register cleanup
     if not os.path.exists('logs'):
         os.mkdir('logs')
-    atexit.register(cleanup_logs)
     
     formatter = logging.Formatter(
         '[%(asctime)s] %(levelname)s in %(module)s: %(message)s'
     )
 
-    # File handler for debug level
-    debug_handler = RotatingFileHandler('logs/debug.log', maxBytes=10240, backupCount=10)
+    # Improved file handler with larger buffer and delay
+    debug_handler = RotatingFileHandler(
+        'logs/debug.log',
+        maxBytes=1024*1024,  # 1MB
+        backupCount=5,
+        delay=True,  # Don't create file until first write
+        encoding='utf-8'
+    )
     debug_handler.setLevel(logging.DEBUG)
     debug_handler.setFormatter(formatter)
 
@@ -41,8 +36,11 @@ def create_app():
     console_handler.setLevel(logging.INFO)
     console_handler.setFormatter(formatter)
 
-    # Set root logger
+    # Clear existing handlers to prevent duplicates
     root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    
+    # Set root logger
     root_logger.setLevel(logging.DEBUG)
     root_logger.addHandler(debug_handler)
     root_logger.addHandler(console_handler)

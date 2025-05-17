@@ -1,0 +1,56 @@
+version: "1.0"
+name: "future"
+description: "Future instrument schema mapping"
+extends: "base"
+fields:
+  - name: "expiration_date"
+    source: "expiration_date"
+    type: "date"
+    required: true
+    description: "Contract expiration date"
+    transformation: "format(YYYY-MM-DD)"
+
+  - name: "final_settlement_date"
+    source: "final_settlement_date"
+    type: "date"
+    required: true
+    description: "Final settlement date"
+    transformation: "format(YYYY-MM-DD)"
+
+  - name: "delivery_type"
+    source: "delivery_type"
+    type: "string"
+    required: true
+    description: "Type of delivery"
+
+  - name: "settlement_method"
+    source: "settlement_method"
+    type: "string"
+    required: true
+    description: "Method of settlement"
+
+  - name: "contract_size"
+    source: "contract_size"
+    type: "number"
+    required: true
+    description: "Size of contract"
+    transformation: "round(2)"
+
+  - name: "contract_unit"
+    source: "contract_unit"
+    type: "string"
+    required: true
+    description: "Unit of contract"
+
+  - name: "price_multiplier"
+    source: "price_multiplier"
+    type: "number"
+    required: false
+    description: "Price multiplier"
+    transformation: "round(4)"
+
+  - name: "settlement_currency"
+    source: "settlement_currency"
+    type: "string"
+    required: true
+    description: "Settlement currency"

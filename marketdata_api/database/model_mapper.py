@@ -100,6 +100,26 @@ def map_to_model(data: Dict[str, Any], instrument_type: str = "equity") -> Dict[
             'coupon_frequency': data.get('CpnFreq'),  # If available in FIRDS data
             'credit_rating': data.get('CrdtRtg')  # If available in FIRDS data
         })
+    elif instrument_type == "future":
+        mapped.update({
+            'admission_approval_date': parse_date(data.get('AdmssnApprvlDtByIssr')),
+            'admission_request_date': parse_date(data.get('ReqForAdmssnDt')),
+            'expiration_date': parse_date(data.get('ExprtnDt')),
+            'final_settlement_date': parse_date(data.get('FnlSttlmDt')),
+            'delivery_type': data.get('DlvryTp'),
+            'settlement_method': data.get('SttlmtMtd'),
+            'contract_size': parse_float(data.get('CtrctSz')),
+            'contract_unit': data.get('CtrctUnit'),
+            'price_multiplier': parse_float(data.get('PricMltplr')),
+            'settlement_currency': data.get('SttlmtCcy'),
+            'contract_details': {
+                'trading_hours': data.get('TrdngHrs'),
+                'tick_size': parse_float(data.get('TckSz')),
+                'market_segment': data.get('MktSgmt'),
+                'underlying_type': data.get('UndrlygTp'),
+                'trading_cycle': data.get('TrdngCycl')
+            }
+        })
 
     return {k: v for k, v in mapped.items() if v is not None}
 

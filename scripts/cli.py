@@ -117,13 +117,37 @@ def print_instrument_detail(instrument):
     print(f"\nCreated: {instrument.created_at}")
     print(f"Last Updated: {instrument.updated_at}")
 
+    # Add future-specific fields
+    if instrument.type == 'future':
+        print("\n=== Future Specific Details ===")
+        print(f"Expiration Date: {instrument.expiration_date}")
+        print(f"Final Settlement Date: {instrument.final_settlement_date}")
+        print(f"Delivery Type: {instrument.delivery_type}")
+        print(f"Settlement Method: {instrument.settlement_method}")
+        print(f"Contract Size: {instrument.contract_size}")
+        print(f"Contract Unit: {instrument.contract_unit}")
+        print(f"Settlement Currency: {instrument.settlement_currency}")
+        
+        if instrument.contract_details:
+            print("\n=== Contract Details ===")
+            for key, value in instrument.contract_details.items():
+                print(f"{key}: {value}")
+
 def instrument_operations():
     """Handle instrument CRUD operations."""
     service = InstrumentService()
     
     if len(sys.argv) < 3:
         print("Usage: python scripts/cli.py instrument <command> [args]")
-        print("Commands: get <id/isin>, create <type> <data>, update <id> <data>, delete <id/isin>, enrich <id>, list, detail <isin>")
+        print("Commands:")
+        print("  get <id/isin>                     - Get basic instrument info")
+        print("  create-ext <type> <isin>          - Create instrument from external source")
+        print("  create-int <type> <data>          - Create instrument from provided data")
+        print("  update <id> <data>                - Update existing instrument")
+        print("  delete <id/isin>                  - Delete instrument")
+        print("  enrich <id>                       - Enrich with FIGI and LEI data")
+        print("  list                              - List all instruments")
+        print("  detail <isin>                     - Show detailed instrument info")
         return
 
     command = sys.argv[2]
@@ -137,11 +161,22 @@ def instrument_operations():
                 print("Instrument not found")
             session.close()
             
-        elif command == "create" and len(sys.argv) >= 4:
+        elif command == "create-ext" and len(sys.argv) == 5:
+            # Create from external source (FIRDS)
+            instrument_type = sys.argv[3]
+            isin = sys.argv[4]
+            instrument = service.get_or_create_instrument(isin, instrument_type)
+            if instrument:
+                print(f"Created/Retrieved instrument from external source: {instrument.__dict__}")
+            else:
+                print(f"Failed to create/retrieve instrument: {isin}")
+            
+        elif command == "create-int" and len(sys.argv) >= 4:
+            # Create directly with provided data
             instrument_type = sys.argv[3]
             data = eval(" ".join(sys.argv[4:]))  # Be careful with eval in production!
             instrument = service.create_instrument(data, instrument_type)
-            print(f"Created instrument: {instrument.__dict__}")
+            print(f"Created instrument directly: {instrument.__dict__}")
             
         elif command == "update" and len(sys.argv) >= 4:
             identifier = sys.argv[3]
@@ -394,8 +429,8 @@ Basic Commands:
 
 Instrument Commands:
     get <id/isin>                      - Get basic instrument info
-    detail <isin>                      - Show detailed instrument info including FIGI and LEI data
-    create <type> <data>               - Create new instrument (type: equity|debt)
+    create-ext <type> <isin>           - Create instrument from external source (FIRDS)
+    create-int <type> <data>           - Create instrument from provided data
     update <id> <data>                 - Update existing instrument
     delete <id/isin>                   - Delete instrument by ID or ISIN
     enrich <id>                        - Enrich with FIGI and LEI data
@@ -418,7 +453,7 @@ Export Commands:
 
 Examples:
     python scripts/cli.py instrument detail DE000A1EWWW0
-    python scripts/cli.py batch create isins.txt equity
+    python scripts/cli.py batch create futures.txt future
     python scripts/cli.py entity create 549300PPETP6IPXYTE40
     python scripts/cli.py filter type equity
     python scripts/cli.py cfi ESVUFR

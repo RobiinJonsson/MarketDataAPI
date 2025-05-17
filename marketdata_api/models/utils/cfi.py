@@ -66,14 +66,14 @@ class Group(Enum):
     OTHER_NON_STANDARD = 'O' # Others/Miscellaneous
 
 class CategoryDescription(Enum):
-    EQUITIES = "Equity Instruments"
-    DEBT = "Debt Instruments"
-    ENTITLEMENTS = "Entitlements (Rights)"
-    OPTIONS = "Options"
-    FUTURES = "Futures"
-    SWAPS = "Spot Instruments"
-    OTHERS = "Other Instruments"
-    LOANS = "Loan Instruments"
+    EQUITIES = "Equity"
+    DEBT = "Debt"
+    ENTITLEMENTS = "Entitlement (Right)"
+    OPTIONS = "Option"
+    FUTURES = "Future"
+    SWAPS = "Swap"
+    OTHERS = "Other"
+    LOANS = "Loan"
 
 class GroupDescription:
     DESCRIPTIONS = {

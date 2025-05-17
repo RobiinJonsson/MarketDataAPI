@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional, NoReturn, Tuple
 from sqlalchemy.orm import Session
 from ..database.session import get_session, SessionLocal
 from ..database.model_mapper import map_to_model, map_figi_data
-from ..models.instrument import Instrument, Equity, Debt
+from ..models.instrument import Instrument, Equity, Debt, Future
 from ..models.figi import FigiMapping  # Assuming this is the model for FIGI mapping
 from .esma_data_loader import EsmaDataLoader
 from .openfigi import search_openfigi
@@ -62,8 +62,10 @@ class InstrumentService:
             model_data['id'] = str(uuid.uuid4())
             model_data['type'] = instrument_type
             
+            # Add Future to the instrument type mapping
             instrument = (Equity if instrument_type == "equity" else 
-                        Debt if instrument_type == "debt" else 
+                        Debt if instrument_type == "debt" else
+                        Future if instrument_type == "future" else 
                         Instrument)(**model_data)
             
             unmapped = {k: v for k, v in data.items() if k not in model_data}
@@ -207,7 +209,15 @@ class InstrumentService:
         """Helper method to fetch FIRDS data."""
         try:
             list_files = self.esma_loader.load_mifid_file_list(['firds'])
-            file_type = 'FULINS_E' if instrument_type == 'equity' else 'FULINS_D'
+            # Add Future file type
+            file_type = ('FULINS_E' if instrument_type == 'equity' else
+                        'FULINS_D' if instrument_type == 'debt' else
+                        'FULINS_F' if instrument_type == 'future' else None)
+            
+            if not file_type:
+                self.logger.error(f"Unsupported instrument type: {instrument_type}")
+                return None
+                
             fulins_files = list_files[list_files['download_link'].str.contains(file_type, na=False)]
             
             if fulins_files.empty:

@@ -53,7 +53,7 @@ Remaining Implementation Tasks:
 4. Instrument Classification System
    - Implement CFI code decoder and repository ✓
    - Create two-level classification structure from CFI codes ✓
-   - Add FIRDS instrument type support ⚠️ (Partially done - have FIRDS mapping in Model Implementation)
+   - Add FIRDS instrument type support ✓ (Futures support added)
    - Add FITRS trading venue data integration
    - Support GLEIF parent/child relationship structures ⚠️ (Partially done - LegalEntity relationships implemented)
    - Add attribute level decoding for all instrument types ✓
@@ -98,7 +98,8 @@ Case 2: ORM Implementation
 Components:
 1. Core ORM Setup ✓
    - Basic SQLAlchemy setup with Base, Session management ✓
-   - Core models: Instrument, Equity, Debt ✓
+   - Core models: Instrument, Equity, Debt, Future ✓
+   - Database versioning with Alembic ✓
    - Session management improvements ✓
    - Error handling and logging ✓
    - Add service interfaces/protocols ✓
@@ -111,6 +112,7 @@ Components:
    - Add NOT NULL constraints for essential fields ✓
    - Add check constraints for status values ✓
    - Add basic indices for performance ✓
+   - Add database migration system ✓
 
 3. Service Layer ✓
    - Basic CRUD operations in InstrumentService ✓
