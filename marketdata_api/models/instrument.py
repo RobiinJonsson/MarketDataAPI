@@ -75,6 +75,7 @@ class Instrument(BaseModel):
     relevant_authority = Column(String)
     relevant_venue = Column(String)
     from_date = Column(DateTime)
+    technical_from_date = Column(DateTime)  # TechAttrbts_PblctnPrd_FrDt
     
     # Relationships
     lei_id = Column(String, ForeignKey('legal_entities.lei'))
@@ -125,6 +126,13 @@ class Equity(Instrument):
     # Underlying instrument references (JSON field to store multiple ISINs)
     underlying_isins = Column(JSON)
 
+    # Add missing FULINS_E fields
+    basket_isin = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN
+    basket_lei = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Bskt_LEI
+    underlying_index_isin = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_ISIN
+    underlying_single_isin = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN
+    underlying_single_index_name = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm
+    additional_metal_product = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_AddtlSubPdct
 
 class Debt(Instrument):
     __tablename__ = 'debts'
@@ -145,7 +153,28 @@ class Debt(Instrument):
     # Additional debt fields from your schema
     coupon_frequency = Column(String)
     credit_rating = Column(String)
+    floating_rate_reference = Column(String)  # DebtInstrmAttrbts_IntrstRate_Fltg_RefRate_Nm
+    floating_rate_term_unit = Column(String)  # DebtInstrmAttrbts_IntrstRate_Fltg_Term_Unit
+    floating_rate_term_value = Column(Float)  # DebtInstrmAttrbts_IntrstRate_Fltg_Term_Val
+    floating_rate_basis_points_spread = Column(Float)  # DebtInstrmAttrbts_IntrstRate_Fltg_BsisPtSprd
+    interest_rate_floating_reference_index = Column(String)  # DerivInstrmAttrbts_IntrstRate_Fltg_RefRate_Indx
+    interest_rate_floating_reference_isin = Column(String)  # DerivInstrmAttrbts_IntrstRate_Fltg_RefRate_ISIN
 
+    # Add missing FULINS_D fields
+    underlying_single_isin = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN
+    basket_isin = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN
+    underlying_index_isin = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_ISIN
+    underlying_single_index_name = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm
+    underlying_single_lei = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_LEI
+    additional_metal_product = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_AddtlSubPdct
+    oil_type = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_BasePdct
+    sub_product = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_SubPdct
+    additional_sub_product = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_AddtlSubPdct
+    metal_type = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_BasePdct
+    precious_metal = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_SubPdct
+    other_commodity_base_product = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Othr_BasePdct
+    underlying_index_name_term_unit = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Unit
+    underlying_index_name_term_value = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Val
 
 class Future(Instrument):
     __tablename__ = 'futures'
@@ -168,3 +197,25 @@ class Future(Instrument):
     price_multiplier = Column(Float)
     settlement_currency = Column(String)
     contract_details = Column(JSON)  # Add proper JSON column type
+    final_price_type = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_FnlPricTp
+    transaction_type = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_TxTp
+    underlying_index_name = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm
+
+    # Add missing FULINS_F fields
+    underlying_single_isin = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN
+    basket_isin = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN
+    underlying_index_isin = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_ISIN
+    underlying_single_index_name = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm
+    underlying_single_lei = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_LEI
+    basket_lei = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Bskt_LEI
+    additional_metal_product = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_AddtlSubPdct
+    oil_type = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_BasePdct
+    sub_product = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_SubPdct
+    additional_sub_product = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_AddtlSubPdct
+    metal_type = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_BasePdct
+    precious_metal = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_SubPdct
+    multi_commodity_base_product = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_MultiCmmdtyExtc_BasePdct
+    other_c10_nondeliverable_base_product = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_OthrC10_NonDlvrbl_BasePdct
+    other_c10_nondeliverable_sub_product = Column(String)  # DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_OthrC10_NonDlvrbl_SubPdct
+    underlying_index_name_term_unit = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Unit
+    underlying_index_name_term_value = Column(String)  # DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Val

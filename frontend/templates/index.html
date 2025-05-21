@@ -63,21 +63,62 @@
             </div>
             <div class="tab-content">
                 <div id="overview-tab" class="tab-pane active">
-                    <div class="overview-grid">
-                        <div class="overview-section" id="instrument-details">
+                    <!-- Equity View -->
+                    <div class="overview-grid instrument-view" id="equity-view" style="display: none;">
+                        <div class="overview-section" id="equity-instrument-details">
                             <h3>Instrument Details</h3>
                             <div class="section-content"></div>
                         </div>
-                        <div class="overview-section" id="issuer-data">
+                        <div class="overview-section" id="equity-issuer-data">
                             <h3>Issuer Data</h3>
                             <div class="section-content"></div>
                         </div>
-                        <div class="overview-section" id="trading-venue">
+                        <div class="overview-section" id="equity-trading-venue">
                             <h3>Trading Venue</h3>
                             <div class="section-content"></div>
                         </div>
-                        <div class="overview-section" id="underlying-instruments">
-                            <h3>Underlying Instruments</h3>
+                        <div class="overview-section" id="equity-price-data">
+                            <h3>Price Information</h3>
+                            <div class="section-content"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Future View -->
+                    <div class="overview-grid instrument-view" id="future-view" style="display: none;">
+                        <div class="overview-section" id="future-instrument-details">
+                            <h3>Instrument Details</h3>
+                            <div class="section-content"></div>
+                        </div>
+                        <div class="overview-section" id="future-contract-data">
+                            <h3>Contract Data</h3>
+                            <div class="section-content"></div>
+                        </div>
+                        <div class="overview-section" id="future-trading-venue">
+                            <h3>Trading Venue</h3>
+                            <div class="section-content"></div>
+                        </div>
+                        <div class="overview-section" id="future-underlying">
+                            <h3>Underlying Information</h3>
+                            <div class="section-content"></div>
+                        </div>
+                    </div>
+
+                    <!-- Debt View -->
+                    <div class="overview-grid instrument-view" id="debt-view" style="display: none;">
+                        <div class="overview-section" id="debt-instrument-details">
+                            <h3>Instrument Details</h3>
+                            <div class="section-content"></div>
+                        </div>
+                        <div class="overview-section" id="debt-issuer-data">
+                            <h3>Issuer Data</h3>
+                            <div class="section-content"></div>
+                        </div>
+                        <div class="overview-section" id="debt-payment-info">
+                            <h3>Payment Information</h3>
+                            <div class="section-content"></div>
+                        </div>
+                        <div class="overview-section" id="debt-trading-venue">
+                            <h3>Trading Venue</h3>
                             <div class="section-content"></div>
                         </div>
                     </div>

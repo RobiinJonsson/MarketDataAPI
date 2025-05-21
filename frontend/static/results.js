@@ -17,7 +17,7 @@ function switchTab(tabName) {
 }
 
 async function searchAndDisplay() {
-    const isin = document.getElementById("search-isin-input").value;  // Updated ID
+    const isin = document.getElementById("search-isin-input").value;
     if (!isin) {
         alert("Please enter an ISIN");
         return;
@@ -27,10 +27,6 @@ async function searchAndDisplay() {
         document.getElementById("spinner").style.display = "block";
         const response = await fetch(`/api/search/${isin}`);
         const data = await response.json();
-
-        // Add debug logging
-        console.log("Raw API response:", data);
-        console.log("First trade date:", data.instrument?.first_trade_date);
 
         if (!response.ok) {
             showResultsError(data.message || "Error fetching data");
@@ -42,62 +38,115 @@ async function searchAndDisplay() {
             return;
         }
 
-        const sections = {
-            instrumentDetails: {
-                "ISIN": data.instrument?.isin || 'N/A',
-                "Type": data.instrument?.type || 'N/A',
-                "Full Name": data.instrument?.full_name || 'N/A',
-                "Short Name": data.instrument?.short_name || 'N/A',
-                "Symbol": data.instrument?.symbol || 'N/A',
-                "CFI Code": data.instrument?.cfi_code || 'N/A',
-                "Currency": data.instrument?.currency || 'N/A',
-                "First Trade Date": data.instrument?.first_trade_date ? 
-                    formatDateResults(data.instrument.first_trade_date) : 'N/A',
-                "FIGI": data.figi?.figi || 'N/A',
-                "Security Type": data.figi?.security_type || 'N/A',
-                "Market Sector": data.figi?.market_sector || 'N/A'
-            },
-            issuerData: {
-                "LEI": data.lei?.lei || 'N/A',
-                "Name": data.lei?.name || 'N/A',
-                "Jurisdiction": data.lei?.jurisdiction || 'N/A',
-                "Legal Form": data.lei?.legal_form || 'N/A',
-                "Status": data.lei?.status || 'N/A',
-                "Creation Date": data.lei?.creation_date ? 
-                    formatDateResults(data.lei.creation_date) : 'N/A'
-            },
-            tradingVenue: {
-                "Trading Venue": data.instrument?.trading_venue || 'N/A',
-                "Relevant Venue": data.instrument?.relevant_venue || 'N/A',
-                "Relevant Authority": data.instrument?.relevant_authority || 'N/A'
-            },
-            underlyingInstruments: {
-                "Commodity Derivative": data.instrument?.commodity_derivative ? 'Yes' : 'No'
-            }
-        };
-
-        Object.entries(sections).forEach(([sectionId, sectionData]) => {
-            const elementId = sectionId.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase();
-            const sectionContent = document.querySelector(`#${elementId} .section-content`);
-            if (!sectionContent) {
-                return;
-            }
-            const htmlContent = Object.entries(sectionData)
-                .map(([label, value]) => `
-                    <div class="field-row">
-                        <div class="label">${label}:</div>
-                        <div class="value">${value}</div>
-                    </div>
-                `).join('');
-            sectionContent.innerHTML = htmlContent;
+        // Hide all instrument views first
+        document.querySelectorAll('.instrument-view').forEach(view => {
+            view.style.display = 'none';
         });
 
+        // Show the appropriate view based on instrument type
+        const instrumentType = data.instrument?.type?.toLowerCase() || '';
+        const viewElement = document.getElementById(`${instrumentType}-view`);
+        if (viewElement) {
+            viewElement.style.display = 'grid';
+        } else {
+            showResultsError("Unsupported instrument type");
+            return;
+        }
+
+        // Update the sections based on instrument type
+        updateInstrumentView(instrumentType, data);
+        
         switchTab('overview');
     } catch (error) {
         showResultsError('An error occurred while fetching the data');
     } finally {
         document.getElementById("spinner").style.display = "none";
     }
+}
+
+function updateInstrumentView(type, data) {
+    const sections = {
+        equity: {
+            [`${type}-instrument-details`]: {
+                "ISIN": data.instrument?.isin || 'N/A',
+                "Type": data.instrument?.type || 'N/A',
+                "Symbol": data.instrument?.symbol || 'N/A',
+                "CFI Code": data.instrument?.cfi_code || 'N/A',
+                "Currency": data.instrument?.currency || 'N/A'
+            },
+            [`${type}-issuer-data`]: {
+                "LEI": data.lei?.lei || 'N/A',
+                "Name": data.lei?.name || 'N/A',
+                "Status": data.lei?.status || 'N/A'
+            },
+            [`${type}-trading-venue`]: {
+                "Trading Venue": data.instrument?.trading_venue || 'N/A',
+                "Relevant Authority": data.instrument?.relevant_authority || 'N/A'
+            },
+            [`${type}-price-data`]: {
+                "First Trade Date": data.instrument?.first_trade_date ? 
+                    formatDateResults(data.instrument.first_trade_date) : 'N/A'
+            }
+        },
+        future: {
+            [`${type}-instrument-details`]: {
+                "ISIN": data.instrument?.isin || 'N/A',
+                "Type": data.instrument?.type || 'N/A',
+                "Symbol": data.instrument?.symbol || 'N/A',
+                "CFI Code": data.instrument?.cfi_code || 'N/A'
+            },
+            [`${type}-contract-data`]: {
+                "Currency": data.instrument?.currency || 'N/A',
+                "First Trade Date": data.instrument?.first_trade_date ? 
+                    formatDateResults(data.instrument.first_trade_date) : 'N/A'
+            },
+            [`${type}-trading-venue`]: {
+                "Trading Venue": data.instrument?.trading_venue || 'N/A',
+                "Relevant Authority": data.instrument?.relevant_authority || 'N/A'
+            },
+            [`${type}-underlying`]: {
+                "Commodity Derivative": data.instrument?.commodity_derivative ? 'Yes' : 'No'
+            }
+        },
+        debt: {
+            [`${type}-instrument-details`]: {
+                "ISIN": data.instrument?.isin || 'N/A',
+                "Type": data.instrument?.type || 'N/A',
+                "CFI Code": data.instrument?.cfi_code || 'N/A',
+                "Currency": data.instrument?.currency || 'N/A'
+            },
+            [`${type}-issuer-data`]: {
+                "LEI": data.lei?.lei || 'N/A',
+                "Name": data.lei?.name || 'N/A',
+                "Status": data.lei?.status || 'N/A'
+            },
+            [`${type}-payment-info`]: {
+                "First Trade Date": data.instrument?.first_trade_date ? 
+                    formatDateResults(data.instrument.first_trade_date) : 'N/A'
+            },
+            [`${type}-trading-venue`]: {
+                "Trading Venue": data.instrument?.trading_venue || 'N/A',
+                "Relevant Authority": data.instrument?.relevant_authority || 'N/A'
+            }
+        }
+    };
+
+    const viewSections = sections[type];
+    if (!viewSections) return;
+
+    Object.entries(viewSections).forEach(([sectionId, sectionData]) => {
+        const sectionContent = document.querySelector(`#${sectionId} .section-content`);
+        if (!sectionContent) return;
+        
+        const htmlContent = Object.entries(sectionData)
+            .map(([label, value]) => `
+                <div class="field-row">
+                    <div class="label">${label}:</div>
+                    <div class="value">${value}</div>
+                </div>
+            `).join('');
+        sectionContent.innerHTML = htmlContent;
+    });
 }
 
 function renderTable(data) {

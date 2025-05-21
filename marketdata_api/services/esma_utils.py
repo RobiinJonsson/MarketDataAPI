@@ -193,17 +193,7 @@ class Utils:
 
     @staticmethod
     def clean_inner_tags(root: ET):
-        
-        """
-        Clean XML inner tags by stripping namespaces and adjusting the tag names.
-
-        Args:
-            root (ET): The XML tree to process.
-        
-        Example:
-            >>> Utils.clean_inner_tags(root)  # root is an ElementTree object
-        """
-
+        """Clean XML inner tags by stripping namespaces and adjusting the tag names."""
         parent_elem = None
         pattern_tag = r"\{[^}]*\}(\S+)"
 
@@ -217,20 +207,7 @@ class Utils:
 
     @staticmethod
     def process_tags(child: ET) -> dict:
-        
-        """
-        Process XML tags and map values into a dictionary.
-
-        Args:
-            child (ET): A child XML element to process.
-
-        Returns:
-            dict: A dictionary of processed tag-value pairs.
-
-        Example:
-            >>> tag_dict = Utils.process_tags(child)  # child is an XML element
-        """
-
+        """Process XML tags and map values into a dictionary."""
         mini_tags = defaultdict(list)
         list_additional_vals = [deque(range(2,101)) for _ in range(15)]
         mini_tags_list_map = defaultdict(int)
@@ -247,6 +224,35 @@ class Utils:
                     key = '_'.join([i.tag, str(list_additional_vals[key_list_map].popleft())])
                     mini_tags[key].append(i.text)
 
+        return mini_tags
+
+    @staticmethod
+    def process_tags_firds(child: ET) -> dict:
+        """Process XML tags by building complete paths for all fields."""
+        mini_tags = defaultdict(list)
+        
+        def process_element(elem, current_path=[]):
+            """Recursively process elements and build path."""
+            # Special case for ISIN ID field - always map to Id for consistency
+            if elem.tag == 'Id' and current_path and current_path[-1] == 'FinInstrmGnlAttrbts':
+                if str(elem.text).strip():
+                    mini_tags['Id'].append(elem.text)
+                return
+                
+            path = current_path + [elem.tag]
+            
+            # Store any non-empty value with its full path
+            if str(elem.text).strip() and str(elem.text).strip().lower() != 'nan':
+                column_name = '_'.join(path)
+                mini_tags[column_name].append(elem.text)
+            
+            # Process children
+            for child_elem in elem:
+                process_element(child_elem, path)
+        
+        # Start processing from root
+        process_element(child)
+        
         return mini_tags
 
     @staticmethod
@@ -344,8 +350,7 @@ class Utils:
         # First check for FIRDS format
         if root.find('.//Document:RefData', Utils.NAMESPACES) is not None:
             logger.info("Detected FIRDS format")
-            # Clean inner tags for FIRDS
-            Utils.clean_inner_tags(root)
+            Utils.clean_inner_tags_firds(root)
             logger.info("Cleaned inner tags for FIRDS")
             root_list = list(root.iter('RefData'))
             if not root_list:
@@ -354,15 +359,30 @@ class Utils:
             logger.info(f"Found {len(root_list)} records to process")
             list_dicts = []
             for child in tqdm(root_list, desc='Parsing file ... ', position=0, leave=True):
-                list_dicts.append(Utils.process_tags(child))
+                list_dicts.append(Utils.process_tags_firds(child))
             df = pd.DataFrame.from_records(list_dicts)
-            delivery_df = df.map(lambda x: x[0] if isinstance(x, list) else x)
-            logger.info(f"Final DataFrame shape: {delivery_df.shape}")
-            # Check if the DataFrame is empty
-            if delivery_df.empty:
+            
+            # Clean the DataFrame:
+            # 1. Convert lists to scalar values
+            df = df.map(lambda x: x[0] if isinstance(x, list) else x)
+            
+            # 2. Drop columns with all null values (includes np.nan, None, and empty strings)
+            df = df.replace(r'^\s*$', pd.NA, regex=True)  # Convert empty strings to NA
+            df = df.dropna(axis=1, how='all')  # Drop columns where all values are NA
+            
+            # 3. Drop intermediate node columns (those with count = 0)
+            null_counts = df.isnull().sum()
+            empty_columns = null_counts[null_counts == len(df)].index
+            df = df.drop(columns=empty_columns)
+            
+            # 4. Clean up RefData prefix from column names
+            df.columns = df.columns.str.replace('^RefData_', '', regex=True)
+            
+            logger.info(f"Final DataFrame shape after cleaning: {df.shape}")
+            if df.empty:
                 logger.warning("The DataFrame is empty after processing FIRDS XML.")
                 return pd.DataFrame()
-            return delivery_df
+            return df
 
         # Continue with existing FITRS/DVCAP processing
         Utils.clean_inner_tags(root)
@@ -400,6 +420,45 @@ class Utils:
             logger.propagate = False
 
         return logger
+
+    @staticmethod
+    def clean_inner_tags_firds(root: ET):
+        """Clean XML inner tags specifically for FIRDS format."""
+        pattern_tag = r"\{[^}]*\}(\S+)"
+
+        # Track parents and their children
+        parent_sections = {
+            'FinInstrmGnlAttrbts': True,
+            'DerivInstrmAttrbts': True,
+            'TradgVnRltdAttrbts': True,
+            'TechAttrbts': True,
+            'PblctnPrd': True
+        }
+        current_parent = None
+
+        for elem in root.iter():
+            # Clean namespace
+            if (clean_tag := re.search(pattern_tag, elem.tag)):
+                clean_tag = clean_tag.group(1)
+                # Handle parent sections
+                if clean_tag in parent_sections:
+                    current_parent = clean_tag
+                    # Remove numbered duplicates
+                    if '_' in clean_tag:
+                        base_tag = clean_tag.split('_')[0]
+                        if base_tag in parent_sections:
+                            clean_tag = base_tag
+                    elem.tag = clean_tag
+                else:
+                    # Add parent prefix for child elements
+                    if current_parent:
+                        elem.tag = f"{current_parent}_{clean_tag}"
+                    else:
+                        elem.tag = clean_tag
+
+            # Reset parent when exiting section
+            if elem.tag in parent_sections:
+                current_parent = None
 
 
 class Dataset(Enum):

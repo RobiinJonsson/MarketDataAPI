@@ -53,72 +53,145 @@ def map_to_schema(data: Dict[str, Any], instrument_type: str = "equity") -> Dict
         return map_to_model(data, instrument_type)
 
 def map_to_model(data: Dict[str, Any], instrument_type: str = "equity") -> Dict[str, Any]:
-    """Legacy mapping function as fallback"""
+    """Maps ESMA/FIRDS data to instrument model fields"""
     # Base instrument fields
     mapped = {
         'isin': data.get('Id'),
-        'full_name': data.get('FullNm'),
-        'short_name': data.get('ShrtNm'),
-        'symbol': data.get('ShrtNm'),  # Using short name as symbol if no specific symbol
-        'currency': data.get('NtnlCcy'),
-        'cfi_code': data.get('ClssfctnTp'),
-        'commodity_derivative': str(data.get('CmmdtyDerivInd', 'false')).lower() == 'true',  # Proper boolean conversion
+        'full_name': data.get('FinInstrmGnlAttrbts_FullNm'),
+        'short_name': data.get('FinInstrmGnlAttrbts_ShrtNm'),
+        'symbol': data.get('FinInstrmGnlAttrbts_ShrtNm'),  # Using short name as symbol if no specific symbol
+        'currency': data.get('FinInstrmGnlAttrbts_NtnlCcy'),
+        'cfi_code': data.get('FinInstrmGnlAttrbts_ClssfctnTp'),
+        'commodity_derivative': str(data.get('FinInstrmGnlAttrbts_CmmdtyDerivInd', 'false')).lower() == 'true',  # Proper boolean conversion
         'lei_id': data.get('Issr'),
-        'trading_venue': data.get('Id_2'),
-        'issuer_req': data.get('IssrReq', False),
-        'first_trade_date': parse_date(data.get('FrstTradDt')),
-        'termination_date': parse_date(data.get('TermntnDt')),
-        'relevant_authority': data.get('RlvntCmptntAuthrty'),
-        'relevant_venue': data.get('RlvntTradgVn'),
-        'from_date': parse_date(data.get('FrDt'))
+        'trading_venue': data.get('TradgVnRltdAttrbts_Id_'),
+        'issuer_req': data.get('TradgVnRltdAttrbts_IssrReq', False),
+        'first_trade_date': parse_date(data.get('TradgVnRltdAttrbts_FrstTradDt')),
+        'termination_date': parse_date(data.get('TradgVnRltdAttrbts_TermntnDt')),
+        'relevant_authority': data.get('TechAttrbts_RlvntCmptntAuthrty'),
+        'relevant_venue': data.get('TechAttrbts_RlvntTradgVn'),
+        'from_date': parse_date(data.get('TechAttrbts_PblctnPrd_FrDt'))
     }
 
-    # Add type-specific fields
+    # Update type-specific fields
     if instrument_type == "equity":
         mapped.update({
-            'admission_approval_date': parse_date(data.get('AdmssnApprvlDtByIssr')),
-            'admission_request_date': parse_date(data.get('ReqForAdmssnDt')),
-            'price_multiplier': parse_float(data.get('PricMltplr')),
-            'asset_class': data.get('AsstClssSpcfcAttrbts'),
-            'commodity_product': data.get('Cmmdty_Pdct'),
-            'energy_type': data.get('Nrgy'),
-            'oil_type': data.get('Oil'),
-            'base_product': data.get('BasePdct'),
-            'sub_product': data.get('SubPdct'),
-            'additional_sub_product': data.get('AddtlSubPdct'),
-            'metal_type': data.get('Metl'),
-            'precious_metal': data.get('Prcs'),
-            'underlying_isins': extract_underlying_isins(data)
+            'admission_approval_date': parse_date(data.get('TradgVnRltdAttrbts_AdmssnApprvlDtByIssr')),
+            'admission_request_date': parse_date(data.get('TradgVnRltdAttrbts_ReqForAdmssnDt')),
+            'price_multiplier': parse_float(data.get('DerivInstrmAttrbts_PricMltplr')),
+            'basket_isin': data.get('DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN'),
+            'underlying_index_isin': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_ISIN'),
+            'underlying_single_index_name': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm'),
+            'basket_lei': data.get('DerivInstrmAttrbts_UndrlygInstrm_Bskt_LEI'),
+            # Keep existing asset class specific fields
+            'oil_type': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_BasePdct'),
+            'sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_SubPdct'),
+            'additional_sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_AddtlSubPdct'),
+            'metal_type': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_BasePdct'),
+            'precious_metal': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_SubPdct'),
+            'underlying_single_isin': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'),
+            'additional_metal_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_AddtlSubPdct'),
         })
-    elif instrument_type == "debt":
+    elif instrument_type == "debt": # Debt instrument specific fields "DebtInstrmAttrbts"
         mapped.update({
-            'total_issued_nominal': parse_float(data.get('TtlIssdNmnlAmt')),
-            'maturity_date': parse_date(data.get('MtrtyDt')),
-            'nominal_value_per_unit': parse_float(data.get('NmnlValPerUnit')),
-            'fixed_interest_rate': parse_float(data.get('IntrstRate_Fxd')),
-            'debt_seniority': data.get('DebtSnrty'),
-            'coupon_frequency': data.get('CpnFreq'),  # If available in FIRDS data
-            'credit_rating': data.get('CrdtRtg')  # If available in FIRDS data
+            'total_issued_nominal': parse_float(data.get('DebtInstrmAttrbts_TtlIssdNmnlAmt')),
+            'maturity_date': parse_date(data.get('DebtInstrmAttrbts_MtrtyDt')),
+            'nominal_value_per_unit': parse_float(data.get('DebtInstrmAttrbts_NmnlValPerUnit')),
+            'fixed_interest_rate': parse_float(data.get('DebtInstrmAttrbts_IntrstRate_Fxd')),
+            'debt_seniority': data.get('DebtInstrmAttrbts_DebtSnrty'),
+            'floating_rate_reference': data.get('DebtInstrmAttrbts_IntrstRate_Fltg_RefRate_Nm'),
+            'floating_rate_term_unit': data.get('DebtInstrmAttrbts_IntrstRate_Fltg_Term_Unit'),
+            'floating_rate_term_value': parse_float(data.get('DebtInstrmAttrbts_IntrstRate_Fltg_Term_Val')),
+            'floating_rate_basis_points_spread': parse_float(data.get('DebtInstrmAttrbts_IntrstRate_Fltg_BsisPtSprd')),
+            'interest_rate_floating_reference_index': data.get('DebtInstrmAttrbts_IntrstRate_Fltg_RefRate_Indx'),
+            'interest_rate_floating_reference_isin': data.get('DebtInstrmAttrbts_IntrstRate_Fltg_RefRate_ISIN'),
+            'underlying_single_isin': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'),
+            'basket_isin': data.get('DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN'),
+            'underlying_index_isin': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_ISIN'),
+            'underlying_single_index_name': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm'),
+            'underlying_single_lei': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_LEI'),
+            'additional_metal_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_AddtlSubPdct'),
+            'oil_type': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_BasePdct'),
+            'sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_SubPdct'),
+            'additional_sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_AddtlSubPdct'),
+            'metal_type': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_BasePdct'),
+            'precious_metal': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_SubPdct'),
+            'other_commodity_base_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Othr_BasePdct'),
+            'underlying_index_name_term_unit': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Unit'),
+            'underlying_index_name_term_value': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Val'),
         })
     elif instrument_type == "future":
         mapped.update({
-            'admission_approval_date': parse_date(data.get('AdmssnApprvlDtByIssr')),
-            'admission_request_date': parse_date(data.get('ReqForAdmssnDt')),
-            'expiration_date': parse_date(data.get('ExprtnDt')),
-            'final_settlement_date': parse_date(data.get('FnlSttlmDt')),
-            'delivery_type': data.get('DlvryTp'),
-            'settlement_method': data.get('SttlmtMtd'),
-            'contract_size': parse_float(data.get('CtrctSz')),
-            'contract_unit': data.get('CtrctUnit'),
-            'price_multiplier': parse_float(data.get('PricMltplr')),
-            'settlement_currency': data.get('SttlmtCcy'),
-            'contract_details': {
-                'trading_hours': data.get('TrdngHrs'),
-                'tick_size': parse_float(data.get('TckSz')),
-                'market_segment': data.get('MktSgmt'),
-                'underlying_type': data.get('UndrlygTp'),
-                'trading_cycle': data.get('TrdngCycl')
-            }
+            'admission_approval_date': parse_date(data.get('TradgVnRltdAttrbts_AdmssnApprvlDtByIssr')),
+            'admission_request_date': parse_date(data.get('TradgVnRltdAttrbts_ReqForAdmssnDt')),
+            'expiration_date': parse_date(data.get('DerivInstrmAttrbts_XpryDt')),
+            'delivery_type': data.get('DerivInstrmAttrbts_DlvryTp'),
+            'price_multiplier': parse_float(data.get('DerivInstrmAttrbts_PricMltplr')),
+            'final_price_type': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_FnlPricTp'),
+            'transaction_type': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_TxTp'),
+            'underlying_index_name': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm'),
+            'fx_type': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_FxTp'),
+            'other_notional_currency': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_OthrNtnlCcy'),
+            'interest_rate_reference': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_RefRate_Nm'),
+            'interest_rate_term_unit': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Unit'),
+            'interest_rate_term_value': parse_float(data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Val')),
+            'index_reference_rate': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Indx'),
+            
+            # JSON fields for complex attributes
+            'agricultural_attributes': {
+                'dairy': {
+                    'base_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Dairy_BasePdct'),
+                    'sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Dairy_SubPdct')
+                },
+                'grain': {
+                    'base_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Grn_BasePdct'),
+                    'sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Grn_SubPdct'),
+                    'additional_sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Grn_AddtlSubPdct')
+                }
+            },
+            'natural_gas_attributes': {
+                'base_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_NtrlGas_BasePdct'),
+                'sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_NtrlGas_SubPdct'),
+                'additional_sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_NtrlGas_AddtlSubPdct')
+            },
+            'electricity_attributes': {
+                'base_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Elctrcty_BasePdct'),
+                'sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Elctrcty_SubPdct'),
+                'additional_sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Elctrcty_AddtlSubPdct')
+            },
+            'environmental_attributes': {
+                'base_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Envttl_Emssns_BasePdct'),
+                'sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Envttl_Emssns_SubPdct'),
+                'additional_sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Envttl_Emssns_AddtlSubPdct')
+            },
+            'freight_attributes': {
+                'dry': {
+                    'base_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Frght_Dry_BasePdct'),
+                    'sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Frght_Dry_SubPdct'),
+                    'additional_sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Frght_Dry_AddtlSubPdct')
+                },
+                'wet': {
+                    'base_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Frght_Wet_BasePdct'),
+                    'sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Frght_Wet_SubPdct'),
+                    'additional_sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Frght_Wet_AddtlSubPdct')
+                }
+            },
+            'underlying_single_isin': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'),
+            'basket_isin': data.get('DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN'),
+            'underlying_index_isin': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_ISIN'),
+            'underlying_single_index_name': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm'),
+            'underlying_single_lei': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_LEI'),
+            'additional_metal_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_AddtlSubPdct'),
+            'oil_type': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_BasePdct'),
+            'sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_SubPdct'),
+            'additional_sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_AddtlSubPdct'),
+            'metal_type': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_BasePdct'),
+            'precious_metal': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_SubPdct'),
+            'multi_commodity_base_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_MultiCmmdtyExtc_BasePdct'),
+            'other_c10_nondeliverable_base_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_OthrC10_NonDlvrbl_BasePdct'),
+            'other_c10_nondeliverable_sub_product': data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_OthrC10_NonDlvrbl_SubPdct'),
+            'underlying_index_name_term_unit': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Unit'),
+            'underlying_index_name_term_value': data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Val'),
         })
 
     return {k: v for k, v in mapped.items() if v is not None}
