@@ -219,17 +219,6 @@ def parse_float(value: Any) -> float:
     except (ValueError, TypeError):
         return None
 
-def extract_underlying_isins(data: Dict[str, Any]) -> list:
-    """Extract all underlying ISINs from the data"""
-    isins = []
-    i = 2
-    while True:
-        isin = data.get(f'ISIN_{i}')
-        if not isin:
-            break
-        isins.append(isin)
-        i += 1
-    return isins if isins else None
 
 def map_figi_data(data: list, isin: str) -> FigiMapping:
     """Maps OpenFIGI API response to FigiMapping model"""

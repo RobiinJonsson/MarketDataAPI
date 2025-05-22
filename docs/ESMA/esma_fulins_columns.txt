@@ -1,0 +1,175 @@
+FULINS_E Dataframe:
+
+DataFrame Information:
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 487056 entries, 0 to 487055
+Data columns (total 28 columns):
+ #   Column                                                                      Non-Null Count   Dtype
+---  ------                                                                      --------------   -----
+ 0   Id                                                                          487056 non-null  object
+ 1   FinInstrmGnlAttrbts_FullNm                                                  487056 non-null  object
+ 2   FinInstrmGnlAttrbts_ShrtNm                                                  487056 non-null  object
+ 3   FinInstrmGnlAttrbts_ClssfctnTp                                              487056 non-null  object
+ 4   FinInstrmGnlAttrbts_NtnlCcy                                                 487056 non-null  object
+ 5   FinInstrmGnlAttrbts_CmmdtyDerivInd                                          487056 non-null  object
+ 6   Issr                                                                        487056 non-null  object
+ 7   TradgVnRltdAttrbts_Id                                                       487056 non-null  object
+ 8   TradgVnRltdAttrbts_IssrReq                                                  487056 non-null  object
+ 9   TradgVnRltdAttrbts_FrstTradDt                                               487056 non-null  object
+ 10  DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN                                  179854 non-null  object
+ 11  TechAttrbts_RlvntCmptntAuthrty                                              487056 non-null  object
+ 12  TechAttrbts_PblctnPrd_FrDt                                                  487056 non-null  object
+ 13  TechAttrbts_RlvntTradgVn                                                    487056 non-null  object
+ 14  TradgVnRltdAttrbts_AdmssnApprvlDtByIssr                                     296651 non-null  object
+ 15  TradgVnRltdAttrbts_ReqForAdmssnDt                                           14309 non-null   object
+ 16  TradgVnRltdAttrbts_TermntnDt                                                305810 non-null  object
+ 17  DerivInstrmAttrbts_PricMltplr                                               26 non-null      object
+ 18  DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN                                  300 non-null     object
+ 19  DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_ISIN                             117257 non-null  object
+ 20  DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm                    128196 non-null  object
+ 21  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_BasePdct       6 non-null       object
+ 22  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_SubPdct        6 non-null       object
+ 23  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_AddtlSubPdct   6 non-null       object
+ 24  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_BasePdct      6 non-null       object
+ 25  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_SubPdct       6 non-null       object
+ 26  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_AddtlSubPdct  6 non-null       object
+ 27  DerivInstrmAttrbts_UndrlygInstrm_Bskt_LEI                                   6 non-null       object
+dtypes: object(28)
+memory usage: 104.0+ MB
+None
+INFO:__main__:DataFrame shape: (487056, 28)
+
+FULINS_F Dataframe:
+
+DataFrame Information:
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 47248 entries, 0 to 47247
+Data columns (total 70 columns):
+ #   Column                                                                                Non-Null Count  Dtype
+---  ------                                                                                --------------  -----
+ 0   Id                                                                                    47248 non-null  object
+ 1   FinInstrmGnlAttrbts_FullNm                                                            47248 non-null  object
+ 2   FinInstrmGnlAttrbts_ShrtNm                                                            47248 non-null  object
+ 3   FinInstrmGnlAttrbts_ClssfctnTp                                                        47248 non-null  object
+ 4   FinInstrmGnlAttrbts_NtnlCcy                                                           47248 non-null  object
+ 5   FinInstrmGnlAttrbts_CmmdtyDerivInd                                                    47248 non-null  object
+ 6   Issr                                                                                  47248 non-null  object
+ 7   TradgVnRltdAttrbts_Id                                                                 47248 non-null  object
+ 8   TradgVnRltdAttrbts_IssrReq                                                            47248 non-null  object
+ 9   TradgVnRltdAttrbts_FrstTradDt                                                         47248 non-null  object
+ 10  TradgVnRltdAttrbts_TermntnDt                                                          47226 non-null  object
+ 11  DerivInstrmAttrbts_XpryDt                                                             47248 non-null  object
+ 12  DerivInstrmAttrbts_PricMltplr                                                         47248 non-null  object
+ 13  DerivInstrmAttrbts_DlvryTp                                                            47248 non-null  object
+ 14  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Dairy_BasePdct           80 non-null     object
+ 15  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Dairy_SubPdct            80 non-null     object
+ 16  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_TxTp                                   8577 non-null   object
+ 17  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_FnlPricTp                              8218 non-null   object
+ 18  TechAttrbts_RlvntCmptntAuthrty                                                        47248 non-null  object
+ 19  TechAttrbts_PblctnPrd_FrDt                                                            47248 non-null  object
+ 20  TechAttrbts_RlvntTradgVn                                                              47248 non-null  object
+ 21  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Ptt_BasePdct             3 non-null      object
+ 22  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Ptt_SubPdct              3 non-null      object
+ 23  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Grn_BasePdct             35 non-null     object
+ 24  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Grn_SubPdct              35 non-null     object
+ 25  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Grn_AddtlSubPdct         35 non-null     object
+ 26  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Sfd_BasePdct             77 non-null     object
+ 27  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Sfd_SubPdct              77 non-null     object
+ 28  TradgVnRltdAttrbts_AdmssnApprvlDtByIssr                                               4121 non-null   object
+ 29  TradgVnRltdAttrbts_ReqForAdmssnDt                                                     4917 non-null   object
+ 30  DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_ISIN                                       3567 non-null   object
+ 31  DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm                              3787 non-null   object
+ 32  DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Unit                               509 non-null    object
+ 33  DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Val                                509 non-null    object
+ 34  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_GrnOilSeed_BasePdct      63 non-null     object
+ 35  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_GrnOilSeed_SubPdct       63 non-null     object
+ 36  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_GrnOilSeed_AddtlSubPdct  63 non-null     object
+ 37  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_NtrlGas_BasePdct             2781 non-null   object
+ 38  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_NtrlGas_SubPdct              2781 non-null   object
+ 39  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_NtrlGas_AddtlSubPdct         1381 non-null   object
+ 40  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Elctrcty_BasePdct            5511 non-null   object
+ 41  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Elctrcty_SubPdct             5511 non-null   object
+ 42  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Elctrcty_AddtlSubPdct        5511 non-null   object
+ 43  DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN                                            33963 non-null  object
+ 44  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_RnwblNrgy_BasePdct           16 non-null     object
+ 45  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_RnwblNrgy_SubPdct            16 non-null     object
+ 46  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_MultiCmmdtyExtc_BasePdct          210 non-null    object
+ 47  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Ppr_RcvrdPpr_BasePdct             65 non-null     object
+ 48  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Ppr_RcvrdPpr_SubPdct              65 non-null     object
+ 49  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Ppr_Pulp_BasePdct                 316 non-null    object
+ 50  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Ppr_Pulp_SubPdct                  316 non-null    object
+ 51  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_OthrC10_NonDlvrbl_BasePdct        2 non-null      object
+ 52  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_OthrC10_NonDlvrbl_SubPdct         2 non-null      object
+ 53  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Envttl_Emssns_BasePdct            70 non-null     object
+ 54  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Envttl_Emssns_SubPdct             70 non-null     object
+ 55  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Envttl_Emssns_AddtlSubPdct        70 non-null     object
+ 56  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Frght_Dry_BasePdct                675 non-null    object
+ 57  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Frght_Dry_SubPdct                 675 non-null    object
+ 58  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Frght_Dry_AddtlSubPdct            675 non-null    object
+ 59  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Frght_Wet_BasePdct                108 non-null    object
+ 60  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Frght_Wet_SubPdct                 108 non-null    object
+ 61  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Frght_Wet_AddtlSubPdct            108 non-null    object
+ 62  DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN                                            43 non-null     object
+ 63  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_FxTp                                       1050 non-null   object
+ 64  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_OthrNtnlCcy                                1052 non-null   object
+ 65  DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Indx                            40 non-null     object
+ 66  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_RefRate_Indx                40 non-null     object
+ 67  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Unit                   72 non-null     object
+ 68  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Val                    72 non-null     object
+ 69  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_RefRate_Nm                  32 non-null     object
+dtypes: object(70)
+memory usage: 25.2+ MB
+
+FULINS_D Dataframe:
+
+DataFrame Information:
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 500000 entries, 0 to 499999
+Data columns (total 42 columns):
+ #   Column                                                                      Non-Null Count   Dtype
+---  ------                                                                      --------------   -----
+ 0   Id                                                                          500000 non-null  object
+ 1   FinInstrmGnlAttrbts_FullNm                                                  500000 non-null  object
+ 2   FinInstrmGnlAttrbts_ShrtNm                                                  500000 non-null  object
+ 3   FinInstrmGnlAttrbts_ClssfctnTp                                              500000 non-null  object
+ 4   FinInstrmGnlAttrbts_NtnlCcy                                                 500000 non-null  object
+ 5   FinInstrmGnlAttrbts_CmmdtyDerivInd                                          500000 non-null  object
+ 6   Issr                                                                        500000 non-null  object
+ 7   TradgVnRltdAttrbts_Id                                                       500000 non-null  object
+ 8   TradgVnRltdAttrbts_IssrReq                                                  500000 non-null  object
+ 9   TradgVnRltdAttrbts_AdmssnApprvlDtByIssr                                     379113 non-null  object
+ 10  TradgVnRltdAttrbts_FrstTradDt                                               500000 non-null  object
+ 11  TradgVnRltdAttrbts_TermntnDt                                                465199 non-null  object
+ 12  DebtInstrmAttrbts_TtlIssdNmnlAmt                                            500000 non-null  object
+ 13  DebtInstrmAttrbts_MtrtyDt                                                   500000 non-null  object
+ 14  DebtInstrmAttrbts_NmnlValPerUnit                                            500000 non-null  object
+ 15  DebtInstrmAttrbts_IntrstRate_Fxd                                            493304 non-null  object
+ 16  DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN                                  356389 non-null  object
+ 17  TechAttrbts_RlvntCmptntAuthrty                                              500000 non-null  object
+ 18  TechAttrbts_PblctnPrd_FrDt                                                  500000 non-null  object
+ 19  TechAttrbts_RlvntTradgVn                                                    500000 non-null  object
+ 20  TradgVnRltdAttrbts_ReqForAdmssnDt                                           43505 non-null   object
+ 21  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_BasePdct      2329 non-null    object
+ 22  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_SubPdct       2329 non-null    object
+ 23  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_AddtlSubPdct  2329 non-null    object
+ 24  DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN                                  11290 non-null   object
+ 25  DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_ISIN                             15538 non-null   object
+ 26  DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm                    16174 non-null   object
+ 27  DebtInstrmAttrbts_DebtSnrty                                                 64447 non-null   object
+ 28  DerivInstrmAttrbts_PricMltplr                                               8 non-null       object
+ 29  DebtInstrmAttrbts_IntrstRate_Fltg_RefRate_Nm                                3782 non-null    object
+ 30  DebtInstrmAttrbts_IntrstRate_Fltg_Term_Unit                                 6696 non-null    object
+ 31  DebtInstrmAttrbts_IntrstRate_Fltg_Term_Val                                  6696 non-null    object
+ 32  DebtInstrmAttrbts_IntrstRate_Fltg_BsisPtSprd                                6696 non-null    object
+ 33  DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Unit                     188 non-null     object
+ 34  DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Val                      188 non-null     object
+ 35  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_BasePdct       4 non-null       object
+ 36  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_SubPdct        4 non-null       object
+ 37  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_AddtlSubPdct   4 non-null       object
+ 38  DebtInstrmAttrbts_IntrstRate_Fltg_RefRate_Indx                              1075 non-null    object
+ 39  DebtInstrmAttrbts_IntrstRate_Fltg_RefRate_ISIN                              1839 non-null    object
+ 40  DerivInstrmAttrbts_UndrlygInstrm_Sngl_LEI                                   24 non-null      object
+ 41  DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Othr_BasePdct           80 non-null      object
+dtypes: object(42)
+memory usage: 160.2+ MB
+

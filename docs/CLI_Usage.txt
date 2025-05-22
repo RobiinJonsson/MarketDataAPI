@@ -9,6 +9,8 @@ Basic Commands:
     instrument <command>                - Instrument operations
     entity <command>                    - Legal entity operations
     batch <command> <file>             - Batch process instruments
+    batch batch-source <type> [prefix] [mic] [limit] - Batch source from FIRDS (e.g. equity SE)
+    batch batch-enrich [limit]          - Batch enrich all instruments in DB
     filter <field> <value>             - Filter instruments by field
     export <format> <table>            - Export data to CSV/JSON
     cfi <code>                         - Decode CFI code
@@ -20,7 +22,6 @@ Instrument Commands:
     update <id> <data>                 - Update existing instrument
     delete <id/isin>                   - Delete instrument by ID or ISIN
     enrich <id>                        - Enrich with FIGI and LEI data
-    detail <isin>                      - List instrument detailed data
     list                               - List all instruments
 
 Entity Commands:
@@ -33,14 +34,18 @@ Entity Commands:
 Batch Operations:
     batch create <file> [type]         - Create instruments from file (default: equity)
     batch enrich <file>                - Enrich instruments from file with FIGI/LEI
+    batch batch-source <type> [prefix] [mic] [limit] - Source from FIRDS by ISIN prefix/MIC
+    batch batch-enrich [limit]          - Enrich all instruments in DB
 
 Export Commands:
     export json instruments            - Export instruments to JSON
     export csv instruments             - Export instruments to CSV
 
 Examples:
-    python scripts/cli.py instrument detail SE0000242455
+    python scripts/cli.py instrument detail DE000A1EWWW0
     python scripts/cli.py batch create futures.txt future
     python scripts/cli.py entity create 549300PPETP6IPXYTE40
     python scripts/cli.py filter type equity
     python scripts/cli.py cfi ESVUFR
+    python scripts/cli.py batch batch-source equity SE
+    python scripts/cli.py batch batch-enrich

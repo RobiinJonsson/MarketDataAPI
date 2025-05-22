@@ -49,89 +49,64 @@ def list_tables():
 def print_instrument_detail(instrument):
     """Print detailed instrument information including relationships."""
     print("\n=== Instrument Details ===")
-    print(f"ID: {instrument.id}")
-    print(f"Type: {instrument.type}")
-    print(f"ISIN: {instrument.isin}")
-    print(f"Full Name: {instrument.full_name}")
-    print(f"Short Name: {instrument.short_name}")
-    print(f"Symbol: {instrument.symbol}")
-    print(f"CFI Code: {instrument.cfi_code}")
-    print(f"Currency: {instrument.currency}")
-    print(f"Trading Venue: {instrument.trading_venue}")
-    print(f"First Trade Date: {instrument.first_trade_date}")
-    
-    if instrument.first_trade_date:
-        print(f"First Trade Date: {instrument.first_trade_date}")
-    if instrument.termination_date:
-        print(f"Termination Date: {instrument.termination_date}")
-        
-    print(f"\nCommodity Derivative: {instrument.commodity_derivative}")
-    print(f"Relevant Authority: {instrument.relevant_authority}")
-    print(f"Relevant Venue: {instrument.relevant_venue}")
-    
-    if instrument.figi_mapping:
-        print("\n=== FIGI Data ===")
-        print(f"FIGI: {instrument.figi_mapping.figi}")
-        print(f"Share Class FIGI: {instrument.figi_mapping.share_class_figi}")
-        print(f"Composite FIGI: {instrument.figi_mapping.composite_figi}")
-        print(f"Market Sector: {instrument.figi_mapping.market_sector}")
-        print(f"Security Type: {instrument.figi_mapping.security_type}")
-    
-    if instrument.legal_entity:
-        print("\n=== Legal Entity Data ===")
-        print(f"LEI: {instrument.legal_entity.lei}")
-        print(f"Name: {instrument.legal_entity.name}")
-        print(f"Legal Form: {instrument.legal_entity.legal_form}")
-        print(f"Jurisdiction: {instrument.legal_entity.jurisdiction}")
-        print(f"Registered As: {instrument.legal_entity.registered_as}")
-        print(f"Status: {instrument.legal_entity.status}")
-        print(f"BIC: {instrument.legal_entity.bic}")
-        print(f"Next Renewal: {instrument.legal_entity.next_renewal_date}")
-        print(f"Registration Status: {instrument.legal_entity.registration_status}")
-        print(f"Managing LOU: {instrument.legal_entity.managing_lou}")
-        print(f"Created: {instrument.legal_entity.creation_date}")
-        
-        if instrument.legal_entity.addresses:
-            print("\nAddresses:")
-            for addr in instrument.legal_entity.addresses:
-                print(f"  Type: {addr.type}")
-                print(f"  {addr.address_lines}")
-                print(f"  {addr.city}, {addr.region} {addr.postal_code}")
-                print(f"  Country: {addr.country}")
-        
-        if instrument.legal_entity.registration:
-            print("\nRegistration Details:")
-            reg = instrument.legal_entity.registration
-            print(f"  Initial Date: {reg.initial_date}")
-            print(f"  Last Update: {reg.last_update}")
-            print(f"  Status: {reg.status}")
-            print(f"  Next Renewal: {reg.next_renewal}")
-            print(f"  Managing LOU: {reg.managing_lou}")
-            print(f"  Validation Sources: {reg.validation_sources}")
-            
-    if instrument.additional_data:
-        print("\n=== Additional Data ===")
-        for key, value in instrument.additional_data.items():
+    # Print all non-empty fields from the instrument (excluding SQLAlchemy internals and relationships)
+    exclude_fields = {'_sa_instance_state', 'legal_entity', 'figi_mapping', 'related_isins'}
+    attrs = vars(instrument)
+    for key, value in attrs.items():
+        if key in exclude_fields:
+            continue
+        if value is not None and value != "" and value != [] and value != {}:
             print(f"{key}: {value}")
-            
-    print(f"\nCreated: {instrument.created_at}")
-    print(f"Last Updated: {instrument.updated_at}")
 
-    # Add future-specific fields
-    if instrument.type == 'future':
-        print("\n=== Future Specific Details ===")
-        print(f"Expiration Date: {instrument.expiration_date}")
-        print(f"Final Settlement Date: {instrument.final_settlement_date}")
-        print(f"Delivery Type: {instrument.delivery_type}")
-        print(f"Settlement Method: {instrument.settlement_method}")
-        print(f"Contract Size: {instrument.contract_size}")
-        print(f"Contract Unit: {instrument.contract_unit}")
-        print(f"Settlement Currency: {instrument.settlement_currency}")
-        
-        if instrument.contract_details:
-            print("\n=== Contract Details ===")
-            for key, value in instrument.contract_details.items():
+    # Print type-specific fields dynamically (fields defined on the subclass, not base)
+    model_cls = type(instrument)
+    base_cls = instrument.__class__.__bases__[0]
+    # Get only subclass-specific columns (not inherited from Instrument)
+    if hasattr(model_cls, '__table__') and hasattr(base_cls, '__table__'):
+        base_cols = set(c.name for c in base_cls.__table__.columns)
+        sub_cols = set(c.name for c in model_cls.__table__.columns)
+        type_specific = sub_cols - base_cols
+        if type_specific:
+            print(f"\n=== {instrument.type.capitalize()} Specific Fields ===")
+            for field in type_specific:
+                value = getattr(instrument, field, None)
+                if value not in (None, "", [], {}):
+                    print(f"{field}: {value}")
+
+    # Print relationships if present
+    if getattr(instrument, 'figi_mapping', None):
+        print("\n=== FIGI Data ===")
+        figi = instrument.figi_mapping
+        for key, value in vars(figi).items():
+            if key != '_sa_instance_state' and value is not None:
                 print(f"{key}: {value}")
+
+    if getattr(instrument, 'legal_entity', None):
+        print("\n=== Legal Entity Data ===")
+        entity = instrument.legal_entity
+        for key, value in vars(entity).items():
+            if key != '_sa_instance_state' and value is not None:
+                print(f"{key}: {value}")
+        if getattr(entity, 'addresses', None):
+            print("\nAddresses:")
+            for addr in entity.addresses:
+                for k, v in vars(addr).items():
+                    if k != '_sa_instance_state' and v is not None:
+                        print(f"  {k}: {v}")
+        if getattr(entity, 'registration', None):
+            print("\nRegistration Details:")
+            reg = entity.registration
+            for k, v in vars(reg).items():
+                if k != '_sa_instance_state' and v is not None:
+                    print(f"  {k}: {v}")
+
+    # Print related ISINs if present
+    if getattr(instrument, 'related_isins', None):
+        print("\nRelated ISINs:")
+        for rel in instrument.related_isins:
+            for k, v in vars(rel).items():
+                if k != '_sa_instance_state' and v is not None:
+                    print(f"  {k}: {v}")
 
 def instrument_operations():
     """Handle instrument CRUD operations."""
@@ -279,24 +254,27 @@ def batch_operations():
     """Handle batch operations for instruments."""
     service = InstrumentService()
     
-    if len(sys.argv) < 4:
-        print("Usage: python scripts/cli.py batch <command> <file_path> [instrument_type]")
-        print("Commands: create, enrich")
+    if len(sys.argv) < 3:
+        print("Usage: python scripts/cli.py batch <command> [args]")
+        print("Commands: create, enrich, batch-source, batch-enrich")
         print("Example: python scripts/cli.py batch create docs/isin_test.txt equity")
+        print("Example: python scripts/cli.py batch batch-source equity SE")
+        print("Example: python scripts/cli.py batch batch-enrich")
         return
 
     command = sys.argv[2]
-    file_path = sys.argv[3]
-    instrument_type = sys.argv[4] if len(sys.argv) > 4 else "equity"
     
     try:
-        with open(file_path, 'r') as f:
-            identifiers = [line.strip() for line in f if line.strip()]
-            
-        print(f"Processing {len(identifiers)} instruments...")
-        success = failed = 0
-            
         if command == "create":
+            file_path = sys.argv[3]
+            instrument_type = sys.argv[4] if len(sys.argv) > 4 else "equity"
+            
+            with open(file_path, 'r') as f:
+                identifiers = [line.strip() for line in f if line.strip()]
+                
+            print(f"Processing {len(identifiers)} instruments...")
+            success = failed = 0
+                
             for isin in identifiers:
                 try:
                     instrument = service.get_or_create_instrument(isin, instrument_type)
@@ -309,27 +287,38 @@ def batch_operations():
                 except Exception as e:
                     print(f"✗ Error processing {isin}: {str(e)}")
                     failed += 1
-                
-        elif command == "enrich":
-            for isin in identifiers:
-                try:
-                    session, instrument = service.get_instrument(isin)
-                    if instrument:
-                        session, _ = service.enrich_instrument(instrument)
-                        print(f"✓ Enriched {isin}")
-                        success += 1
-                    else:
-                        print(f"✗ Instrument not found: {isin}")
-                        failed += 1
-                    session.close()
-                except Exception as e:
-                    print(f"✗ Error enriching {isin}: {str(e)}")
-                    failed += 1
+            
+            print(f"\nProcessing complete: {success} successful, {failed} failed")
         
-        print(f"\nProcessing complete: {success} successful, {failed} failed")
-    
-    except FileNotFoundError:
-        print(f"Error: File not found: {file_path}")
+        elif command == "enrich":
+            limit = int(sys.argv[3]) if len(sys.argv) > 3 else None
+            print(f"Batch enriching all instruments in the database (limit={limit})...")
+            count = service.batch_enrich_instrument(limit=limit)
+            print(f"Batch enrichment complete: {count} instruments enriched.")
+        
+        elif command == "batch-source":
+            # Usage: python scripts/cli.py batch batch-source <instrument_type> [isin_prefix] [mic_code] [limit]
+            instrument_type = sys.argv[3] if len(sys.argv) > 3 else "equity"
+            isin_prefix = sys.argv[4] if len(sys.argv) > 4 else None
+            mic_code = sys.argv[5] if len(sys.argv) > 5 else None
+            limit = int(sys.argv[6]) if len(sys.argv) > 6 else None
+
+            print(f"Batch sourcing instruments from FIRDS: type={instrument_type}, isin_prefix={isin_prefix}, mic_code={mic_code}, limit={limit}")
+            instruments = service.batch_source_instrument(
+                instrument_type=instrument_type,
+                isin_prefix=isin_prefix,
+                mic_code=mic_code,
+                limit=limit
+            )
+            print(f"Batch source complete: {len(instruments)} instruments created.")
+
+        elif command == "batch-enrich":
+            # Usage: python scripts/cli.py batch batch-enrich [limit]
+            limit = int(sys.argv[3]) if len(sys.argv) > 3 else None
+            print(f"Batch enriching all instruments in the database (limit={limit})...")
+            count = service.batch_enrich_instrument(limit=limit)
+            print(f"Batch enrichment complete: {count} instruments enriched.")
+
     except Exception as e:
         print(f"Error in batch operation: {str(e)}")
 
@@ -423,6 +412,8 @@ Basic Commands:
     instrument <command>                - Instrument operations
     entity <command>                    - Legal entity operations
     batch <command> <file>             - Batch process instruments
+    batch batch-source <type> [prefix] [mic] [limit] - Batch source from FIRDS (e.g. equity SE)
+    batch batch-enrich [limit]          - Batch enrich all instruments in DB
     filter <field> <value>             - Filter instruments by field
     export <format> <table>            - Export data to CSV/JSON
     cfi <code>                         - Decode CFI code
@@ -446,6 +437,8 @@ Entity Commands:
 Batch Operations:
     batch create <file> [type]         - Create instruments from file (default: equity)
     batch enrich <file>                - Enrich instruments from file with FIGI/LEI
+    batch batch-source <type> [prefix] [mic] [limit] - Source from FIRDS by ISIN prefix/MIC
+    batch batch-enrich [limit]          - Enrich all instruments in DB
 
 Export Commands:
     export json instruments            - Export instruments to JSON
@@ -457,6 +450,8 @@ Examples:
     python scripts/cli.py entity create 549300PPETP6IPXYTE40
     python scripts/cli.py filter type equity
     python scripts/cli.py cfi ESVUFR
+    python scripts/cli.py batch batch-source equity SE
+    python scripts/cli.py batch batch-enrich
     """)
 
 def main():

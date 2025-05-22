@@ -59,7 +59,7 @@ class Instrument(BaseModel):
     isin = Column(String, unique=True)
     full_name = Column(String)
     short_name = Column(String)
-    symbol = Column(String, unique=True)
+    symbol = Column(String)  # Removed unique=True
     figi = Column(String)
     
     # Common FIRDS fields

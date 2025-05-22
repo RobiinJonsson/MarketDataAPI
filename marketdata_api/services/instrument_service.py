@@ -61,25 +61,59 @@ class InstrumentService:
             model_data = map_to_model(data, instrument_type)
             model_data['id'] = str(uuid.uuid4())
             model_data['type'] = instrument_type
-            
-            # Add Future to the instrument type mapping
-            instrument = (Equity if instrument_type == "equity" else 
-                        Debt if instrument_type == "debt" else
-                        Future if instrument_type == "future" else 
-                        Instrument)(**model_data)
-            
-            unmapped = {k: v for k, v in data.items() if k not in model_data}
+
+            # Only check for duplicate ISIN (symbol is no longer unique)
+            isin = model_data.get('isin') or model_data.get('Id')
+            existing = session.query(Instrument).filter(
+                Instrument.isin == isin
+            ).first()
+            if existing:
+                logger.info(f"Instrument with ISIN {isin} already exists. Skipping creation.")
+                return existing
+
+            # Filter out keys not present in the model's __table__.columns
+            if instrument_type == "equity":
+                model_cls = Equity
+            elif instrument_type == "debt":
+                model_cls = Debt
+            elif instrument_type == "future":
+                model_cls = Future
+            else:
+                model_cls = Instrument
+
+            valid_keys = set(c.name for c in model_cls.__table__.columns)
+            # Also include parent columns (Instrument) for subclasses
+            if model_cls is not Instrument:
+                valid_keys |= set(c.name for c in Instrument.__table__.columns)
+
+            filtered_model_data = {k: v for k, v in model_data.items() if k in valid_keys}
+
+            unmapped = {k: v for k, v in model_data.items() if k not in valid_keys}
+            # Remove unmapped fields that are None, NaN, or empty dicts
+            import math
+            def is_empty(val):
+                if val is None:
+                    return True
+                if isinstance(val, float) and math.isnan(val):
+                    return True
+                if isinstance(val, dict) and all(is_empty(v) for v in val.values()):
+                    return True
+                return False
+            unmapped = {k: v for k, v in unmapped.items() if not is_empty(v)}
             if unmapped:
-                instrument.additional_data = unmapped
-            
+                logger.warning(f"Unmapped fields for {instrument_type} instrument: {unmapped}")
+            assert not unmapped, f"Unmapped fields present: {unmapped}"
+
+            instrument = model_cls(**filtered_model_data)
+
             session.add(instrument)
             session.flush()
             session.refresh(instrument)
             session.commit()
-            
+
             logger.info(f"Created new {instrument_type} instrument with ID: {instrument.id}")
             return session.get(Instrument, instrument.id)
-            
+
         except Exception as e:
             session.rollback()
             logger.error(f"Failed to create instrument: {str(e)}")
@@ -324,3 +358,113 @@ class InstrumentService:
         finally:
             if lei_session:
                 lei_session.close()
+
+    def batch_source_instrument(
+        self,
+        instrument_type: str,
+        isin_prefix: Optional[str] = None,
+        mic_code: Optional[str] = None,
+        limit: Optional[int] = None
+    ) -> list[Instrument]:
+        """
+        Batch source instruments from FIRDS, filtered by ISIN prefix and/or MIC code.
+
+        Args:
+            instrument_type: Type of instrument to source ('equity', 'debt', 'future')
+            isin_prefix: Optional ISIN prefix to filter
+            mic_code: Optional MIC code to filter
+            limit: Optional maximum number of instruments to source
+
+        Returns:
+            List of created Instrument instances
+        """
+        created_instruments = []
+        try:
+            list_files = self.esma_loader.load_mifid_file_list(['firds'])
+            file_type = (
+                'FULINS_E' if instrument_type == 'equity' else
+                'FULINS_D' if instrument_type == 'debt' else
+                'FULINS_F' if instrument_type == 'future' else None
+            )
+            if not file_type:
+                self.logger.error(f"Unsupported instrument type: {instrument_type}")
+                return []
+
+            fulins_files = list_files[list_files['download_link'].str.contains(file_type, na=False)]
+            if fulins_files.empty:
+                self.logger.warning("No FIRDS files found for the specified type.")
+                return []
+
+            count = 0
+            for _, file_info in fulins_files.iterrows():
+                df = self.esma_loader.download_file(file_info['download_link'])
+                if df.empty:
+                    continue
+
+                # Apply filters
+                if isin_prefix:
+                    df = df[df['Id'].str.startswith(isin_prefix)]
+                if mic_code and 'MIC' in df.columns:
+                    df = df[df['MIC'] == mic_code]
+
+                for _, row in df.iterrows():
+                    if limit is not None and count >= limit:
+                        return created_instruments
+                    data = row.to_dict()
+                    # Check for existing instrument by ISIN or symbol
+                    # Use 'symbol' as per your Instrument model 
+                    symbol = (
+                        data.get('symbol') or
+                        data.get('Symbol') or
+                        data.get('short_name') or
+                        data.get('ShortName')
+                    )
+                    with get_session() as session:
+                        existing = session.query(Instrument).filter(
+                            (Instrument.isin == data.get('Id')) |
+                            (Instrument.symbol == symbol)
+                        ).first()
+                        if existing:
+                            self.logger.info(f"Instrument with ISIN {data.get('Id')} or symbol {symbol} already exists. Skipping.")
+                            continue
+                    try:
+                        instrument = self.create_instrument(data, instrument_type)
+                        created_instruments.append(instrument)
+                        count += 1
+                    except Exception as e:
+                        self.logger.error(f"Failed to create instrument for ISIN {data.get('Id')}: {str(e)}")
+                if limit is not None and count >= limit:
+                    break
+
+            return created_instruments
+        except Exception as e:
+            self.logger.error(f"Batch sourcing failed: {str(e)}")
+            return []
+
+    def batch_enrich_instrument(self, limit: Optional[int] = None) -> int:
+        """
+        Enrich all instruments in the database.
+
+        Args:
+            limit: Optional maximum number of instruments to enrich
+
+        Returns:
+            Number of instruments successfully enriched
+        """
+        session = SessionLocal()
+        enriched_count = 0
+        try:
+            query = session.query(Instrument)
+            if limit is not None:
+                query = query.limit(limit)
+            instruments = query.all()
+            for instrument in instruments:
+                try:
+                    # Use a new session for each enrichment to avoid stale state
+                    _, _ = self.enrich_instrument(instrument)
+                    enriched_count += 1
+                except Exception as e:
+                    self.logger.error(f"Failed to enrich instrument {instrument.id}: {str(e)}")
+            return enriched_count
+        finally:
+            session.close()
