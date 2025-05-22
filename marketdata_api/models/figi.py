@@ -8,7 +8,7 @@ class FigiMapping(Base):
     __tablename__ = "figi_mappings"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    isin = Column(String, ForeignKey('instruments.isin'), unique=True, nullable=False)
+    isin = Column(String, ForeignKey('instruments.isin', ondelete='CASCADE'), unique=True, nullable=False)
     figi = Column(String)
     composite_figi = Column(String)
     share_class_figi = Column(String)
@@ -18,4 +18,8 @@ class FigiMapping(Base):
     security_description = Column(String)
     last_updated = Column(DateTime, default=lambda: datetime.now(UTC))
     
-    instrument = relationship("Instrument", back_populates="figi_mapping")
+    instrument = relationship(
+        "Instrument",
+        back_populates="figi_mapping",
+        passive_deletes=True
+    )

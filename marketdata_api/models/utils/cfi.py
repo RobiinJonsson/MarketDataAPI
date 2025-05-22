@@ -136,6 +136,7 @@ class AttributeDescription:
         'V': "Voting",
         'N': "Non-voting",
         'R': "Restricted voting",
+        'E': "Enhanced voting",
         'X': "Not applicable",
     }
     
@@ -220,32 +221,52 @@ class AttributeDescription:
         'X': "Not applicable",
     }
 
-    # Futures Attribute Positions
+    # Futures Attribute Positions - Updated with more detailed classifications
     FUTURES_SETTLEMENT = {  # Position 3 for Futures
         'P': "Physical",
         'C': "Cash",
+        'N': "Non-Deliverable",
         'X': "Not applicable",
     }
     
-    FUTURES_UNDERLYING = {  # Position 4 for Futures
-        'E': "Equities",
-        'D': "Debt",
-        'C': "Currency",
-        'I': "Index",
-        'R': "Interest rate",
-        'M': "Commodities",
+    FUTURES_UNDERLYING_FINANCIAL = {  # Position 4 for Financial Futures (FF)
+        'B': "Baskets",
+        'S': "Stock-Equities",
+        'D': "Debt Instruments",
+        'C': "Currencies",
+        'I': "Indices",
+        'O': "Options",
+        'F': "Futures",
+        'W': "Swaps",
+        'N': "Interest Rates",
+        'V': "Stock Dividend",
+        'M': "Others (Misc.)",
         'X': "Not applicable",
     }
     
-    FUTURES_DELIVERY = {  # Position 5 for Futures
+    FUTURES_UNDERLYING_COMMODITIES = {  # Position 4 for Commodity Futures (FC)
+        'E': "Extraction Resources",
+        'A': "Agriculture",
+        'I': "Industrial Products",
+        'S': "Services",
+        'N': "Environmental",
+        'P': "Polypropylene Products",
+        'H': "Generated Resources",
+        'M': "Others (Misc.)",
+        'X': "Not applicable",
+    }
+    
+    FUTURES_DELIVERY = {  # Position 5 for Futures (fixed from position mapping error)
         'F': "Fixed date",
         'V': "Variable date",
+        'P': "Physical delivery",  # Added to match your FFSP code
+        'C': "Cash settlement",    # Added to be consistent
         'X': "Not applicable",
     }
     
     FUTURES_SCHEME = {  # Position 6 for Futures
-        'S': "Standard",
-        'N': "Non-standard",
+        'S': "Standardized",
+        'N': "Non-Standardized",
         'X': "Not applicable",
     }
 
@@ -306,14 +327,25 @@ class AttributeDescription:
         }
 
     @classmethod
-    def decode_futures_attributes(cls, attrs: tuple[str, str, str, str]) -> dict[str, str]:
-        """Decode futures instrument attributes"""
-        return {
-            "settlement": cls.FUTURES_SETTLEMENT.get(attrs[0], "Unknown"),
-            "underlying": cls.FUTURES_UNDERLYING.get(attrs[1], "Unknown"),
-            "delivery": cls.FUTURES_DELIVERY.get(attrs[2], "Unknown"),
+    def decode_futures_attributes(cls, attrs: tuple[str, str, str, str], cfi_code: str) -> dict[str, str]:
+        """Decode futures instrument attributes with more detailed classifications"""
+        
+        # Get the underlying based on financial vs commodity future
+        if cfi_code[:2] == "FF":
+            underlying = f"Financial: {cls.FUTURES_UNDERLYING_FINANCIAL.get(attrs[0], 'Unknown')}"
+        elif cfi_code[:2] == "FC":
+            underlying = f"Commodity: {cls.FUTURES_UNDERLYING_COMMODITIES.get(attrs[0], 'Unknown')}"
+        else:
+            underlying = "Unknown"
+        
+        # Map positions correctly: pos3=underlying(already handled), pos4=delivery, pos5=standardization
+        result = {
+            "underlying": underlying,
+            "delivery": cls.FUTURES_SETTLEMENT.get(attrs[1], "Unknown"),
             "scheme": cls.FUTURES_SCHEME.get(attrs[3], "Unknown")
         }
+        
+        return result
 
     @classmethod
     def decode_swap_attributes(cls, attrs: tuple[str, str, str, str]) -> dict[str, str]:
@@ -380,7 +412,7 @@ class CFI:
         elif self.category == Category.OPTIONS:
             result["attributes"] = AttributeDescription.decode_option_attributes(self.attributes)
         elif self.category == Category.FUTURES:
-            result["attributes"] = AttributeDescription.decode_futures_attributes(self.attributes)
+            result["attributes"] = AttributeDescription.decode_futures_attributes(self.attributes, self.code)
         elif self.category == Category.SWAPS:
             result["attributes"] = AttributeDescription.decode_swap_attributes(self.attributes)
         else:

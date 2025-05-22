@@ -6,9 +6,10 @@ A comprehensive market data management system that integrates FIRDS, OpenFIGI, a
 
 - **Instrument Management**
   - ISIN-based instrument lookup and creation
-  - Support for equity and debt instruments
+  - Support for equity, debt and futures instruments
   - Automatic data enrichment from multiple sources
   - Relationship handling between instruments and legal entities
+  - CFI code decoding and classification
 
 - **Data Integration**
   - FIRDS (Financial Instruments Reference Data System) integration
@@ -27,6 +28,9 @@ A comprehensive market data management system that integrates FIRDS, OpenFIGI, a
   - Real-time data display
   - Interactive data exploration
   - Toast notifications for operation feedback
+  - Instrument type-specific views
+  - Status indicators for futures and debt instruments
+  - Raw JSON data display for debugging
 
 ## Installation
 
@@ -76,6 +80,12 @@ python scripts/cli.py instrument detail <ISIN>
 
 # Batch process instruments
 python scripts/cli.py batch create isins.txt equity
+
+# Decode a CFI code
+python scripts/cli.py cfi ESVUFR
+
+# Batch source from FIRDS
+python scripts/cli.py batch batch-source equity SE
 ```
 
 ### API Endpoints
@@ -84,6 +94,8 @@ python scripts/cli.py batch create isins.txt equity
 - `POST /api/fetch` - Fetch and create new instrument
 - `GET /api/instruments` - List all instruments
 - `POST /api/batch_search` - Batch search instruments
+- `GET /firds` - Search for FIRDS files
+- `POST /api/gleif` - Fetch data from GLEIF API
 
 ## Project Structure
 
@@ -91,6 +103,10 @@ python scripts/cli.py batch create isins.txt equity
 MarketDataAPI/
 ├── marketdata_api/
 │   ├── models/           # SQLAlchemy models
+│   │   ├── instrument.py # Instrument models with polymorphic inheritance
+│   │   ├── legal_entity.py # Legal Entity models
+│   │   ├── figi.py       # FIGI mapping models
+│   │   └── utils/        # Utilities for models
 │   ├── services/         # Business logic & external APIs
 │   ├── routes/          # API endpoints
 │   ├── database/        # Database configuration

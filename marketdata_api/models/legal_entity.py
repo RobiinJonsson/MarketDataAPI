@@ -27,7 +27,13 @@ class LegalEntity(Base):
     # Relationships
     addresses = relationship("EntityAddress", back_populates="entity", cascade="all, delete-orphan")
     registration = relationship("EntityRegistration", back_populates="entity", uselist=False, cascade="all, delete-orphan")
-    instruments = relationship("Instrument", back_populates="legal_entity", passive_deletes=True, lazy='select')
+    instruments = relationship(
+        "Instrument",
+        back_populates="legal_entity",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        lazy='select'
+    )
 
 class EntityAddress(Base):
     __tablename__ = "entity_addresses"

@@ -1,0 +1,75 @@
+=== Instrument Details ===
+symbol: NDAQST/F 20250619 SWEDA GR
+termination_date: 2025-06-19 00:00:00
+updated_at: 2025-05-22 06:38:11.025029
+underlying_single_isin: SE0000242455
+id: 7039ac89-a858-4033-85cc-9daff4dcf2af
+relevant_authority: SE
+type: future
+cfi_code: FFSPSX
+relevant_venue: SEED
+currency: SEK
+from_date: 2025-03-28 00:00:00
+price_multiplier: 100.0
+commodity_derivative: False
+isin: SE0024321988
+lei_id: 549300KBQIVNEJEZVL96
+expiration_date: 2025-06-19
+full_name: 4SWEDA5FY
+issuer_req: false
+short_name: NDAQST/F 20250619 SWEDA GR
+first_trade_date: 2025-03-27 00:00:00
+created_at: 2025-05-22 06:37:50.664133
+delivery_type: PHYS
+
+=== Future Specific Fields ===
+expiration_date: 2025-06-19
+price_multiplier: 100.0
+delivery_type: PHYS
+underlying_single_isin: SE0000242455
+
+=== FIGI Data ===
+id: a0287ff9-9b86-4ca7-b7f7-d982536682ed
+ticker: B4SWE=M5
+market_sector: Equity
+last_updated: 2025-05-22 06:38:11.027391
+isin: SE0024321988
+figi: BBG01L0KZPB1
+security_type: SINGLE STOCK FUTURE
+security_description: B4SWE=M5
+
+=== Legal Entity Data ===
+lei: 549300KBQIVNEJEZVL96
+legal_form: XJHM
+status: ACTIVE
+next_renewal_date: 2026-06-29 22:00:00
+managing_lou: 485100001PLJJ09NZT59
+name: Nasdaq Stockholm Aktiebolag
+jurisdiction: SE
+registered_as: 556420-8394
+registration_status: ISSUED
+creation_date: 2016-09-27 02:00:00
+
+Addresses:
+  lei: 549300KBQIVNEJEZVL96
+  type: legal
+  country: SE
+  address_lines: Tullvaktsvägen 15
+  id: ba0d3fa9-74f9-453d-9d83-2726e4600ae4
+  city: Stockholm
+  postal_code: 105 78
+  lei: 549300KBQIVNEJEZVL96
+  type: headquarters
+  country: SE
+  address_lines: Tullvaktsvägen 15
+  id: 277e529d-21fb-4609-8819-8b0e3d4bd442
+  city: Stockholm
+  postal_code: 105 78
+
+Registration Details:
+  last_update: 2025-05-05 07:46:18
+  next_renewal: 2026-06-29 22:00:00
+  validation_sources: RA000544
+  lei: 549300KBQIVNEJEZVL96
+  status: ISSUED
+  managing_lou: 485100001PLJJ09NZT59

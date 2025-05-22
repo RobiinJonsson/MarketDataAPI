@@ -8,8 +8,9 @@ from marketdata_api.services.firds import get_firds_file_names
 from marketdata_api.services.gleif import fetch_lei_info
 from marketdata_api.database.session import get_session
 from ..services.instrument_service import InstrumentService
-from ..models.instrument import Instrument, Equity, Debt
+from ..models.instrument import Instrument, Equity, Debt, Future
 from sqlalchemy.exc import SQLAlchemyError
+from marketdata_api.models.utils.cfi import CFI
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -104,10 +105,48 @@ def search_db_entry(isin):
                 "relevant_authority": instrument.relevant_authority,
                 "relevant_venue": instrument.relevant_venue,
                 "commodity_derivative": instrument.commodity_derivative,
-                "first_trade_date": instrument.first_trade_date.isoformat() if instrument.first_trade_date else None
+                "first_trade_date": instrument.first_trade_date.isoformat() if instrument.first_trade_date else None,
+                "termination_date": instrument.termination_date.isoformat() if getattr(instrument, "termination_date", None) else None,
+                "basket_isin": getattr(instrument, "basket_isin", None),
+                "basket_lei": getattr(instrument, "basket_lei", None),
+                "underlying_index_isin": getattr(instrument, "underlying_index_isin", None),
+                "underlying_single_isin": getattr(instrument, "underlying_single_isin", None),
+                "basket_isin": getattr(instrument, "basket_isin", None),
+                "underlying_index_isin": getattr(instrument, "underlying_index_isin", None),
+                "underlying_single_index_name": getattr(instrument, "underlying_single_index_name", None)
             }
         }
-        
+
+        # Add contract data fields for futures
+        if instrument.type == "future":
+            result["instrument"].update({
+                "expiration_date": getattr(instrument, "expiration_date", None),
+                "price_multiplier": getattr(instrument, "price_multiplier", None),
+                "delivery_type": getattr(instrument, "delivery_type", None)
+            })
+
+        # Add debt-specific fields
+        if instrument.type == "debt":
+            result["instrument"].update({
+                "maturity_date": instrument.maturity_date.isoformat() if instrument.maturity_date else None,
+                "total_issued_nominal": instrument.total_issued_nominal,
+                "nominal_value_per_unit": instrument.nominal_value_per_unit,
+                "debt_seniority": instrument.debt_seniority,
+                "floating_rate_term_unit": instrument.floating_rate_term_unit,
+                "floating_rate_term_value": instrument.floating_rate_term_value,
+                "floating_rate_basis_points_spread": instrument.floating_rate_basis_points_spread,
+                "interest_rate_floating_reference_index": instrument.interest_rate_floating_reference_index
+            })
+
+        # Add CFI decoded output if available
+        cfi_code = instrument.cfi_code
+        if cfi_code and len(cfi_code) == 6:
+            try:
+                cfi = CFI(cfi_code)
+                result["instrument"]["cfi_decoded"] = cfi.describe()
+            except Exception as e:
+                result["instrument"]["cfi_decoded"] = {"error": str(e)}
+
         if instrument.figi_mapping:
             result["figi"] = {
                 "figi": instrument.figi_mapping.figi,
@@ -126,7 +165,32 @@ def search_db_entry(isin):
                 "status": instrument.legal_entity.status,
                 "creation_date": instrument.legal_entity.creation_date.isoformat() if instrument.legal_entity.creation_date else None
             }
-            
+
+        # Add Derivatives section: ISINs and symbols of futures where this ISIN is underlying
+        if instrument.type == "equity":
+            future_rows = session.query(Future.isin, Future.symbol).filter(
+                (Future.underlying_single_isin == isin) |
+                (Future.basket_isin == isin) |
+                (Future.underlying_index_isin == isin)
+            ).all()
+            result["derivatives"] = [
+                {"isin": f[0], "symbol": f[1]} for f in future_rows if f[0]
+            ]
+
+        # Add underlying instrument symbol for futures
+        if instrument.type == "future":
+            underlying_isin = (
+                getattr(instrument, "underlying_single_isin", None)
+                or getattr(instrument, "basket_isin", None)
+                or getattr(instrument, "underlying_index_isin", None)
+            )
+            underlying_full_name = None
+            if underlying_isin:
+                underlying_inst = session.query(Instrument).filter_by(isin=underlying_isin).first()
+                if underlying_inst:
+                    underlying_full_name = underlying_inst.full_name
+            result["underlying_instrument"] = {"full_name": underlying_full_name}
+
         session.close()
         return jsonify(result), 200
         

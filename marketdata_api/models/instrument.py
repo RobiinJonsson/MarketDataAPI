@@ -78,9 +78,19 @@ class Instrument(BaseModel):
     technical_from_date = Column(DateTime)  # TechAttrbts_PblctnPrd_FrDt
     
     # Relationships
-    lei_id = Column(String, ForeignKey('legal_entities.lei'))
-    legal_entity = relationship("LegalEntity", back_populates="instruments")
-    figi_mapping = relationship("FigiMapping", back_populates="instrument", uselist=False)
+    lei_id = Column(String, ForeignKey('legal_entities.lei', ondelete='CASCADE'))
+    legal_entity = relationship(
+        "LegalEntity",
+        back_populates="instruments",
+        passive_deletes=True
+    )
+    figi_mapping = relationship(
+        "FigiMapping",
+        back_populates="instrument",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
     
     # Additional data for flexibility
     additional_data = Column(JSON)
@@ -88,7 +98,12 @@ class Instrument(BaseModel):
     updated_at = Column(DateTime, default=lambda: datetime.now(UTC), onupdate=lambda: datetime.now(UTC))
     
     # Add relationship to related ISINs
-    related_isins = relationship("RelatedIsin", back_populates="primary_instrument")
+    related_isins = relationship(
+        "RelatedIsin",
+        back_populates="primary_instrument",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
 
 
 class Equity(Instrument):

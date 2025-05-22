@@ -1,0 +1,73 @@
+C:\Users\robin\Projects\MarketDataAPI>python scripts/cli.py instrument detail SE0000242455           
+
+=== Instrument Details ===
+symbol: SWEDBANK/SH A
+updated_at: 2025-05-22 06:14:15.626846
+id: c34d0c43-dc4f-4bac-99f4-48a58cdb1b26
+relevant_authority: SE
+type: equity
+cfi_code: ESVUFR
+relevant_venue: DSTO
+currency: SEK
+from_date: 2020-12-01 00:00:00
+commodity_derivative: False
+isin: SE0000242455
+lei_id: M312WZV08Y7LYUC71685
+full_name: Swedbank AB
+issuer_req: false
+short_name: SWEDBANK/SH A
+first_trade_date: 2020-11-12 00:00:00
+created_at: 2025-05-22 06:13:59.444338
+
+=== Equity Specific Fields ===
+
+=== FIGI Data ===
+composite_figi: BBG000BQXJ29
+id: 12ab9d57-c168-4312-b9fe-fe318983056e
+ticker: SWEDA
+market_sector: Equity
+last_updated: 2025-05-17 14:32:10.339936
+isin: SE0000242455
+figi: BBG000BQXJJ1
+share_class_figi: BBG001S9S3X4
+security_type: Common Stock
+security_description: SWEDA
+
+=== Legal Entity Data ===
+name: Swedbank AB
+legal_form: BYQJ
+status: ACTIVE
+next_renewal_date: 2026-04-17 09:27:44
+managing_lou: 549300O897ZC5H7CY412
+lei: M312WZV08Y7LYUC71685
+jurisdiction: SE
+registered_as: 502017-7753
+bic: FINNSES1XXX, SWEDCNSHXXX, SWEDFIHHXXX, SWEDGB21XXX, SWEDKYK1XXX, SWEDNOKKXXX, SWEDSESSCLS, SWEDSESSCUS, SWEDSESSROB, SWEDSESSXXX, SWEDUS33XXX
+registration_status: ISSUED
+creation_date: 2012-06-06 15:54:00
+
+Addresses:
+  lei: M312WZV08Y7LYUC71685
+  type: legal
+  country: SE
+  region: SE-AB
+  address_lines: C/O Swedbank AB, Landsvägen 40
+  id: c3a9807a-c170-48c4-b7be-9faabd4dfd63
+  city: Stockholm
+  postal_code: 105 34
+  lei: M312WZV08Y7LYUC71685
+  type: headquarters
+  country: SE
+  region: SE-AB
+  address_lines: C/O Swedbank AB, Landsvägen 40
+  id: 90fff14d-5a3b-40e4-bb40-1073339973d6
+  city: Stockholm
+  postal_code: 105 34
+
+Registration Details:
+  last_update: 2025-03-04 10:47:00
+  next_renewal: 2026-04-17 09:27:44
+  validation_sources: RA000544
+  lei: M312WZV08Y7LYUC71685
+  status: ISSUED
+  managing_lou: 549300O897ZC5H7CY412
