@@ -1,6 +1,7 @@
 import logging
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_
 from ..models.legal_entity import LegalEntity, EntityAddress, EntityRegistration
 from ..database.model_mapper import map_lei_record, flatten_address
 from ..database.session import get_session, SessionLocal
@@ -25,10 +26,40 @@ class LegalEntityService:
             session.close()
             raise
 
-    def get_all_entities(self) -> tuple[Session, List[LegalEntity]]:
+    def get_all_entities(self, limit: Optional[int] = None, offset: Optional[int] = None, filters: Optional[Dict[str, Any]] = None) -> tuple[Session, List[LegalEntity]]:
+        """
+        Get all legal entities with optional pagination and filtering.
+        
+        Args:
+            limit (int, optional): Maximum number of results to return
+            offset (int, optional): Number of results to skip (for pagination)
+            filters (dict, optional): Dictionary of filters to apply (e.g. {'status': 'ACTIVE'})
+        
+        Returns:
+            tuple: (session, list of entities)
+        """
         session = SessionLocal()
         try:
-            entities = session.query(LegalEntity).all()
+            query = session.query(LegalEntity)
+            
+            # Apply filters if provided
+            if filters:
+                filter_conditions = []
+                if 'status' in filters and filters['status']:
+                    filter_conditions.append(LegalEntity.status == filters['status'])
+                if 'jurisdiction' in filters and filters['jurisdiction']:
+                    filter_conditions.append(LegalEntity.jurisdiction == filters['jurisdiction'])
+                
+                if filter_conditions:
+                    query = query.filter(and_(*filter_conditions))
+            
+            # Apply pagination
+            if offset is not None:
+                query = query.offset(offset)
+            if limit is not None:
+                query = query.limit(limit)
+                
+            entities = query.all()
             return session, entities
         except:
             session.close()

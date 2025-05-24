@@ -52,8 +52,14 @@ def create_app():
 
     from marketdata_api.routes.market import market_bp
     from marketdata_api.routes.schema import schema_bp
+    from marketdata_api.routes.crud import crud_bp  # Import the CRUD API blueprint
     app.register_blueprint(market_bp)
     app.register_blueprint(schema_bp)
+    app.register_blueprint(crud_bp)  # Register the CRUD API blueprint
+
+    @app.route('/health')
+    def health_check():
+        return {'status': 'healthy'}, 200
 
     return app
 

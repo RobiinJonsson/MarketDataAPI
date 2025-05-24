@@ -289,3 +289,8 @@ def test_instrument_creation():
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+# Route for the admin page
+@market_bp.route("/admin", methods=["GET"])
+def admin():
+    return render_template("admin.html")
