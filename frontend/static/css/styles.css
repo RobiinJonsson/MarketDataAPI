@@ -66,12 +66,13 @@ body {
 
 .input-group {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 1rem;
     margin-bottom: 1.5rem;
 }
 
 .input-field {
+    flex: 1; /* Make the input field take up all available space */
     padding: 0.8rem;
     border: 1px solid #dee2e6;
     border-radius: 4px;
@@ -217,6 +218,27 @@ body {
 .nav-link.active {
     background-color: #007bff;
     color: white;
+}
+
+/* Admin redirect note */
+.admin-redirect-note {
+    margin-top: 1rem;
+    padding: 0.8rem;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 0.9rem;
+    color: #6c757d;
+}
+
+.admin-link {
+    color: #007bff;
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.admin-link:hover {
+    text-decoration: underline;
 }
 
 /* Responsive Design */

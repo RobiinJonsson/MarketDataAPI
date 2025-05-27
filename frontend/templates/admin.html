@@ -127,23 +127,31 @@
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="instrument-symbol">Symbol:</label>
-                            <input type="text" id="instrument-symbol" name="symbol">
+                            <label for="fetch-and-enrich">
+                                <input type="checkbox" id="fetch-and-enrich" name="fetch_and_enrich" checked>
+                                Fetch and enrich with market data
+                            </label>
                         </div>
-                        <div class="form-group">
-                            <label for="instrument-full-name">Full Name:</label>
-                            <input type="text" id="instrument-full-name" name="full_name">
+                        <div id="manual-fields">
+                            <div class="form-group">
+                                <label for="instrument-symbol">Symbol:</label>
+                                <input type="text" id="instrument-symbol" name="symbol">
+                            </div>
+                            <div class="form-group">
+                                <label for="instrument-full-name">Full Name:</label>
+                                <input type="text" id="instrument-full-name" name="full_name">
+                            </div>
+                            <div class="form-group">
+                                <label for="instrument-cfi">CFI Code:</label>
+                                <input type="text" id="instrument-cfi" name="cfi_code" pattern="^[A-Z]{6}$">
+                            </div>
+                            <div class="form-group">
+                                <label for="instrument-currency">Currency:</label>
+                                <input type="text" id="instrument-currency" name="currency">
+                            </div>
+                            <!-- Dynamic fields for specific instrument types will be added by JS -->
+                            <div id="type-specific-fields"></div>
                         </div>
-                        <div class="form-group">
-                            <label for="instrument-cfi">CFI Code:</label>
-                            <input type="text" id="instrument-cfi" name="cfi_code" pattern="^[A-Z]{6}$">
-                        </div>
-                        <div class="form-group">
-                            <label for="instrument-currency">Currency:</label>
-                            <input type="text" id="instrument-currency" name="currency">
-                        </div>
-                        <!-- Dynamic fields for specific instrument types will be added by JS -->
-                        <div id="type-specific-fields"></div>
                         <div class="form-actions">
                             <button type="submit" class="btn btn-primary">Save</button>
                             <button type="button" class="btn btn-secondary cancel-form">Cancel</button>

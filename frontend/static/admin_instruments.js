@@ -60,6 +60,22 @@ const AdminInstruments = {
             document.getElementById('instrument-form-container').style.display = 'block';
             document.getElementById('instrument-form').reset();
             document.getElementById('instrument-isin').disabled = false;
+            
+            // Check if fetch-and-enrich checkbox exists
+            const fetchEnrichCheckbox = document.getElementById('fetch-and-enrich');
+            if (fetchEnrichCheckbox) {
+                fetchEnrichCheckbox.checked = true;
+                this.toggleManualFields(true);
+                
+                // Add event listener for the checkbox if it doesn't have one
+                if (!fetchEnrichCheckbox._hasListener) {
+                    fetchEnrichCheckbox.addEventListener('change', (e) => {
+                        this.toggleManualFields(e.target.checked);
+                    });
+                    fetchEnrichCheckbox._hasListener = true;
+                }
+            }
+            
             this.updateTypeSpecificFields(document.getElementById('instrument-type').value);
         });
 
@@ -78,8 +94,23 @@ const AdminInstruments = {
         // Submit instrument form
         document.getElementById('instrument-form').addEventListener('submit', (e) => {
             e.preventDefault();
+            
+            const fetchAndEnrich = document.getElementById('fetch-and-enrich')?.checked;
+            
+            // If using fetch and enrich, use that process instead of the manual form submission
+            if (fetchAndEnrich) {
+                const isin = document.getElementById('instrument-isin').value;
+                const type = document.getElementById('instrument-type').value;
+                this.fetchAndInsert(isin, type);
+                return;
+            }
+            
+            // Otherwise use the normal manual form submission
             const formData = new FormData(e.target);
             const instrumentData = Object.fromEntries(formData.entries());
+            
+            // Remove the fetch_and_enrich field
+            delete instrumentData.fetch_and_enrich;
             
             if (this.state.mode === 'create') {
                 this.createInstrument(instrumentData);
@@ -112,6 +143,60 @@ const AdminInstruments = {
         
         // Load initial data
         this.fetchInstruments();
+    },
+    
+    // Toggle visibility of manual fields based on checkbox
+    toggleManualFields(fetchAndEnrich) {
+        const manualFields = document.getElementById('manual-fields');
+        if (manualFields) {
+            manualFields.style.display = fetchAndEnrich ? 'none' : 'block';
+        }
+    },
+    
+    // New fetchAndInsert function moved from search.js
+    async fetchAndInsert(isin, category) {
+        AdminUtils.showSpinner();
+        try {
+            const payload = {
+                Id: isin,
+                Category: category  // This matches the database polymorphic identity
+            };
+
+            const response = await fetch('/api/fetch', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+            
+            if (response.ok) {
+                const enrichmentStatus = [];
+                if (result.figi) enrichmentStatus.push('FIGI');
+                if (result.lei) enrichmentStatus.push('LEI');
+                
+                const enrichmentText = enrichmentStatus.length ? 
+                    ` (enriched with ${enrichmentStatus.join(', ')})` : '';
+                    
+                AdminUtils.showToast(`Successfully processed ${isin}${enrichmentText}`, 'success');
+                document.getElementById('instrument-form-container').style.display = 'none';
+                
+                // Fetch and show the newly created instrument
+                this.fetchInstrumentById(isin);
+                
+                // Refresh the instruments list
+                this.fetchInstruments();
+            } else {
+                throw new Error(result.error || 'Failed to process request');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            AdminUtils.showToast(error.message, 'error');
+        } finally {
+            AdminUtils.hideSpinner();
+        }
     },
     
     // API Functions for Instruments
