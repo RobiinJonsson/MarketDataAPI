@@ -103,6 +103,11 @@ const AdminLegalEntities = {
                 this.renderEntitiesTable(data.entities);
                 this.state.totalItems = data.count;
                 AdminUtils.updatePaginationInfo('entities', this.state.currentPage, this.state.pageSize, this.state.totalItems);
+                
+                // Fetch all available jurisdictions for the filter
+                if (!this.state.filters.jurisdiction) {
+                    this.fetchAllAvailableJurisdictions();
+                }
             } else {
                 AdminUtils.showToast(data.error || 'Failed to fetch entities', 'error');
             }
@@ -201,6 +206,54 @@ const AdminLegalEntities = {
         } finally {
             AdminUtils.hideSpinner();
             AdminUtils.hideConfirmationModal();
+        }
+    },
+
+    async fetchAllAvailableJurisdictions() {
+        try {
+            // Use a larger limit to get as many different jurisdictions as possible
+            const response = await fetch(`/api/v1/entities?limit=1000`);
+            const data = await response.json();
+            
+            if (response.ok && data.entities && data.entities.length > 0) {
+                this.updateJurisdictionFilter(data.entities);
+            }
+        } catch (error) {
+            console.error('Error fetching jurisdictions:', error);
+            // Don't show an error toast as this is a background operation
+        }
+    },
+
+    updateJurisdictionFilter(entities) {
+        // Get unique jurisdictions
+        const jurisdictions = [...new Set(
+            entities
+                .map(entity => entity.jurisdiction)
+                .filter(jurisdiction => jurisdiction) // Filter out null/undefined
+        )].sort();
+        
+        // Update the jurisdiction filter dropdown
+        const selectElement = document.getElementById('entity-jurisdiction-filter');
+        
+        // Store current value to preserve it
+        const currentValue = selectElement.value;
+        
+        // Keep the first empty option
+        const emptyOption = selectElement.querySelector('option:first-child');
+        selectElement.innerHTML = '';
+        selectElement.appendChild(emptyOption);
+        
+        // Add options for each jurisdiction
+        jurisdictions.forEach(jurisdiction => {
+            const option = document.createElement('option');
+            option.value = jurisdiction;
+            option.textContent = jurisdiction;
+            selectElement.appendChild(option);
+        });
+        
+        // Restore selected value if it exists
+        if (currentValue) {
+            selectElement.value = currentValue;
         }
     },
     

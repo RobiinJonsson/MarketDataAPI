@@ -31,6 +31,15 @@ def schema_search():
             if not instrument:
                 return jsonify({"error": "Instrument not found"}), 404
 
+            # Check if we need to load a specific subtype
+            instrument_type = instrument.type.lower()
+            logger.debug(f"Found instrument of type: {instrument_type}")
+            
+            # If schema_name is 'base', use the instrument's actual type if it matches a schema
+            if schema_name == 'base' and instrument_type in mapper.type_mapping:
+                schema_name = instrument_type
+                logger.debug(f"Using instrument type schema: {schema_name}")
+            
             try:
                 version, _ = mapper.get_schema_version(schema_name)
                 result = mapper.map_to_schema(instrument, schema_name)
@@ -53,6 +62,7 @@ def schema_search():
                 return jsonify({"error": str(e)}), 400
 
     except Exception as e:
+        logger.error(f"Schema search error: {str(e)}", exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 @schema_bp.route('/api/schema/validate', methods=['POST'])

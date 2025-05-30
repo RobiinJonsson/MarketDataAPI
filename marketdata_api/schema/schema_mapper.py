@@ -6,7 +6,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime, date
 from functools import lru_cache
-from ..models.instrument import Instrument, Equity, Debt
+from ..models.instrument import Instrument, Equity, Debt, Future
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +35,7 @@ class SchemaMapper:
         self.type_mapping = {
             "equity": Equity,
             "debt": Debt,
+            "future": Future,  # Fix: Use the proper Future import
             "base": Instrument
         }
         self._schema_cache = {}
@@ -132,11 +133,19 @@ class SchemaMapper:
         result = {}
         fields = self._get_all_fields(schema_name)
         
+        logger.debug(f"Mapping data to schema {schema_name}")
+        logger.debug(f"Available data keys: {list(data.keys())}")
+        logger.debug(f"Schema fields: {[field.name for field in fields]}")
+        
         for field in fields:
             try:
                 value = data.get(field.source)
+                logger.debug(f"Field {field.name} (source: {field.source}) = {value}")
+                
                 if value is not None and field.transformation:
                     value = self._apply_transformation(value, field.transformation)
+                    logger.debug(f"After transformation: {value}")
+                    
                 if value is not None or field.required:
                     result[field.name] = value
             except Exception as e:
@@ -150,11 +159,41 @@ class SchemaMapper:
     def _map_model_to_schema(self, instrument: Instrument, schema_name: str) -> Dict[str, Any]:
         """Map model instance to schema format"""
         expected_type = self.type_mapping.get(schema_name)
-        if expected_type and not isinstance(instrument, expected_type):
-            raise ValueError(f"Invalid instrument type for schema {schema_name}")
-
-        return self._map_dict_to_schema(instrument.__dict__, schema_name)
-
+        
+        # Create a dictionary from the instrument data
+        data = {}
+        
+        # First add all base instrument attributes
+        for key, value in instrument.__dict__.items():
+            if not key.startswith('_'):  # Skip SQLAlchemy internal attributes
+                data[key] = value
+                
+        # For specific instrument types, we need to fully load their attributes
+        instrument_type = getattr(instrument, 'type', '').lower()
+        
+        # Debug the type and expected type
+        logger.debug(f"Mapping instrument of type {instrument_type} to schema {schema_name}")
+        logger.debug(f"Expected type: {expected_type.__name__ if expected_type else 'None'}")
+        
+        # Handle Future type specially - we need to get all the future-specific attributes
+        if instrument_type == 'future' and hasattr(instrument, 'expiration_date'):
+            logger.debug("Processing Future instrument attributes")
+            # Add future-specific attributes
+            for attr in ['expiration_date', 'final_settlement_date', 'delivery_type', 
+                        'settlement_method', 'contract_size', 'contract_unit', 
+                        'price_multiplier', 'settlement_currency']:
+                try:
+                    # Try to get attribute directly from instrument
+                    value = getattr(instrument, attr, None)
+                    if value is not None:
+                        data[attr] = value
+                        logger.debug(f"Found attribute {attr} = {value}")
+                except Exception as e:
+                    logger.warning(f"Error getting future attribute {attr}: {e}")
+        
+        # Map the collected data using the schema
+        return self._map_dict_to_schema(data, schema_name)
+    
     def _get_all_fields(self, schema_name: str, visited=None) -> List[SchemaField]:
         """Get all fields including from extended schemas"""
         if visited is None:
