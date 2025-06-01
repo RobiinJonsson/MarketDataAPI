@@ -212,13 +212,16 @@ const AdminInstruments = {
             if (this.state.filters.currency) {
                 url += `&currency=${this.state.filters.currency}`;
             }
-            
-            const response = await fetch(url);
+              const response = await fetch(url);
             const data = await response.json();
             
             if (response.ok) {
-                this.renderInstrumentsTable(data.instruments);
-                this.state.totalItems = data.count;
+                // Handle both the new API format (with status/data/meta) and the old format (with instruments/count) 
+                const instruments = data.data || data.instruments || [];
+                const count = data.meta?.total || data.count || 0;
+                
+                this.renderInstrumentsTable(instruments);
+                this.state.totalItems = count;
                 AdminUtils.updatePaginationInfo('instruments', this.state.currentPage, this.state.pageSize, this.state.totalItems);
             } else {
                 AdminUtils.showToast(data.error || 'Failed to fetch instruments', 'error');

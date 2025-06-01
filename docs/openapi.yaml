@@ -1,0 +1,405 @@
+openapi: 3.0.0
+info:
+  title: MarketDataAPI
+  description: API for financial market data, instrument details, and legal entity information
+  version: 1.0.0
+  contact:
+    name: API Support
+    url: https://marketdataapi.com/support
+    email: support@marketdataapi.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.marketdataapi.com/v1
+    description: Production server
+  - url: https://api-staging.marketdataapi.com/v1
+    description: Staging server
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+  schemas:
+    Error:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [error]
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+      required:
+        - status
+        - error
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+
+    InstrumentBase:
+      type: object
+      properties:
+        isin:
+          type: string
+          example: US0378331005
+        name:
+          type: string
+          example: APPLE INC
+        short_name:
+          type: string
+          example: AAPL
+        type:
+          type: string
+          example: equity
+        currency:
+          type: string
+          example: USD
+        issuer_lei:
+          type: string
+          example: HWUPKR0MPOU8FGXBT394
+        status:
+          type: string
+          example: active
+        first_trading_date:
+          type: string
+          format: date
+          example: 1980-12-12
+        termination_date:
+          type: string
+          format: date
+          nullable: true
+          example: null
+      required:
+        - isin
+        - name
+
+    InstrumentDetailed:
+      allOf:
+        - $ref: '#/components/schemas/InstrumentBase'
+        - type: object
+          properties:
+            cfi_code:
+              type: string
+              example: ESVUFR
+            figi:
+              type: string
+              example: BBG000B9XRY4
+            market_identifier_code:
+              type: string
+              example: XNAS
+            trading_venues:
+              type: array
+              items:
+                type: string
+              example: [XNAS, XNYS]
+            price_multiplier:
+              type: string
+              example: "1"
+            classification:
+              type: object
+              properties:
+                cfi_category:
+                  type: string
+                  example: E
+                cfi_group:
+                  type: string
+                  example: S
+                description:
+                  type: string
+                  example: Equity, Shares
+            issuer:
+              type: object
+              properties:
+                lei:
+                  type: string
+                  example: HWUPKR0MPOU8FGXBT394
+                name:
+                  type: string
+                  example: APPLE INC
+                jurisdiction:
+                  type: string
+                  example: US
+                legal_form:
+                  type: string
+                  example: CORPORATION
+
+    LegalEntityBase:
+      type: object
+      properties:
+        lei:
+          type: string
+          example: HWUPKR0MPOU8FGXBT394
+        name:
+          type: string
+          example: APPLE INC
+        jurisdiction:
+          type: string
+          example: US
+        legal_form:
+          type: string
+          example: CORPORATION
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE, PENDING]
+          example: ACTIVE
+      required:
+        - lei
+        - name
+        - jurisdiction
+        - status
+
+    LegalEntityDetailed:
+      allOf:
+        - $ref: '#/components/schemas/LegalEntityBase'
+        - type: object
+          properties:
+            registered_as:
+              type: string
+              example: CORPORATION
+            bic:
+              type: string
+              nullable: true
+            next_renewal_date:
+              type: string
+              format: date-time
+              example: 2023-12-31T00:00:00Z
+            registration_status:
+              type: string
+              example: ISSUED
+            managing_lou:
+              type: string
+              example: EVK05KS7XY1DEII3R011
+
+    RelationshipBase:
+      type: object
+      properties:
+        relationship_type:
+          type: string
+          enum: [DIRECT, ULTIMATE]
+          example: DIRECT
+        relationship_status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+          example: ACTIVE
+        parent_lei:
+          type: string
+          example: 529900ODI3047E2LIV03
+        parent_name:
+          type: string
+          example: Apple Operations
+        child_lei:
+          type: string
+          example: HWUPKR0MPOU8FGXBT394
+        child_name:
+          type: string
+          example: APPLE INC
+        relationship_period_start:
+          type: string
+          format: date-time
+          example: 2022-01-15T00:00:00Z
+        relationship_period_end:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        percentage_ownership:
+          type: number
+          format: float
+          example: 75.5
+      required:
+        - relationship_type
+        - relationship_status
+        - parent_lei
+        - child_lei
+
+    SchemaBase:
+      type: object
+      properties:
+        id:
+          type: string
+          example: bloomberg_format
+        name:
+          type: string
+          example: Bloomberg Format
+        description:
+          type: string
+          example: Schema for mapping instrument data to Bloomberg format
+        type:
+          type: string
+          enum: [instrument, legal_entity, relationship]
+          example: instrument
+        status:
+          type: string
+          enum: [active, draft, deprecated]
+          example: active
+        version:
+          type: string
+          example: 1.2
+        created_at:
+          type: string
+          format: date-time
+          example: 2022-03-15T10:30:00Z
+        updated_at:
+          type: string
+          format: date-time
+          example: 2022-09-22T14:45:00Z
+      required:
+        - id
+        - name
+        - type
+
+    SchemaDetailed:
+      allOf:
+        - $ref: '#/components/schemas/SchemaBase'
+        - type: object
+          properties:
+            mapping_rules:
+              type: array
+              items:
+                type: object
+                properties:
+                  source_field:
+                    type: string
+                    example: isin
+                  target_field:
+                    type: string
+                    example: security_id
+                  transformation:
+                    type: object
+                    nullable: true
+                    example: null
+                required:
+                  - source_field
+                  - target_field
+
+paths:
+  /instruments:
+    get:
+      summary: Get All Instruments
+      description: Retrieves a paginated list of instruments.
+      tags:
+        - Instruments
+      parameters:
+        - in: query
+          name: type
+          schema:
+            type: string
+          description: Filter by instrument type (e.g., "equity", "bond", "future")
+        - in: query
+          name: status
+          schema:
+            type: string
+          description: Filter by status (e.g., "active", "inactive")
+        - in: query
+          name: currency
+          schema:
+            type: string
+          description: Filter by currency code
+        - in: query
+          name: issuer_lei
+          schema:
+            type: string
+          description: Filter by issuer LEI
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Page number for paginated results
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Number of records per page
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/InstrumentBase'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - ApiKeyAuth: []
+
+  /instruments/{isin}:
+    get:
+      summary: Get Instrument by ISIN
+      description: Retrieves detailed information about a specific instrument by its ISIN.
+      tags:
+        - Instruments
+      parameters:
+        - in: path
+          name: isin
+          schema:
+            type: string
+          required: true
+          description: International Securities Identification Number
+          example: US0378331005
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    $ref: '#/components/schemas/InstrumentDetailed'
+        '404':
+          description: Instrument not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+      security:
+        - ApiKeyAuth: []
+
+  # Additional paths (similar structure) for other endpoints...

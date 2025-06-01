@@ -95,13 +95,16 @@ const AdminLegalEntities = {
             if (this.state.filters.jurisdiction) {
                 url += `&jurisdiction=${this.state.filters.jurisdiction}`;
             }
-            
-            const response = await fetch(url);
+              const response = await fetch(url);
             const data = await response.json();
             
             if (response.ok) {
-                this.renderEntitiesTable(data.entities);
-                this.state.totalItems = data.count;
+                // Handle both the new API format (with status/data/meta) and the old format (with entities/count) 
+                const entities = data.data || data.entities || [];
+                const count = data.meta?.total || data.count || 0;
+                
+                this.renderEntitiesTable(entities);
+                this.state.totalItems = count;
                 AdminUtils.updatePaginationInfo('entities', this.state.currentPage, this.state.pageSize, this.state.totalItems);
                 
                 // Fetch all available jurisdictions for the filter
@@ -207,16 +210,17 @@ const AdminLegalEntities = {
             AdminUtils.hideSpinner();
             AdminUtils.hideConfirmationModal();
         }
-    },
-
-    async fetchAllAvailableJurisdictions() {
+    },    async fetchAllAvailableJurisdictions() {
         try {
             // Use a larger limit to get as many different jurisdictions as possible
             const response = await fetch(`/api/v1/entities?limit=1000`);
             const data = await response.json();
             
-            if (response.ok && data.entities && data.entities.length > 0) {
-                this.updateJurisdictionFilter(data.entities);
+            // Handle both old and new API response formats
+            const entities = data.data || data.entities || [];
+            
+            if (response.ok && entities.length > 0) {
+                this.updateJurisdictionFilter(entities);
             }
         } catch (error) {
             console.error('Error fetching jurisdictions:', error);

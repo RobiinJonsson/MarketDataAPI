@@ -46,16 +46,25 @@ def list_instruments():
         currency = request.args.get('currency')
         limit = request.args.get('limit', 100, type=int)
         offset = request.args.get('offset', 0, type=int)
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)
         
         with get_session() as session:
             query = session.query(Instrument)
             
-            # Apply filters
+            # Apply filters - Debug log to check the filter
+            logger.debug(f"Filtering instruments with type={instrument_type}, currency={currency}")
             if instrument_type:
                 query = query.filter(Instrument.type == instrument_type)
+                # Additional debug to check if this filter matches anything
+                count = query.count()
+                logger.debug(f"Found {count} instruments with type={instrument_type}")
             if currency:
                 query = query.filter(Instrument.currency == currency)
                 
+            # Get total count for pagination
+            total_count = query.count()
+            
             # Apply pagination
             instruments = query.limit(limit).offset(offset).all()
             
@@ -70,10 +79,16 @@ def list_instruments():
                     "currency": instrument.currency,
                     "cfi_code": instrument.cfi_code
                 })
-                
+            
+            # Match the expected response format from swagger
             return jsonify({
-                "count": len(result),
-                "instruments": result
+                "status": "success", 
+                "data": result,
+                "meta": {
+                    "page": page,
+                    "per_page": per_page,
+                    "total": total_count
+                }
             })
             
     except Exception as e:
@@ -231,6 +246,8 @@ def list_entities():
         jurisdiction = request.args.get('jurisdiction')
         limit = request.args.get('limit', 100, type=int)
         offset = request.args.get('offset', 0, type=int)
+        page = request.args.get('page', 1, type=int)
+        per_page = min(request.args.get('per_page', 20, type=int), 100)
         
         # Create filters dictionary only if we have filters to apply
         filters = {}
@@ -257,9 +274,16 @@ def list_entities():
             })
                 
         session.close()
+        
+        # Return in the new standardized format
         return jsonify({
-            "count": len(result),
-            "entities": result
+            "status": "success", 
+            "data": result,
+            "meta": {
+                "page": page,
+                "per_page": per_page,
+                "total": len(result)
+            }
         })
             
     except Exception as e:

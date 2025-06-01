@@ -49,6 +49,7 @@ Remaining Implementation Tasks:
    - Add schema validation system ✓
    - Implement schema version control ✓
    - Add schema documentation generation ✓
+   - Create comprehensive API documentation ✓
 
 4. Instrument Classification System
    - Implement CFI code decoder and repository ✓
@@ -58,6 +59,7 @@ Remaining Implementation Tasks:
    - Support GLEIF parent/child relationship structures ✓
    - Add attribute level decoding for all instrument types ✓
    - Add human-readable descriptions for all CFI components ✓
+   - Implement LEI parent-child relationship tracking ✓
 
 5. Dynamic Frontend Components
    - Implement instrument-type-specific overview tabs ✓
@@ -74,7 +76,7 @@ Technical Considerations:
 - Add comprehensive schema validation ✓
 - Support schema versioning ✓
 - Add schema documentation generation ✓
-- Use OpenAPI/Swagger for schema endpoints ⚠️
+- Use OpenAPI/Swagger for schema endpoints ✓
 - Implement schema migration system ✓
 - Implement CFI code validation and parsing ✓
 - Support GLEIF relationship mapping ✓
@@ -82,9 +84,10 @@ Technical Considerations:
 - Create flexible frontend component system ✓
 - Add CFI code search and filtering ✓
 - Add instrument type specific displays ✓
+- Add comprehensive API documentation ✓
 
 Next Steps:
-1. Add OpenAPI/Swagger documentation
+1. Add OpenAPI/Swagger documentation ✓
 2. Implement caching system
 3. Add schema migration tools
 4. Add FITRS integration
@@ -112,6 +115,7 @@ Components:
    - Add check constraints for status values ✓
    - Add basic indices for performance ✓
    - Add database migration system ✓
+   - Add LEI parent-child relationship model ✓
 
 3. Service Layer ✓
    - Basic CRUD operations in InstrumentService ✓
@@ -120,6 +124,8 @@ Components:
    - Add CLI interface for data operations ✓
    - Split enrichment logic into separate methods ✓
    - Add retry mechanism for external services ✓
+   - Implement LEI relationship pruning ✓
+   - Add batch processing for entity relationships ✓
 
 Remaining Implementation Tasks:
 1. Data Management
@@ -156,8 +162,10 @@ Technical Considerations:
 - Add backup procedures
 - Consider sharding for large datasets
 - Add ETL pipeline support
-- Add error reporting system
+- Add error reporting system ✓
 - Add performance monitoring
+- Add comprehensive API documentation ✓
+- Add relationship management and tracking ✓
 
 Next Steps:
 1. Implement service factory pattern

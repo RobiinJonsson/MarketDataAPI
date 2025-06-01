@@ -1,5 +1,5 @@
 from flask import Flask
-from marketdata_api.config import FLASK_ENV
+from marketdata_api.config import FLASK_ENV, Config
 from marketdata_api.database.base import init_db
 import logging
 from logging.handlers import RotatingFileHandler
@@ -11,6 +11,7 @@ def create_app():
                 template_folder="../frontend/templates",
                 static_folder="../frontend/static")
     app.config["ENV"] = FLASK_ENV
+    app.config["ROOT_PATH"] = Config.ROOT_PATH
 
     # Set up logging and register cleanup
     if not os.path.exists('logs'):
@@ -43,19 +44,20 @@ def create_app():
     # Set root logger
     root_logger.setLevel(logging.DEBUG)
     root_logger.addHandler(debug_handler)
-    root_logger.addHandler(console_handler)
-
-    # Initialize database and create tables
+    root_logger.addHandler(console_handler)    # Initialize database and create tables
     app.logger.info("Initializing database...")
     init_db()
     app.logger.info("Database initialization complete")
-
     from marketdata_api.routes.market import market_bp
     from marketdata_api.routes.schema import schema_bp
     from marketdata_api.routes.crud import crud_bp  # Import the CRUD API blueprint
+    from marketdata_api.routes.swagger import swagger_bp  # Import the Swagger API blueprint
+    from marketdata_api.routes.docs import docs_bp  # Import the Docs API blueprint
     app.register_blueprint(market_bp)
     app.register_blueprint(schema_bp)
     app.register_blueprint(crud_bp)  # Register the CRUD API blueprint
+    app.register_blueprint(swagger_bp)  # Register the Swagger API blueprint
+    app.register_blueprint(docs_bp)  # Register the Docs API blueprint
 
     @app.route('/health')
     def health_check():

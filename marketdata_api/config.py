@@ -14,6 +14,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "default_secret_key")
 class Config:
     # Use an absolute path or relative path
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
+    ROOT_PATH = os.path.dirname(BASE_DIR)  # Path to project root
     DATABASE_PATH = os.path.join(BASE_DIR, 'database', 'marketdata.db')  # Adjust path as needed
 
     UPLOAD_FOLDER = 'uploads'
