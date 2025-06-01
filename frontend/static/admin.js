@@ -54,11 +54,10 @@ const AdminUtils = {
         const toast = document.getElementById('admin-toast');
         toast.textContent = message;
         toast.className = `toast ${type} show`;
-        
-        // Auto hide after 3 seconds
+          // Auto hide after configured duration
         setTimeout(() => {
             toast.className = 'toast';
-        }, 3000);
+        }, APP_CONFIG.TOAST_DURATION);
     },
 
     showConfirmationModal(title, message, confirmCallback) {

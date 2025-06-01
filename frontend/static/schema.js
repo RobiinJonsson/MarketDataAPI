@@ -1,6 +1,7 @@
 async function getIsinByFigi(figi) {
     try {
-        const response = await fetch(`/api/figi/${figi}`);
+        const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.FIGI}/${figi}`);
+        const response = await fetch(url);
         const data = await response.json();
         if (data.error) {
             throw new Error(data.error);
@@ -51,11 +52,10 @@ async function searchBySchema() {
             },
             schema_type: schemaType,  // Use the selected schema type
             format: 'json'
-        };
+        };        document.getElementById("spinner").style.display = "block";
 
-        document.getElementById("spinner").style.display = "block";
-
-        const response = await fetch("/api/schema/search", {
+        const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.SCHEMAS}/search`);
+        const response = await fetch(url, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
@@ -97,9 +97,9 @@ function displaySchemaResults(data) {
 
 // Add example schema loading
 async function loadExampleSchema() {
-    try {
-        // Update path to match where we store our example schemas
-        const response = await fetch('/api/schema/examples/frontend_equity.yaml');
+    try {        // Update path to match where we store our example schemas
+        const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.SCHEMAS}/examples/frontend_equity.yaml`);
+        const response = await fetch(url);
         const schemaText = await response.text();
         
         // Create a file object from the schema text
@@ -137,9 +137,9 @@ function formatDateSchema(dateString) {
 }
 
 // Add a function to populate the schema type dropdown
-async function populateSchemaTypes() {
-    try {
-        const response = await fetch("/api/schema");
+async function populateSchemaTypes() {    try {
+        const url = buildApiUrl(APP_CONFIG.ENDPOINTS.SCHEMAS);
+        const response = await fetch(url);
         const data = await response.json();
         
         const schemaTypeSelect = document.getElementById("schema-type");

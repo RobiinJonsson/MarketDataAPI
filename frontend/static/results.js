@@ -25,7 +25,8 @@ async function searchAndDisplay() {
 
     try {
         document.getElementById("spinner").style.display = "block";
-        const response = await fetch(`/api/search/${isin}`);
+        const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.SEARCH}/${isin}`);
+        const response = await fetch(url);
         const data = await response.json();
 
         if (!response.ok) {
@@ -439,73 +440,4 @@ function logDebugInfo(data) {
         floating_rate_basis_points_spread: data.instrument?.floating_rate_basis_points_spread,
         interest_rate_floating_reference_index: data.instrument?.interest_rate_floating_reference_index
     });
-}
-
-// Update searchAndDisplay to include debug logging
-async function searchAndDisplay() {
-    const isin = document.getElementById("search-isin-input").value;
-    if (!isin) {
-        alert("Please enter an ISIN");
-        return;
-    }
-
-    try {
-        document.getElementById("spinner").style.display = "block";
-        const response = await fetch(`/api/search/${isin}`);
-        const data = await response.json();
-
-        if (!response.ok) {
-            showResultsError(data.message || "Error fetching data");
-            return;
-        }
-
-        if (!data || (!data.instrument && !data.figi && !data.lei)) {
-            showResultsError("No data found for this ISIN");
-            return;
-        }
-
-        // Hide all instrument views first
-        document.querySelectorAll('.instrument-view').forEach(view => {
-            view.style.display = 'none';
-        });
-
-        // Show the appropriate view based on instrument type
-        const instrumentType = data.instrument?.type?.toLowerCase() || '';
-        if (instrumentType === 'debt') {
-            logDebugInfo(data); // Add debug logging for debt instruments
-        }
-        const viewElement = document.getElementById(`${instrumentType}-view`);
-        if (viewElement) {
-            viewElement.style.display = 'grid';
-        } else {
-            showResultsError("Unsupported instrument type");
-            return;
-        }
-
-        // Update the sections based on instrument type
-        updateInstrumentView(instrumentType, data);
-        
-        // Add raw JSON data to the Data tab
-        displayRawData(data);
-        
-        switchTab('overview');
-    } catch (error) {
-        showResultsError('An error occurred while fetching the data');
-    } finally {
-        document.getElementById("spinner").style.display = "none";
-    }
-}
-
-// Add this function to display raw JSON data
-function displayRawData(data) {
-    const dataTab = document.getElementById('data-tab');
-    if (!dataTab) return;
-    
-    const jsonStr = JSON.stringify(data, null, 2);
-    dataTab.innerHTML = `
-        <div class="raw-data-container">
-            <h3>Raw Instrument Data</h3>
-            <pre class="raw-json">${jsonStr}</pre>
-        </div>
-    `;
 }

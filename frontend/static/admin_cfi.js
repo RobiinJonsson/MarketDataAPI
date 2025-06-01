@@ -14,9 +14,9 @@ const AdminCFI = {
     
     // API Function for CFI Decoding
     async decodeCFI(cfiCode) {
-        AdminUtils.showSpinner();
-        try {
-            const response = await fetch(`/api/v1/cfi/${cfiCode}`);
+        AdminUtils.showSpinner();        try {
+            const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.CFI}/${cfiCode}`);
+            const response = await fetch(url);
             const data = await response.json();
             
             if (response.ok) {

@@ -2,7 +2,7 @@ const AdminLegalEntities = {
     // State management for legal entities
     state: {
         currentPage: 1,
-        pageSize: 10,
+        pageSize: APP_CONFIG.DEFAULT_PAGE_SIZE,
         totalItems: 0,
         filters: {
             status: '',
@@ -84,18 +84,22 @@ const AdminLegalEntities = {
     
     // API Functions for Legal Entities
     async fetchEntities() {
-        AdminUtils.showSpinner();
-        try {
-            let url = `/api/v1/entities?limit=${this.state.pageSize}&offset=${(this.state.currentPage - 1) * this.state.pageSize}`;
+        AdminUtils.showSpinner();        try {
+            const params = {
+                limit: this.state.pageSize,
+                offset: (this.state.currentPage - 1) * this.state.pageSize
+            };
             
             if (this.state.filters.status) {
-                url += `&status=${this.state.filters.status}`;
+                params.status = this.state.filters.status;
             }
             
             if (this.state.filters.jurisdiction) {
-                url += `&jurisdiction=${this.state.filters.jurisdiction}`;
+                params.jurisdiction = this.state.filters.jurisdiction;
             }
-              const response = await fetch(url);
+            
+            const url = buildApiUrl(APP_CONFIG.ENDPOINTS.ENTITIES, params);
+            const response = await fetch(url);
             const data = await response.json();
             
             if (response.ok) {
@@ -125,7 +129,8 @@ const AdminLegalEntities = {
     async fetchEntityById(lei) {
         AdminUtils.showSpinner();
         try {
-            const response = await fetch(`/api/v1/entities/${lei}`);
+            const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.ENTITIES}/${lei}`);
+            const response = await fetch(url);
             const data = await response.json();
             
             if (response.ok) {
@@ -142,9 +147,9 @@ const AdminLegalEntities = {
     },
 
     async fetchEntityFromGLEIF(lei) {
-        AdminUtils.showSpinner();
-        try {
-            const response = await fetch(`/api/v1/entities/${lei}`, {
+        AdminUtils.showSpinner();        try {
+            const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.ENTITIES}/${lei}`);
+            const response = await fetch(url, {
                 method: 'POST'
             });
             
@@ -165,9 +170,9 @@ const AdminLegalEntities = {
     },
 
     async refreshEntityFromGLEIF(lei) {
-        AdminUtils.showSpinner();
-        try {
-            const response = await fetch(`/api/v1/entities/${lei}`, {
+        AdminUtils.showSpinner();        try {
+            const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.ENTITIES}/${lei}`);
+            const response = await fetch(url, {
                 method: 'PUT'
             });
             
@@ -188,9 +193,9 @@ const AdminLegalEntities = {
     },
 
     async deleteEntity(lei) {
-        AdminUtils.showSpinner();
-        try {
-            const response = await fetch(`/api/v1/entities/${lei}`, {
+        AdminUtils.showSpinner();        try {
+            const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.ENTITIES}/${lei}`);
+            const response = await fetch(url, {
                 method: 'DELETE'
             });
             
@@ -210,10 +215,10 @@ const AdminLegalEntities = {
             AdminUtils.hideSpinner();
             AdminUtils.hideConfirmationModal();
         }
-    },    async fetchAllAvailableJurisdictions() {
-        try {
+    },    async fetchAllAvailableJurisdictions() {        try {
             // Use a larger limit to get as many different jurisdictions as possible
-            const response = await fetch(`/api/v1/entities?limit=1000`);
+            const url = buildApiUrl(APP_CONFIG.ENDPOINTS.ENTITIES, { limit: 1000 });
+            const response = await fetch(url);
             const data = await response.json();
             
             // Handle both old and new API response formats

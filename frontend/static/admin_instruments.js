@@ -2,7 +2,7 @@ const AdminInstruments = {
     // State management for instruments
     state: {
         currentPage: 1,
-        pageSize: 10,
+        pageSize: APP_CONFIG.DEFAULT_PAGE_SIZE,
         totalItems: 0,
         filters: {
             type: '',
@@ -162,7 +162,8 @@ const AdminInstruments = {
                 Category: category  // This matches the database polymorphic identity
             };
 
-            const response = await fetch('/api/fetch', {
+            const url = buildApiUrl(APP_CONFIG.ENDPOINTS.FETCH);
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -201,18 +202,22 @@ const AdminInstruments = {
     
     // API Functions for Instruments
     async fetchInstruments() {
-        AdminUtils.showSpinner();
-        try {
-            let url = `/api/v1/instruments?limit=${this.state.pageSize}&offset=${(this.state.currentPage - 1) * this.state.pageSize}`;
+        AdminUtils.showSpinner();        try {
+            const params = {
+                limit: this.state.pageSize,
+                offset: (this.state.currentPage - 1) * this.state.pageSize
+            };
             
             if (this.state.filters.type) {
-                url += `&type=${this.state.filters.type}`;
+                params.type = this.state.filters.type;
             }
             
             if (this.state.filters.currency) {
-                url += `&currency=${this.state.filters.currency}`;
+                params.currency = this.state.filters.currency;
             }
-              const response = await fetch(url);
+            
+            const url = buildApiUrl(APP_CONFIG.ENDPOINTS.INSTRUMENTS, params);
+            const response = await fetch(url);
             const data = await response.json();
             
             if (response.ok) {
@@ -237,7 +242,8 @@ const AdminInstruments = {
     async fetchInstrumentById(identifier) {
         AdminUtils.showSpinner();
         try {
-            const response = await fetch(`/api/v1/instruments/${identifier}`);
+            const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.INSTRUMENTS}/${identifier}`);
+            const response = await fetch(url);
             const data = await response.json();
             
             if (response.ok) {
@@ -256,7 +262,8 @@ const AdminInstruments = {
     async fetchInstrumentForEdit(id) {
         AdminUtils.showSpinner();
         try {
-            const response = await fetch(`/api/v1/instruments/${id}`);
+            const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.INSTRUMENTS}/${id}`);
+            const response = await fetch(url);
             const data = await response.json();
             
             if (response.ok) {
@@ -275,7 +282,8 @@ const AdminInstruments = {
     async createInstrument(instrumentData) {
         AdminUtils.showSpinner();
         try {
-            const response = await fetch('/api/v1/instruments', {
+            const url = buildApiUrl(APP_CONFIG.ENDPOINTS.INSTRUMENTS);
+            const response = await fetch(url, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -300,10 +308,10 @@ const AdminInstruments = {
         }
     },
 
-    async updateInstrument(id, instrumentData) {
-        AdminUtils.showSpinner();
+    async updateInstrument(id, instrumentData) {        AdminUtils.showSpinner();
         try {
-            const response = await fetch(`/api/v1/instruments/${id}`, {
+            const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.INSTRUMENTS}/${id}`);
+            const response = await fetch(url, {
                 method: 'PUT',
                 headers: {
                     'Content-Type': 'application/json',
@@ -326,12 +334,11 @@ const AdminInstruments = {
         } finally {
             AdminUtils.hideSpinner();
         }
-    },
-
-    async deleteInstrument(id) {
+    },    async deleteInstrument(id) {
         AdminUtils.showSpinner();
         try {
-            const response = await fetch(`/api/v1/instruments/${id}`, {
+            const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.INSTRUMENTS}/${id}`);
+            const response = await fetch(url, {
                 method: 'DELETE'
             });
             
@@ -351,12 +358,11 @@ const AdminInstruments = {
             AdminUtils.hideSpinner();
             AdminUtils.hideConfirmationModal();
         }
-    },
-
-    async enrichInstrument(id) {
+    },    async enrichInstrument(id) {
         AdminUtils.showSpinner();
         try {
-            const response = await fetch(`/api/v1/instruments/${id}/enrich`, {
+            const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.INSTRUMENTS}/${id}/enrich`);
+            const response = await fetch(url, {
                 method: 'POST'
             });
             

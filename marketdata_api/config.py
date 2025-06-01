@@ -12,19 +12,19 @@ FLASK_ENV = os.getenv("FLASK_ENV", "production")
 SECRET_KEY = os.getenv("SECRET_KEY", "default_secret_key")
 
 class Config:
-    # Use an absolute path or relative path
+    # Use environment variables with fallback defaults
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
     ROOT_PATH = os.path.dirname(BASE_DIR)  # Path to project root
-    DATABASE_PATH = os.path.join(BASE_DIR, 'database', 'marketdata.db')  # Adjust path as needed
+    DATABASE_PATH = os.getenv("DATABASE_PATH", os.path.join(BASE_DIR, 'database', 'marketdata.db'))
 
-    UPLOAD_FOLDER = 'uploads'
-    MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500 MB max file size
+    UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", 'uploads')
+    MAX_CONTENT_LENGTH = int(os.getenv("MAX_UPLOAD_SIZE", "500")) * 1024 * 1024  # Convert MB to bytes
 
 class esmaConfig:
-    # Convert string path to Path object
-    file_path = Path("C:\\Users\\robin\\Projects\\MarketDataAPI\\downloads\\esma") # Path to ESMA data directory
-    start_date = "2025-04-26"  # Start date for data processing
-    end_date = "2025-04-26"    # End date for data processing
+    # Use environment variables with fallback defaults
+    file_path = Path(os.getenv("ESMA_DATA_PATH", "downloads/esma"))  # Path to ESMA data directory
+    start_date = os.getenv("ESMA_START_DATE", "2025-04-26")  # Start date for data processing
+    end_date = os.getenv("ESMA_END_DATE", "2025-04-26")      # End date for data processing
 
 # Exchange code mappings for OpenFIGI
 EXCHANGE_CODES = {
@@ -65,7 +65,7 @@ EXCHANGE_CODES = {
 }
 
 # Default exchange code if no country code is provided
-DEFAULT_EXCHANGE_CODE = 'SS'
+DEFAULT_EXCHANGE_CODE = os.getenv("DEFAULT_EXCHANGE_CODE", "SS")
 
 # Update SCHEMA_REGISTRY to use new mapping system
 from .schema.schema_mapper import SchemaMapper

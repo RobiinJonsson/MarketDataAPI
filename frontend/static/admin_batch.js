@@ -28,8 +28,7 @@ const AdminBatch = {
     // API Functions for Batch Operations
     async batchCreateInstruments(type, identifiers) {
         AdminUtils.showSpinner();
-        try {
-            const response = await fetch('/api/v1/batch/instruments', {
+        try {            const response = await fetch(buildApiUrl(`${APP_CONFIG.ENDPOINTS.BATCH}/instruments`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -58,8 +57,7 @@ const AdminBatch = {
 
     async batchEnrichInstruments(identifiers) {
         AdminUtils.showSpinner();
-        try {
-            const response = await fetch('/api/v1/batch/instruments', {
+        try {            const response = await fetch(buildApiUrl(`${APP_CONFIG.ENDPOINTS.BATCH}/instruments`), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
