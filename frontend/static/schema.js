@@ -54,7 +54,7 @@ async function searchBySchema() {
             format: 'json'
         };        document.getElementById("spinner").style.display = "block";
 
-        const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.SCHEMAS}/search`);
+        const url = `/api/schema/search`;
         const response = await fetch(url, {
             method: "POST",
             headers: {

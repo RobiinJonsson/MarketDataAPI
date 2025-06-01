@@ -1,13 +1,18 @@
 from flask import Blueprint, render_template, send_from_directory, send_file, current_app
+from flask import Blueprint
 from flask_restx import Api, Resource, fields
+from ..constants import (
+    HTTPStatus, Pagination, API as APIConstants, ResponseFields,
+    ErrorMessages
+)
 import os
 
 # Create a blueprint for Swagger documentation
-swagger_bp = Blueprint('swagger', __name__, url_prefix='/api/v1')
+swagger_bp = Blueprint('swagger', __name__, url_prefix=APIConstants.PREFIX)
 
 # Initialize Flask-RESTx API
 api = Api(swagger_bp,
-         version='1.0',
+         version=APIConstants.VERSION,
          title='MarketDataAPI',
          description='API for financial market data, instrument details, and legal entity information',
          doc='/swagger',
@@ -28,17 +33,17 @@ schemas_ns = api.namespace('schemas', description='Schema management operations'
 
 # Define response models
 error_model = api.model('Error', {
-    'status': fields.String(required=True, description="Error status", enum=["error"]),
-    'error': fields.Nested(api.model('ErrorDetails', {
+    ResponseFields.STATUS: fields.String(required=True, description="Error status", enum=["error"]),
+    ResponseFields.ERROR: fields.Nested(api.model('ErrorDetails', {
         'code': fields.String(required=True, description="Error code"),
-        'message': fields.String(required=True, description="Error message description")
+        ResponseFields.MESSAGE: fields.String(required=True, description="Error message description")
     }))
 })
 
 pagination_meta = api.model('PaginationMeta', {
-    'page': fields.Integer(description="Current page number"),
-    'per_page': fields.Integer(description="Items per page"),
-    'total': fields.Integer(description="Total number of items")
+    ResponseFields.PAGE: fields.Integer(description="Current page number"),
+    ResponseFields.PER_PAGE: fields.Integer(description="Items per page"),
+    ResponseFields.TOTAL: fields.Integer(description="Total number of items")
 })
 
 # Instrument models
@@ -171,15 +176,15 @@ class InstrumentList(Resource):
         params={
             'type': 'Filter by instrument type (e.g., "equity", "debt", "future")',
             'currency': 'Filter by currency code',
-            'page': 'Page number for paginated results (default: 1)',
-            'per_page': 'Number of records per page (default: 20, max: 100)',
+            'page': f'Page number for paginated results (default: {Pagination.DEFAULT_PAGE})',
+            'per_page': f'Number of records per page (default: {Pagination.DEFAULT_PER_PAGE}, max: {Pagination.MAX_PER_PAGE})',
             'limit': 'Maximum number of records to return',
             'offset': 'Number of records to skip'
         },
         responses={
-            200: 'Success',
-            400: 'Invalid request',
-            401: 'Unauthorized'
+            HTTPStatus.OK: 'Success',
+            HTTPStatus.BAD_REQUEST: 'Invalid request',
+            HTTPStatus.UNAUTHORIZED: 'Unauthorized'
         }
     )
     @instruments_ns.marshal_with(instrument_list_response)
@@ -192,14 +197,13 @@ class InstrumentList(Resource):
         
         logger = logging.getLogger(__name__)
         
-        try:
-            # Query parameters for filtering
+        try:            # Query parameters for filtering
             instrument_type = request.args.get('type')
             currency = request.args.get('currency')
-            limit = request.args.get('limit', 100, type=int)
-            offset = request.args.get('offset', 0, type=int)
-            page = request.args.get('page', 1, type=int)
-            per_page = min(request.args.get('per_page', 20, type=int), 100)
+            limit = request.args.get('limit', Pagination.DEFAULT_LIMIT, type=int)
+            offset = request.args.get('offset', Pagination.DEFAULT_OFFSET, type=int)
+            page = request.args.get('page', Pagination.DEFAULT_PAGE, type=int)
+            per_page = min(request.args.get('per_page', Pagination.DEFAULT_PER_PAGE, type=int), Pagination.MAX_PER_PAGE)
             
             with get_session() as session:
                 query = session.query(Instrument)
@@ -230,21 +234,20 @@ class InstrumentList(Resource):
                         "currency": instrument.currency,
                         "cfi_code": instrument.cfi_code
                     })
-                
-                # Return in the standardized format
+                  # Return in the standardized format
                 return {
-                    "status": "success", 
-                    "data": result,
-                    "meta": {
-                        "page": page,
-                        "per_page": per_page,
-                        "total": total_count
+                    ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS, 
+                    ResponseFields.DATA: result,
+                    ResponseFields.META: {
+                        ResponseFields.PAGE: page,
+                        ResponseFields.PER_PAGE: per_page,
+                        ResponseFields.TOTAL: total_count
                     }
                 }
                 
         except Exception as e:
             logger.error(f"Error in swagger list_instruments: {str(e)}")
-            return {"status": "error", "error": {"code": "500", "message": str(e)}}, 500
+            return {ResponseFields.STATUS: "error", ResponseFields.ERROR: {"code": str(HTTPStatus.INTERNAL_SERVER_ERROR), ResponseFields.MESSAGE: str(e)}}, HTTPStatus.INTERNAL_SERVER_ERROR
     
 @instruments_ns.route('/<string:isin>')
 @instruments_ns.param('isin', 'International Securities Identification Number')
@@ -252,9 +255,9 @@ class InstrumentDetail(Resource):
     @instruments_ns.doc(
         description='Retrieves detailed information about a specific instrument by its ISIN',
         responses={
-            200: 'Success',
-            404: 'Instrument not found',
-            401: 'Unauthorized'
+            HTTPStatus.OK: 'Success',
+            HTTPStatus.NOT_FOUND: 'Instrument not found',
+            HTTPStatus.UNAUTHORIZED: 'Unauthorized'
         }
     )
     @instruments_ns.marshal_with(instrument_detail_response)
@@ -270,7 +273,7 @@ class InstrumentDetail(Resource):
             session, instrument = service.get_instrument(isin)
             
             if not instrument:
-                return {"status": "error", "error": {"code": "404", "message": "Instrument not found"}}, 404
+                return {ResponseFields.STATUS: "error", ResponseFields.ERROR: {"code": str(HTTPStatus.NOT_FOUND), ResponseFields.MESSAGE: ErrorMessages.INSTRUMENT_NOT_FOUND}}, HTTPStatus.NOT_FOUND
             
             # Build detailed response using the helper function from crud.py
             from ..routes.crud import build_instrument_response
@@ -278,13 +281,13 @@ class InstrumentDetail(Resource):
             session.close()
             
             return {
-                "status": "success",
-                "data": result
+                ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                ResponseFields.DATA: result
             }
             
         except Exception as e:
             logger.error(f"Error in swagger get_instrument: {str(e)}")
-            return {"status": "error", "error": {"code": "500", "message": str(e)}}, 500
+            return {ResponseFields.STATUS: "error", ResponseFields.ERROR: {"code": str(HTTPStatus.INTERNAL_SERVER_ERROR), ResponseFields.MESSAGE: str(e)}}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 # Similarly add swagger documentation for other endpoints...
 
@@ -296,15 +299,15 @@ class LegalEntityList(Resource):
         params={
             'status': 'Filter by entity status (e.g., "ACTIVE", "INACTIVE", "PENDING")',
             'jurisdiction': 'Filter by jurisdiction code (ISO 3166-1)',
-            'page': 'Page number for paginated results (default: 1)',
-            'per_page': 'Number of records per page (default: 20, max: 100)',
+            'page': f'Page number for paginated results (default: {Pagination.DEFAULT_PAGE})',
+            'per_page': f'Number of records per page (default: {Pagination.DEFAULT_PER_PAGE}, max: {Pagination.MAX_PER_PAGE})',
             'limit': 'Maximum number of records to return',
             'offset': 'Number of records to skip'
         },
         responses={
-            200: 'Success',
-            400: 'Invalid request',
-            401: 'Unauthorized'
+            HTTPStatus.OK: 'Success',
+            HTTPStatus.BAD_REQUEST: 'Invalid request',
+            HTTPStatus.UNAUTHORIZED: 'Unauthorized'
         }
     )
     @legal_entities_ns.marshal_with(legal_entity_list_response)
@@ -314,16 +317,15 @@ class LegalEntityList(Resource):
         from ..services.legal_entity_service import LegalEntityService
         import logging
         
-        logger = logging.getLogger(__name__)
-        
+        logger = logging.getLogger(__name__)        
         try:
             # Query parameters for filtering
             status = request.args.get('status')
             jurisdiction = request.args.get('jurisdiction')
-            limit = request.args.get('limit', 100, type=int)
-            offset = request.args.get('offset', 0, type=int)
-            page = request.args.get('page', 1, type=int)
-            per_page = min(request.args.get('per_page', 20, type=int), 100)
+            limit = request.args.get('limit', Pagination.DEFAULT_LIMIT, type=int)
+            offset = request.args.get('offset', Pagination.DEFAULT_OFFSET, type=int)
+            page = request.args.get('page', Pagination.DEFAULT_PAGE, type=int)
+            per_page = min(request.args.get('per_page', Pagination.DEFAULT_PER_PAGE, type=int), Pagination.MAX_PER_PAGE)
             
             # Create filters dictionary only if we have filters to apply
             filters = {}
@@ -350,20 +352,19 @@ class LegalEntityList(Resource):
                 })
                     
             session.close()
-            
             return {
-                "status": "success", 
-                "data": result,
-                "meta": {
-                    "page": page,
-                    "per_page": per_page,
-                    "total": len(result)
+                ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS, 
+                ResponseFields.DATA: result,
+                ResponseFields.META: {
+                    ResponseFields.PAGE: page,
+                    ResponseFields.PER_PAGE: per_page,
+                    ResponseFields.TOTAL: len(result)
                 }
             }
                 
         except Exception as e:
             logger.error(f"Error in swagger list_entities: {str(e)}")
-            return {"status": "error", "error": {"code": "500", "message": str(e)}}, 500
+            return {ResponseFields.STATUS: "error", ResponseFields.ERROR: {"code": str(HTTPStatus.INTERNAL_SERVER_ERROR), ResponseFields.MESSAGE: str(e)}}, HTTPStatus.INTERNAL_SERVER_ERROR
     
 @legal_entities_ns.route('/<string:lei>')
 @legal_entities_ns.param('lei', 'Legal Entity Identifier (20 characters)')
@@ -371,9 +372,9 @@ class LegalEntityDetail(Resource):
     @legal_entities_ns.doc(
         description='Retrieves detailed information about a specific legal entity by its LEI',
         responses={
-            200: 'Success',
-            404: 'Legal entity not found',
-            401: 'Unauthorized'
+            HTTPStatus.OK: 'Success',
+            HTTPStatus.NOT_FOUND: 'Legal entity not found',
+            HTTPStatus.UNAUTHORIZED: 'Unauthorized'
         }
     )
     @legal_entities_ns.marshal_with(legal_entity_detail_response)
@@ -390,14 +391,13 @@ class EntityRelationships(Resource):
         params={
             'relationship_type': 'Filter by relationship type ("DIRECT", "ULTIMATE")',
             'relationship_status': 'Filter by relationship status ("ACTIVE", "INACTIVE")',
-            'direction': 'Filter by relationship direction ("PARENT", "CHILD")',
-            'page': 'Page number for paginated results (default: 1)',
-            'per_page': 'Number of records per page (default: 20, max: 100)'
+            'direction': 'Filter by relationship direction ("PARENT", "CHILD")',            'page': f'Page number for paginated results (default: {Pagination.DEFAULT_PAGE})',
+            'per_page': f'Number of records per page (default: {Pagination.DEFAULT_PER_PAGE}, max: {Pagination.MAX_PER_PAGE})'
         },
         responses={
-            200: 'Success',
-            404: 'Legal entity not found',
-            401: 'Unauthorized'
+            HTTPStatus.OK: 'Success',
+            HTTPStatus.NOT_FOUND: 'Legal entity not found',
+            HTTPStatus.UNAUTHORIZED: 'Unauthorized'
         }
     )
     @relationships_ns.marshal_with(relationship_list_response)
@@ -453,7 +453,7 @@ def serve_redoc_ui():
         </style>
       </head>
       <body>
-        <redoc spec-url="/api/v1/openapi.yaml"></redoc>
+        <redoc spec-url="{APIConstants.PREFIX}/openapi.yaml"></redoc>
         <script src="https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js"></script>
       </body>
     </html>

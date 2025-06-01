@@ -17,17 +17,16 @@ const APP_CONFIG = {
     
     // File Upload Limits
     MAX_FILE_SIZE: 500 * 1024 * 1024, // 500MB
-    ALLOWED_FILE_TYPES: ['.yaml', '.yml'],
-      // API Endpoints
+    ALLOWED_FILE_TYPES: ['.yaml', '.yml'],    // API Endpoints
     ENDPOINTS: {
         INSTRUMENTS: '/instruments',
         ENTITIES: '/entities',
         CFI: '/cfi',
         BATCH: '/batch',
-        SEARCH: '/search',
         FIGI: '/figi',
         SCHEMAS: '/schemas',
-        FETCH: '/fetch'
+        FETCH: '/fetch',
+        SEARCH: '/api/search'  // Legacy search endpoint
     }
 };
 

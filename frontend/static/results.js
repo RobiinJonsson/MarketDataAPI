@@ -21,11 +21,9 @@ async function searchAndDisplay() {
     if (!isin) {
         alert("Please enter an ISIN");
         return;
-    }
-
-    try {
+    }    try {
         document.getElementById("spinner").style.display = "block";
-        const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.SEARCH}/${isin}`);
+        const url = `${APP_CONFIG.ENDPOINTS.SEARCH}/${isin}`;
         const response = await fetch(url);
         const data = await response.json();
 
@@ -329,36 +327,18 @@ function renderDebtStatusBar(issueDate, maturityDate) {
     `;
 }
 
-function decodeCFIAttributes(cfiCode) {
-    if (!cfiCode || cfiCode.length !== 6) return { "Error": "Invalid or missing CFI Code" };
-
-    const attributes = {
-        "Voting Rights": decodeCFIPosition(cfiCode[2], {
-            'V': "Voting",
-            'N': "Non-voting",
-            'R': "Restricted voting",
-            'X': "Not applicable"
-        }),
-        "Ownership Transfer": decodeCFIPosition(cfiCode[3], {
-            'R': "Registered",
-            'B': "Bearer",
-            'X': "Not applicable"
-        }),
-        "Dividend Status": decodeCFIPosition(cfiCode[4], {
-            'F': "Full dividend",
-            'P': "Partial dividend",
-            'N': "No dividend",
-            'X': "Not applicable"
-        }),
-        "Payment Status": decodeCFIPosition(cfiCode[5], {
-            'P': "Paid",
-            'N': "Partly paid",
-            'O': "Nil paid",
-            'X': "Not applicable"
-        })
-    };
-
-    return attributes;
+// Add this function to display raw JSON data
+function displayRawData(data) {
+    const dataTab = document.getElementById('data-tab');
+    if (!dataTab) return;
+    
+    const jsonStr = JSON.stringify(data, null, 2);
+    dataTab.innerHTML = `
+        <div class="raw-data-container">
+            <h3>Raw Instrument Data</h3>
+            <pre class="raw-json">${jsonStr}</pre>
+        </div>
+    `;
 }
 
 function decodeCFIPosition(char, mapping) {

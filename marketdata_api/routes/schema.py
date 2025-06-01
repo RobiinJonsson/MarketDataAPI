@@ -5,6 +5,10 @@ from typing import Dict, Any
 from ..schema.schema_mapper import SchemaMapper
 from ..database.session import get_session
 from ..models.instrument import Instrument
+from ..constants import (
+    HTTPStatus, ErrorMessages, SuccessMessages, ResponseFields,
+    QueryParams, FormFields
+)
 import os
 
 logger = logging.getLogger(__name__)
@@ -16,7 +20,7 @@ def schema_search():
     try:
         data = request.get_json()
         if not data or 'filters' not in data:
-            return jsonify({"error": "No filters provided"}), 400
+            return jsonify({ResponseFields.ERROR: ErrorMessages.NO_FILTERS_PROVIDED}), HTTPStatus.BAD_REQUEST
 
         schema_name = data.get('schema_type', 'base')
         output_format = data.get('format', 'json').lower()
@@ -29,13 +33,12 @@ def schema_search():
             ).first()
 
             if not instrument:
-                return jsonify({"error": "Instrument not found"}), 404
+                return jsonify({ResponseFields.ERROR: ErrorMessages.INSTRUMENT_NOT_FOUND}), HTTPStatus.NOT_FOUND
 
             # Check if we need to load a specific subtype
             instrument_type = instrument.type.lower()
             logger.debug(f"Found instrument of type: {instrument_type}")
-            
-            # If schema_name is 'base', use the instrument's actual type if it matches a schema
+              # If schema_name is 'base', use the instrument's actual type if it matches a schema
             if schema_name == 'base' and instrument_type in mapper.type_mapping:
                 schema_name = instrument_type
                 logger.debug(f"Using instrument type schema: {schema_name}")
@@ -51,19 +54,19 @@ def schema_search():
                     "version": version,
                     "unmapped_fields": []  # Add empty list for frontend compatibility
                 }
-
+                
                 if output_format == 'xml':
                     xml_data = mapper.output_as_xml(response)
                     return Response(xml_data, mimetype='application/xml')
                     
                 return jsonify(response)
-
+                
             except ValueError as e:
-                return jsonify({"error": str(e)}), 400
+                return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.BAD_REQUEST
 
     except Exception as e:
         logger.error(f"Schema search error: {str(e)}", exc_info=True)
-        return jsonify({"error": str(e)}), 500
+        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 @schema_bp.route('/api/schema/validate', methods=['POST'])
 def validate_schema():
@@ -71,7 +74,7 @@ def validate_schema():
     try:
         schema_data = request.get_json()
         if not schema_data:
-            return jsonify({"error": "No schema provided"}), 400
+            return jsonify({ResponseFields.ERROR: ErrorMessages.NO_SCHEMA_DATA}), HTTPStatus.BAD_REQUEST
 
         mapper = SchemaMapper()
         is_valid = mapper.validate_value(schema_data, None)  # None as field for basic validation
@@ -82,7 +85,7 @@ def validate_schema():
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.BAD_REQUEST
 
 @schema_bp.route('/api/schema/examples/<path:filename>', methods=['GET'])
 def get_example_schema(filename):
@@ -93,7 +96,7 @@ def get_example_schema(filename):
             content = f.read()
             return Response(content, mimetype='application/x-yaml')
     except FileNotFoundError:
-        return jsonify({"error": "Schema example not found"}), 404
+        return jsonify({ResponseFields.ERROR: ErrorMessages.SCHEMA_EXAMPLE_NOT_FOUND}), HTTPStatus.NOT_FOUND
 
 @schema_bp.route('/api/schema', methods=['POST'])
 def create_schema():
@@ -109,27 +112,27 @@ def create_schema():
             schema_data = request.get_json()
             
         if not schema_data:
-            return jsonify({"error": "No schema data provided"}), 400
+            return jsonify({ResponseFields.ERROR: ErrorMessages.NO_SCHEMA_DATA}), HTTPStatus.BAD_REQUEST
 
         mapper = SchemaMapper()
         name = schema_data.get('name')
         
         # Check for existing schema
         if name in mapper.mappings:
-            return jsonify({"error": f"Schema {name} already exists"}), 409
+            return jsonify({ResponseFields.ERROR: ErrorMessages.SCHEMA_EXISTS}), HTTPStatus.CONFLICT
             
         # Add schema to registry
         mapper.add_schema(schema_data)
         version, schema = mapper.get_schema_version(name)
         
         return jsonify({
-            "message": "Schema created successfully",
+            ResponseFields.MESSAGE: SuccessMessages.SCHEMA_CREATED,
             "schema": name,
             "version": version
-        }), 201
+        }), HTTPStatus.CREATED
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 @schema_bp.route('/api/schema/<name>', methods=['GET'])
 def get_schema(name):
@@ -144,12 +147,12 @@ def get_schema(name):
             _, schema = mapper.get_schema_version(name)
             
         if not schema:
-            return jsonify({"error": "Schema not found"}), 404
+            return jsonify({ResponseFields.ERROR: ErrorMessages.SCHEMA_NOT_FOUND}), HTTPStatus.NOT_FOUND
             
         return jsonify(schema)
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 @schema_bp.route('/api/schema/<name>', methods=['PUT'])
 def update_schema(name):
@@ -157,15 +160,15 @@ def update_schema(name):
     try:
         schema_data = request.get_json()
         if not schema_data:
-            return jsonify({"error": "No schema data provided"}), 400
+            return jsonify({ResponseFields.ERROR: ErrorMessages.NO_SCHEMA_DATA}), HTTPStatus.BAD_REQUEST
 
         # Validate schema name matches URL
         if schema_data.get('name') != name:
-            return jsonify({"error": f"Schema name in data ({schema_data.get('name')}) does not match URL param ({name})"}), 400
+            return jsonify({ResponseFields.ERROR: ErrorMessages.SCHEMA_NAME_MISMATCH}), HTTPStatus.BAD_REQUEST
 
         mapper = SchemaMapper()
         if name not in mapper.mappings:
-            return jsonify({"error": f"Schema '{name}' not found"}), 404
+            return jsonify({ResponseFields.ERROR: ErrorMessages.SCHEMA_NOT_FOUND}), HTTPStatus.NOT_FOUND
             
         try:
             # Update schema with version increment
@@ -173,21 +176,21 @@ def update_schema(name):
             version, schema = mapper.get_schema_version(name)
             
             return jsonify({
-                "message": "Schema updated successfully",
+                ResponseFields.MESSAGE: SuccessMessages.SCHEMA_UPDATED,
                 "schema": name,
                 "version": version,
                 "fields": len(schema.fields)
             })
 
         except ValueError as ve:
-            return jsonify({"error": f"Schema update failed: {str(ve)}"}), 400
+            return jsonify({ResponseFields.ERROR: f"Schema update failed: {str(ve)}"}), HTTPStatus.BAD_REQUEST
         except Exception as e:
             logger.error(f"Error updating schema: {str(e)}")
-            return jsonify({"error": f"Internal error updating schema: {str(e)}"}), 500
+            return jsonify({ResponseFields.ERROR: f"Internal error updating schema: {str(e)}"}), HTTPStatus.INTERNAL_SERVER_ERROR
 
     except Exception as e:
         logger.error(f"Schema update route error: {str(e)}")
-        return jsonify({"error": str(e)}), 500
+        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 @schema_bp.route('/api/schema/<name>', methods=['DELETE'])
 def delete_schema(name):
@@ -197,17 +200,17 @@ def delete_schema(name):
         force = request.args.get('force', '').lower() == 'true'
         
         if name not in mapper.mappings:
-            return jsonify({"error": "Schema not found"}), 404
+            return jsonify({ResponseFields.ERROR: ErrorMessages.SCHEMA_NOT_FOUND}), HTTPStatus.NOT_FOUND
             
         # Check for dependencies unless force=true
         if not force and mapper.has_dependents(name):
-            return jsonify({"error": "Schema has dependent schemas"}), 409
+            return jsonify({ResponseFields.ERROR: ErrorMessages.SCHEMA_HAS_DEPENDENTS}), HTTPStatus.CONFLICT
             
         mapper.delete_schema(name)
-        return jsonify({"message": "Schema deleted successfully"})
+        return jsonify({ResponseFields.MESSAGE: SuccessMessages.SCHEMA_DELETED})
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 @schema_bp.route('/api/schema/<name>/versions', methods=['GET'])
 def get_schema_versions(name):
@@ -215,7 +218,7 @@ def get_schema_versions(name):
     try:
         mapper = SchemaMapper()
         if name not in mapper.mappings:
-            return jsonify({"error": "Schema not found"}), 404
+            return jsonify({ResponseFields.ERROR: ErrorMessages.SCHEMA_NOT_FOUND}), HTTPStatus.NOT_FOUND
             
         versions = mapper.get_schema_versions(name)
         return jsonify({
@@ -224,4 +227,4 @@ def get_schema_versions(name):
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR

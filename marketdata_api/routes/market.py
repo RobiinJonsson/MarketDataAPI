@@ -9,6 +9,10 @@ from marketdata_api.services.gleif import fetch_lei_info
 from marketdata_api.database.session import get_session
 from ..services.instrument_service import InstrumentService
 from ..models.instrument import Instrument, Equity, Debt, Future
+from ..constants import (
+    HTTPStatus, ErrorMessages, SuccessMessages, ResponseFields, 
+    InstrumentTypes, CFI as CFIConstants, DbFields, FormFields, QueryParams
+)
 from sqlalchemy.exc import SQLAlchemyError
 from marketdata_api.models.utils.cfi import CFI
 
@@ -21,7 +25,7 @@ market_bp = Blueprint("market", __name__)
 # Error handler for database errors
 @market_bp.errorhandler(SQLAlchemyError)
 def handle_db_error(error):
-    return jsonify({"error": "A database error occurred"}), 500
+    return jsonify({ResponseFields.ERROR: ErrorMessages.DATABASE_ERROR}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 # Route for the home page
 @market_bp.route("/", methods=["GET"])
@@ -34,15 +38,17 @@ def get_market_data(ticker):
     data = search_openfigi(ticker)
     return jsonify(data)
 
-
+# Route to handle search queries
+@market_bp.route("/search", methods=["POST"])
+def search():
     data = request.json
     query = data.get("query")
 
     # Debugging output
     print(f"Received search query: {query}")
-
+    
     if not query:
-        return jsonify({"error": "Query parameter is required"}), 400
+        return jsonify({ResponseFields.ERROR: ErrorMessages.QUERY_PARAMETER_REQUIRED}), HTTPStatus.BAD_REQUEST
     result = search_openfigi(query)
     return jsonify(result)
 
@@ -50,13 +56,13 @@ def get_market_data(ticker):
 @market_bp.route("/batch_search", methods=["POST"])
 def batch_search():
     if "file" not in request.files:
-        return jsonify({"error": "No file provided"}), 400
+        return jsonify({ResponseFields.ERROR: ErrorMessages.NO_FILE_PROVIDED}), HTTPStatus.BAD_REQUEST
 
     file = request.files["file"]
     isin_list = file.read().decode("utf-8").splitlines()
     
     if not isin_list:
-        return jsonify({"error": "File is empty"}), 400
+        return jsonify({ResponseFields.ERROR: ErrorMessages.FILE_IS_EMPTY}), HTTPStatus.BAD_REQUEST
 
     result = batch_search_openfigi(isin_list)
     return jsonify(result)
@@ -203,13 +209,13 @@ def fetch_and_insert_frontend():
     """Fetch and insert data using SQLAlchemy models."""
     try:
         data = request.get_json()
-        identifier = data.get('Id')
-        instrument_type = data.get('Category')
+        identifier = data.get(FormFields.ID)
+        instrument_type = data.get(FormFields.CATEGORY)
         
         if not identifier:
-            return jsonify({'error': 'Missing identifier'}), 400
+            return jsonify({ResponseFields.ERROR: ErrorMessages.MISSING_IDENTIFIER}), HTTPStatus.BAD_REQUEST
         if not instrument_type:
-            return jsonify({'error': 'Missing instrument category'}), 400
+            return jsonify({ResponseFields.ERROR: ErrorMessages.MISSING_INSTRUMENT_CATEGORY}), HTTPStatus.BAD_REQUEST
 
         service = InstrumentService()
         with get_session() as session:
@@ -217,19 +223,19 @@ def fetch_and_insert_frontend():
             instrument = service.get_or_create_instrument(identifier, instrument_type)
             if not instrument:
                 logger.warning(f"Unable to fetch or create instrument: {identifier}")
-                return jsonify({'error': 'Unable to fetch or create instrument'}), 404
+                return jsonify({ResponseFields.ERROR: ErrorMessages.UNABLE_TO_FETCH_OR_CREATE_INSTRUMENT}), HTTPStatus.NOT_FOUND
 
             # Enrich the instrument
             session, enriched = service.enrich_instrument(instrument)
             
             # Build response with enrichment status
             response_data = {
-                'message': f'Successfully processed instrument',
-                'instrument_id': enriched.id,
-                'instrument_type': enriched.type,
-                'isin': enriched.isin,
-                'figi': enriched.figi_mapping.figi if enriched.figi_mapping else None,
-                'lei': enriched.legal_entity.lei if enriched.legal_entity else None
+                ResponseFields.MESSAGE: SuccessMessages.INSTRUMENT_PROCESSED,
+                "instrument_id": enriched.id,
+                "instrument_type": enriched.type,
+                DbFields.ISIN: enriched.isin,
+                DbFields.FIGI: enriched.figi_mapping.figi if enriched.figi_mapping else None,
+                DbFields.LEI: enriched.legal_entity.lei if enriched.legal_entity else None
             }
             
             logger.info(f"Successfully processed {instrument_type} instrument {identifier}")
@@ -237,15 +243,15 @@ def fetch_and_insert_frontend():
 
     except Exception as e:
         logger.error(f"Error in fetch_and_insert: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 @market_bp.route("/api/gleif", methods=["POST"])
 def get_lei_info():
     data = request.get_json()
-    lei_code = data.get("lei")
+    lei_code = data.get(DbFields.LEI)
     
     if not lei_code:
-        return jsonify({"error": "LEI code is required"}), 400
+        return jsonify({ResponseFields.ERROR: ErrorMessages.LEI_CODE_REQUIRED}), HTTPStatus.BAD_REQUEST
     
     result = fetch_lei_info(lei_code)
     return jsonify(result)
@@ -258,20 +264,20 @@ def get_instrument(identifier):
         service = InstrumentService()
         instrument = service.get_instrument(identifier)
         if not instrument:
-            return jsonify({'error': 'Instrument not found'}), 404
+            return jsonify({ResponseFields.ERROR: ErrorMessages.INSTRUMENT_NOT_FOUND}), HTTPStatus.NOT_FOUND
             
         return jsonify({
-            'id': instrument.id,
-            'type': instrument.type,
-            'isin': instrument.isin,
-            'name': instrument.full_name,
-            'symbol': instrument.symbol,
-            'figi': instrument.figi,
-            'additional_data': instrument.additional_data,
-            'last_updated': instrument.last_updated.isoformat() if instrument.last_updated else None
+            DbFields.ID: instrument.id,
+            DbFields.TYPE: instrument.type,
+            DbFields.ISIN: instrument.isin,
+            DbFields.NAME: instrument.full_name,
+            DbFields.SYMBOL: instrument.symbol,
+            DbFields.FIGI: instrument.figi,
+            "additional_data": instrument.additional_data,
+            "last_updated": instrument.last_updated.isoformat() if instrument.last_updated else None
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 @market_bp.route('/api/test/instrument', methods=['POST'])
 def test_instrument_creation():
@@ -279,16 +285,16 @@ def test_instrument_creation():
     try:
         data = request.get_json()
         service = InstrumentService()
-        instrument = service.create_instrument(data, data.get('type', 'equity'))
+        instrument = service.create_instrument(data, data.get(DbFields.TYPE, InstrumentTypes.EQUITY))
         
         return jsonify({
-            'message': 'Test successful',
-            'instrument_id': instrument.id,
-            'type': instrument.type,
-            'isin': instrument.isin
+            ResponseFields.MESSAGE: SuccessMessages.TEST_SUCCESSFUL,
+            "instrument_id": instrument.id,
+            DbFields.TYPE: instrument.type,
+            DbFields.ISIN: instrument.isin
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 # Route for the admin page
 @market_bp.route("/admin", methods=["GET"])
