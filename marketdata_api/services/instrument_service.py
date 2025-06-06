@@ -201,7 +201,7 @@ class InstrumentService:
                     (Instrument.symbol == identifier)
                 )
                 .first()
-            )
+            )            
             if instrument:
                 session.delete(instrument)
                 session.commit()
@@ -216,28 +216,34 @@ class InstrumentService:
 
     def get_or_create_instrument(self, identifier: str, instrument_type: str) -> Optional[Instrument]:
         """Get existing instrument or create from FIRDS data."""
-        with get_session() as session:
+        try:
+            # Check if instrument exists first
+            session = SessionLocal()
             try:
-                # Check if instrument exists
                 instrument = (
                     session.query(Instrument)
                     .filter(Instrument.isin == identifier)
                     .first()
                 )
                 if instrument:
+                    # Refresh to ensure it's bound to session
+                    session.refresh(instrument)
                     return instrument
+            finally:
+                session.close()
 
-                # If not found, get FIRDS data and create
-                instrument_data = self._get_firds_data(identifier, instrument_type)
-                if not instrument_data:
-                    return None
+            # If not found, get FIRDS data and create
+            instrument_data = self._get_firds_data(identifier, instrument_type)
+            if not instrument_data:
+                return None
 
-                instrument = self.create_instrument(instrument_data, instrument_type)
-                return instrument
+            # create_instrument handles its own session management
+            instrument = self.create_instrument(instrument_data, instrument_type)
+            return instrument
 
-            except Exception as e:
-                self.logger.error(f"Failed to get/create instrument {identifier}: {str(e)}")
-                raise InstrumentServiceError(f"Failed to get/create instrument: {str(e)}")
+        except Exception as e:
+            self.logger.error(f"Failed to get/create instrument {identifier}: {str(e)}")
+            raise InstrumentServiceError(f"Failed to get/create instrument: {str(e)}")
 
     def _get_firds_data(self, identifier: str, instrument_type: str) -> Optional[Dict[str, Any]]:
         """Helper method to fetch FIRDS data."""

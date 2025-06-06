@@ -18,7 +18,8 @@ A comprehensive market data management system that integrates FIRDS, OpenFIGI, a
   - Automatic data enrichment pipeline
 
 - **API Features**
-  - RESTful API endpoints
+  - RESTful API endpoints with modular organization
+  - Separate route modules for instruments, entities, and reference data
   - Batch processing support
   - Search and filtering capabilities
   - Schema-based data mapping

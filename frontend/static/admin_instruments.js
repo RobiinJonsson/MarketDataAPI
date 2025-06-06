@@ -159,10 +159,10 @@ const AdminInstruments = {
         try {
             const payload = {
                 Id: isin,
-                Category: category  // This matches the database polymorphic identity
+                type: category  // Changed from 'Category' to 'type' to match API requirements
             };
 
-            const url = buildApiUrl(APP_CONFIG.ENDPOINTS.FETCH);
+            const url = buildApiUrl(APP_CONFIG.ENDPOINTS.INSTRUMENTS);
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -184,7 +184,7 @@ const AdminInstruments = {
                 AdminUtils.showToast(`Successfully processed ${isin}${enrichmentText}`, 'success');
                 document.getElementById('instrument-form-container').style.display = 'none';
                 
-                // Fetch and show the newly created instrument
+                // Fetch and show the newly created instrument using the ISIN (what users search by)
                 this.fetchInstrumentById(isin);
                 
                 // Refresh the instruments list
@@ -247,7 +247,14 @@ const AdminInstruments = {
             const data = await response.json();
             
             if (response.ok) {
-                this.showInstrumentDetail(data);
+                // Debug logging to see what we're getting
+                console.log('Raw response data:', data);
+                
+                // Handle both wrapped response format {status: "success", data: {...}} and direct format
+                const instrumentData = data.data || data;
+                console.log('Extracted instrument data:', instrumentData);
+                
+                this.showInstrumentDetail(instrumentData);
             } else {
                 AdminUtils.showToast(data.error || 'Instrument not found', 'error');
             }

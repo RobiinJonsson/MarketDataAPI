@@ -50,14 +50,18 @@ def create_app():
     app.logger.info("Database initialization complete")
     from marketdata_api.routes.market import market_bp
     from marketdata_api.routes.schema import schema_bp
-    from marketdata_api.routes.crud import crud_bp  # Import the CRUD API blueprint
     from marketdata_api.routes.swagger import swagger_bp  # Import the Swagger API blueprint
     from marketdata_api.routes.docs import docs_bp  # Import the Docs API blueprint
+    # Import the new refactored routes registration function
+    from marketdata_api.routes import register_routes
+    
     app.register_blueprint(market_bp)
     app.register_blueprint(schema_bp)
-    app.register_blueprint(crud_bp)  # Register the CRUD API blueprint
     app.register_blueprint(swagger_bp)  # Register the Swagger API blueprint
     app.register_blueprint(docs_bp)  # Register the Docs API blueprint
+    
+    # Register all the refactored CRUD routes
+    register_routes(app)
 
     @app.route('/health')
     def health_check():

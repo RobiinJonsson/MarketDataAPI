@@ -63,8 +63,7 @@ class LegalEntityService:
             return session, entities
         except:
             session.close()
-            raise
-
+            raise    
     def create_or_update_entity(self, lei: str) -> tuple[Session, Optional[LegalEntity]]:
         """Create or update legal entity from GLEIF data."""
         gleif_data = fetch_lei_info(lei)
@@ -72,14 +71,17 @@ class LegalEntityService:
             self.logger.warning(f"No GLEIF data found for LEI: {lei}")
             return None, None
 
-        with get_session() as session:
-            try:
-                mapped_data = map_lei_record(gleif_data)
-                entity = self._update_entity_from_data(session, mapped_data)
-                return session, entity
-            except Exception as e:
-                self.logger.error(f"Failed to create/update entity {lei}: {str(e)}")
-                raise LegalEntityServiceError(f"Failed to create/update entity: {str(e)}")
+        session = SessionLocal()
+        try:
+            mapped_data = map_lei_record(gleif_data)
+            entity = self._update_entity_from_data(session, mapped_data)
+            session.commit()
+            session.refresh(entity)  # Ensure entity is bound to session
+            return session, entity
+        except Exception as e:
+            session.rollback()
+            self.logger.error(f"Failed to create/update entity {lei}: {str(e)}")
+            raise LegalEntityServiceError(f"Failed to create/update entity: {str(e)}")
 
     def _update_entity_from_data(self, session: Session, mapped_data: Dict[str, Any]) -> LegalEntity:
         """Helper to update entity from mapped data."""
@@ -92,9 +94,7 @@ class LegalEntityService:
             session.add(entity)
         else:
             for key, value in entity_data.items():
-                setattr(entity, key, value)
-
-        # Update relationships
+                setattr(entity, key, value)        # Update relationships
         self._update_entity_addresses(entity, mapped_data["addresses"])
         self._update_entity_registration(entity, mapped_data["registration"])
         
@@ -116,10 +116,32 @@ class LegalEntityService:
             entity.registration = EntityRegistration(**registration_data)
 
     def delete_entity(self, lei: str) -> bool:
-        with get_session() as session:
+        """Delete a legal entity and its relationships."""
+        session = SessionLocal()
+        try:
             entity = session.query(LegalEntity).filter(LegalEntity.lei == lei).first()
             if entity:
+                # First, delete any relationships where this entity is a parent or child
+                from ..models.legal_entity import EntityRelationship
+                
+                # Delete relationships where this entity is a parent
+                session.query(EntityRelationship).filter(
+                    EntityRelationship.parent_lei == lei
+                ).delete(synchronize_session=False)
+                
+                # Delete relationships where this entity is a child
+                session.query(EntityRelationship).filter(
+                    EntityRelationship.child_lei == lei
+                ).delete(synchronize_session=False)
+                
+                # Now delete the entity itself
                 session.delete(entity)
-                session.flush()
+                session.commit()
                 return True
             return False
+        except Exception as e:
+            session.rollback()
+            self.logger.error(f"Failed to delete entity {lei}: {str(e)}")
+            raise
+        finally:
+            session.close()

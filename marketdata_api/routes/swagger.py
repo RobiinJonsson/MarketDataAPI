@@ -3,7 +3,7 @@ from flask import Blueprint
 from flask_restx import Api, Resource, fields
 from ..constants import (
     HTTPStatus, Pagination, API as APIConstants, ResponseFields,
-    ErrorMessages
+    ErrorMessages, Endpoints
 )
 import os
 
@@ -260,7 +260,7 @@ class InstrumentDetail(Resource):
             HTTPStatus.UNAUTHORIZED: 'Unauthorized'
         }
     )
-    @instruments_ns.marshal_with(instrument_detail_response)
+    #@instruments_ns.marshal_with(instrument_detail_response)
     def get(self, isin):
         '''Retrieves detailed information about a specific instrument by its ISIN'''
         from ..services.instrument_service import InstrumentService
@@ -275,8 +275,8 @@ class InstrumentDetail(Resource):
             if not instrument:
                 return {ResponseFields.STATUS: "error", ResponseFields.ERROR: {"code": str(HTTPStatus.NOT_FOUND), ResponseFields.MESSAGE: ErrorMessages.INSTRUMENT_NOT_FOUND}}, HTTPStatus.NOT_FOUND
             
-            # Build detailed response using the helper function from crud.py
-            from ..routes.crud import build_instrument_response
+            # Build detailed response using the helper function from instrument_routes
+            from ..routes.instrument_routes import build_instrument_response
             result = build_instrument_response(instrument)
             session.close()
             

@@ -1,48 +1,24 @@
 import logging
+import traceback
 from flask import Blueprint, jsonify, request
 from ..services.instrument_service import InstrumentService
-from ..services.legal_entity_service import LegalEntityService
 from ..database.session import get_session
-from ..models.instrument import Instrument, Equity, Debt, Future
-from ..models.legal_entity import LegalEntity
+from ..models.instrument import Instrument
 from ..models.utils.cfi import CFI
 from ..constants import (
-    HTTPStatus, Pagination, CFI as CFIConstants, API, InstrumentTypes,
-    BatchOperations, ErrorMessages, SuccessMessages, ResponseFields,
-    Endpoints, QueryParams, FormFields, DbFields
+    HTTPStatus, Pagination, API, InstrumentTypes, BatchOperations, 
+    ErrorMessages, SuccessMessages, ResponseFields, Endpoints, 
+    QueryParams, FormFields, DbFields
 )
-from sqlalchemy.exc import SQLAlchemyError
 from typing import Dict, Any, List, Optional
-import traceback
 
 # Setup logging
 logger = logging.getLogger(__name__)
 
-# Create blueprint for CRUD operations
-crud_bp = Blueprint("crud", __name__, url_prefix=API.PREFIX)
+# Create blueprint for instrument operations
+instrument_bp = Blueprint("instrument", __name__, url_prefix=API.PREFIX)
 
-# Error handler for database errors
-@crud_bp.errorhandler(SQLAlchemyError)
-def handle_db_error(error):
-    logger.error(f"Database error: {str(error)}")
-    return jsonify({ResponseFields.ERROR: ErrorMessages.DATABASE_ERROR, "details": str(error)}), HTTPStatus.INTERNAL_SERVER_ERROR
-
-# Root endpoint to provide API information
-@crud_bp.route(Endpoints.ROOT, methods=["GET"])
-def api_info():
-    """Root endpoint with API information"""
-    return jsonify({
-        "api": API.NAME,
-        "version": API.VERSION,
-        "endpoints": {
-            "instruments": f"{API.PREFIX}{Endpoints.INSTRUMENTS}",
-            "entities": f"{API.PREFIX}{Endpoints.ENTITIES}",
-            "cfi": f"{API.PREFIX}{Endpoints.CFI}/{{cfi_code}}"
-        }
-    })
-
-# Instruments endpoints
-@crud_bp.route(Endpoints.INSTRUMENTS, methods=["GET"])
+@instrument_bp.route(Endpoints.INSTRUMENTS, methods=["GET"])
 def list_instruments():
     """Get all instruments with optional filtering"""
     try:
@@ -84,7 +60,7 @@ def list_instruments():
                     "currency": instrument.currency,
                     "cfi_code": instrument.cfi_code
                 })
-              # Match the expected response format from swagger
+            # Match the expected response format from swagger
             return jsonify({
                 ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS, 
                 ResponseFields.DATA: result,
@@ -100,12 +76,21 @@ def list_instruments():
         logger.error(traceback.format_exc())
         return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@crud_bp.route(f"{Endpoints.INSTRUMENTS}/<string:identifier>", methods=["GET"])
+@instrument_bp.route(f"{Endpoints.INSTRUMENTS}/<string:identifier>", methods=["GET"])
 def get_instrument(identifier):
-    """Get instrument details by ID or ISIN"""
+    """Get instrument details by ID or ISIN, create from FIRDS if not found"""
     try:
         service = InstrumentService()
+        
+        # First try to get existing instrument
         session, instrument = service.get_instrument(identifier)
+        
+        if not instrument:
+            # If not found, try to get or create from FIRDS (assume equity type for now)
+            instrument = service.get_or_create_instrument(identifier, "equity")
+            if instrument:
+                # Get fresh session for the new instrument
+                session, instrument = service.get_instrument(instrument.id)
         
         if not instrument:
             return jsonify({ResponseFields.ERROR: ErrorMessages.INSTRUMENT_NOT_FOUND}), HTTPStatus.NOT_FOUND
@@ -120,24 +105,24 @@ def get_instrument(identifier):
         logger.error(f"Error in get_instrument: {str(e)}")
         return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@crud_bp.route(Endpoints.INSTRUMENTS, methods=["POST"])
+@instrument_bp.route(Endpoints.INSTRUMENTS, methods=["POST"])
 def create_instrument():
-    """Create a new instrument"""
+    """Create a new instrument or get from FIRDS if not found"""
     try:
         data = request.json
         if not data:
             return jsonify({ResponseFields.ERROR: ErrorMessages.NO_DATA_PROVIDED}), HTTPStatus.BAD_REQUEST
             
-        # Required fields
-        if DbFields.ISIN not in data or DbFields.TYPE not in data:
-            return jsonify({ResponseFields.ERROR: ErrorMessages.ISIN_AND_TYPE_REQUIRED}), HTTPStatus.BAD_REQUEST
+        # Required fields - use Id instead of isin to match service expectations
+        if "Id" not in data or DbFields.TYPE not in data:
+            return jsonify({ResponseFields.ERROR: "Id and type are required"}), HTTPStatus.BAD_REQUEST
             
         instrument_type = data[DbFields.TYPE]
         if instrument_type not in InstrumentTypes.VALID_TYPES:
             return jsonify({ResponseFields.ERROR: ErrorMessages.INVALID_INSTRUMENT_TYPE}), HTTPStatus.BAD_REQUEST
             
         service = InstrumentService()
-        instrument = service.create_instrument(data, instrument_type)
+        instrument = service.get_or_create_instrument(data["Id"], instrument_type)
         
         return jsonify({
             ResponseFields.MESSAGE: SuccessMessages.INSTRUMENT_CREATED,
@@ -150,7 +135,7 @@ def create_instrument():
         logger.error(f"Error in create_instrument: {str(e)}")
         return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@crud_bp.route(f"{Endpoints.INSTRUMENTS}/<string:identifier>", methods=["PUT"])
+@instrument_bp.route(f"{Endpoints.INSTRUMENTS}/<string:identifier>", methods=["PUT"])
 def update_instrument(identifier):
     """Update an existing instrument"""
     try:
@@ -175,7 +160,7 @@ def update_instrument(identifier):
         logger.error(f"Error in update_instrument: {str(e)}")
         return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@crud_bp.route(f"{Endpoints.INSTRUMENTS}/<string:identifier>", methods=["DELETE"])
+@instrument_bp.route(f"{Endpoints.INSTRUMENTS}/<string:identifier>", methods=["DELETE"])
 def delete_instrument(identifier):
     """Delete an instrument"""
     try:
@@ -194,7 +179,7 @@ def delete_instrument(identifier):
         logger.error(f"Error in delete_instrument: {str(e)}")
         return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@crud_bp.route(f"{Endpoints.INSTRUMENTS}/<string:identifier>/enrich", methods=["POST"])
+@instrument_bp.route(f"{Endpoints.INSTRUMENTS}/<string:identifier>/enrich", methods=["POST"])
 def enrich_instrument(identifier):
     """Enrich an instrument with FIGI and LEI data"""
     try:
@@ -239,173 +224,8 @@ def enrich_instrument(identifier):
         logger.error(f"Error in enrich_instrument: {str(e)}")
         return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
-# Legal Entity endpoints
-@crud_bp.route(Endpoints.ENTITIES, methods=["GET"])
-def list_entities():
-    """Get all legal entities with optional filtering"""
-    try:
-        # Query parameters for filtering
-        status = request.args.get(QueryParams.STATUS)
-        jurisdiction = request.args.get(QueryParams.JURISDICTION)
-        limit = request.args.get(QueryParams.LIMIT, Pagination.DEFAULT_LIMIT, type=int)
-        offset = request.args.get(QueryParams.OFFSET, Pagination.DEFAULT_OFFSET, type=int)
-        page = request.args.get(QueryParams.PAGE, Pagination.DEFAULT_PAGE, type=int)
-        per_page = min(request.args.get(QueryParams.PER_PAGE, Pagination.DEFAULT_PER_PAGE, type=int), Pagination.MAX_PER_PAGE)
-          # Create filters dictionary only if we have filters to apply
-        filters = {}
-        if status:
-            filters[QueryParams.STATUS] = status
-        if jurisdiction:
-            filters[QueryParams.JURISDICTION] = jurisdiction
-        
-        service = LegalEntityService()
-        session, entities = service.get_all_entities(
-            limit=limit,
-            offset=offset,
-            filters=filters if filters else None
-        )
-        
-        result = []
-        for entity in entities:
-            result.append({
-                DbFields.LEI: entity.lei,
-                DbFields.NAME: entity.name,
-                DbFields.JURISDICTION: entity.jurisdiction,
-                "legal_form": entity.legal_form,
-                DbFields.STATUS: entity.status
-            })
-                
-        session.close()
-        
-        # Return in the new standardized format
-        return jsonify({
-            ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS, 
-            ResponseFields.DATA: result,
-            ResponseFields.META: {
-                ResponseFields.PAGE: page,
-                ResponseFields.PER_PAGE: per_page,
-                ResponseFields.TOTAL: len(result)
-            }
-        })
-            
-    except Exception as e:
-        logger.error(f"Error in list_entities: {str(e)}")
-        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
-
-@crud_bp.route(f"{Endpoints.ENTITIES}/<string:lei>", methods=["GET"])
-def get_entity(lei):
-    """Get legal entity by LEI code"""
-    try:
-        service = LegalEntityService()
-        session, entity = service.get_entity(lei)
-        
-        if not entity:
-            return jsonify({ResponseFields.ERROR: ErrorMessages.ENTITY_NOT_FOUND}), HTTPStatus.NOT_FOUND
-        
-        # Build comprehensive response
-        result = {
-            "lei": entity.lei,
-            "name": entity.name,
-            "jurisdiction": entity.jurisdiction,
-            "legal_form": entity.legal_form,
-            "registered_as": entity.registered_as,
-            "status": entity.status,
-            "creation_date": entity.creation_date.isoformat() if entity.creation_date else None,
-            "next_renewal_date": entity.next_renewal_date.isoformat() if entity.next_renewal_date else None
-        }
-        
-        # Add addresses
-        if entity.addresses:
-            result["addresses"] = []
-            for address in entity.addresses:
-                result["addresses"].append({
-                    "type": address.type,
-                    "address_lines": address.address_lines,
-                    "country": address.country,
-                    "city": address.city,
-                    "region": address.region,
-                    "postal_code": address.postal_code
-                })
-        
-        # Add registration details
-        if entity.registration:
-            result["registration"] = {
-                "status": entity.registration.status,
-                "last_update": entity.registration.last_update.isoformat() if entity.registration.last_update else None,
-                "next_renewal": entity.registration.next_renewal.isoformat() if entity.registration.next_renewal else None,
-                "managing_lou": entity.registration.managing_lou,
-                "validation_sources": entity.registration.validation_sources
-            }
-        
-        session.close()
-        return jsonify(result)        
-    except Exception as e:
-        logger.error(f"Error in get_entity: {str(e)}")
-        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
-
-@crud_bp.route(f"{Endpoints.ENTITIES}/<string:lei>", methods=["PUT", "POST"])
-def create_or_update_entity(lei):
-    """Create or update a legal entity"""
-    try:
-        service = LegalEntityService()
-        session, entity = service.create_or_update_entity(lei)
-        
-        if not entity:
-            return jsonify({ResponseFields.ERROR: ErrorMessages.FAILED_TO_CREATE_ENTITY}), HTTPStatus.INTERNAL_SERVER_ERROR
-            
-        session.close()
-        return jsonify({
-            ResponseFields.MESSAGE: f"Legal entity {'updated' if request.method == 'PUT' else 'created'} successfully",
-            DbFields.LEI: entity.lei,
-            DbFields.NAME: entity.name
-        }), HTTPStatus.CREATED if request.method == 'POST' else HTTPStatus.OK
-        
-    except Exception as e:
-        logger.error(f"Error in create_or_update_entity: {str(e)}")
-        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
-
-@crud_bp.route(f"{Endpoints.ENTITIES}/<string:lei>", methods=["DELETE"])
-def delete_entity(lei):
-    """Delete a legal entity"""
-    try:
-        service = LegalEntityService()
-        result = service.delete_entity(lei)
-        
-        if not result:
-            return jsonify({ResponseFields.ERROR: ErrorMessages.ENTITY_NOT_FOUND}), HTTPStatus.NOT_FOUND
-            
-        return jsonify({
-            ResponseFields.MESSAGE: SuccessMessages.ENTITY_DELETED,
-            DbFields.LEI: lei
-        })
-        
-    except Exception as e:
-        logger.error(f"Error in delete_entity: {str(e)}")
-        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
-
-# CFI code decoding endpoint
-@crud_bp.route(f"{Endpoints.CFI}/<string:cfi_code>", methods=["GET"])
-def decode_cfi(cfi_code):
-    """Decode a CFI code and return human-readable attributes"""
-    try:
-        cfi_code = cfi_code.upper()
-        
-        if len(cfi_code) != CFIConstants.REQUIRED_LENGTH:
-            return jsonify({ResponseFields.ERROR: ErrorMessages.INVALID_CFI_LENGTH}), HTTPStatus.BAD_REQUEST
-            
-        cfi = CFI(cfi_code)
-        result = cfi.describe()
-        
-        return jsonify(result)
-        
-    except ValueError as e:
-        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.BAD_REQUEST
-    except Exception as e:
-        logger.error(f"Error in decode_cfi: {str(e)}")
-        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
-
 # Batch operations endpoint
-@crud_bp.route(Endpoints.BATCH_INSTRUMENTS, methods=["POST"])
+@instrument_bp.route(Endpoints.BATCH_INSTRUMENTS, methods=["POST"])
 def batch_process_instruments():
     """Batch process instruments (create or enrich)"""
     try:
