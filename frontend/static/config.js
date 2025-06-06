@@ -25,8 +25,7 @@ const APP_CONFIG = {
         BATCH: '/batch',
         FIGI: '/figi',
         SCHEMAS: '/schemas',
-        FETCH: '/fetch',
-        SEARCH: '/api/search'  // Legacy search endpoint
+        SEARCH: '/instruments'  // Updated to use new instruments endpoint
     }
 };
 

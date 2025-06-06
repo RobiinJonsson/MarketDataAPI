@@ -306,12 +306,14 @@ def build_instrument_response(instrument):
         "type": instrument.type,
         "isin": instrument.isin,
         "full_name": instrument.full_name,
+        "short_name": instrument.short_name,
         "symbol": instrument.symbol,
         "cfi_code": instrument.cfi_code,
         "currency": instrument.currency,
         "trading_venue": instrument.trading_venue,
         "relevant_venue": instrument.relevant_venue,
         "relevant_authority": instrument.relevant_authority,
+        "commodity_derivative": instrument.commodity_derivative,
         "first_trade_date": instrument.first_trade_date.isoformat() if instrument.first_trade_date else None,
         "termination_date": instrument.termination_date.isoformat() if getattr(instrument, "termination_date", None) else None,
         "created_at": instrument.created_at.isoformat() if instrument.created_at else None,
@@ -341,7 +343,11 @@ def build_instrument_response(instrument):
             "maturity_date": instrument.maturity_date.isoformat() if instrument.maturity_date else None,
             "total_issued_nominal": instrument.total_issued_nominal,
             "nominal_value_per_unit": instrument.nominal_value_per_unit,
-            "debt_seniority": instrument.debt_seniority
+            "debt_seniority": instrument.debt_seniority,
+            "floating_rate_term_unit": instrument.floating_rate_term_unit,
+            "floating_rate_term_value": instrument.floating_rate_term_value,
+            "floating_rate_basis_points_spread": instrument.floating_rate_basis_points_spread,
+            "interest_rate_floating_reference_index": instrument.interest_rate_floating_reference_index
         }
     elif instrument_type == "future":
         response["future_attributes"] = {
@@ -350,7 +356,11 @@ def build_instrument_response(instrument):
             "delivery_type": instrument.delivery_type,
             "underlying_isin": (instrument.underlying_single_isin or 
                               instrument.basket_isin or 
-                              instrument.underlying_index_isin)
+                              instrument.underlying_index_isin),
+            "underlying_single_isin": getattr(instrument, "underlying_single_isin", None),
+            "basket_isin": getattr(instrument, "basket_isin", None),
+            "underlying_index_isin": getattr(instrument, "underlying_index_isin", None),
+            "underlying_single_index_name": getattr(instrument, "underlying_single_index_name", None)
         }
     
     # Add related entity info if available
@@ -359,7 +369,9 @@ def build_instrument_response(instrument):
             "lei": instrument.legal_entity.lei,
             "name": instrument.legal_entity.name,
             "jurisdiction": instrument.legal_entity.jurisdiction,
-            "status": instrument.legal_entity.status
+            "legal_form": instrument.legal_entity.legal_form,
+            "status": instrument.legal_entity.status,
+            "creation_date": instrument.legal_entity.creation_date.isoformat() if instrument.legal_entity.creation_date else None
         }
     
     # Add FIGI mapping if available
@@ -371,5 +383,40 @@ def build_instrument_response(instrument):
             "security_type": instrument.figi_mapping.security_type,
             "market_sector": instrument.figi_mapping.market_sector
         }
+    
+    # Add derivatives lookup for equities - find futures that have this instrument as underlying
+    if instrument_type == "equity":
+        from ..database.session import get_session
+        with get_session() as session:
+            # Import Future model locally to avoid circular imports
+            from ..models.instrument import Future
+            future_rows = session.query(Future.isin, Future.symbol).filter(
+                (Future.underlying_single_isin == instrument.isin) |
+                (Future.basket_isin == instrument.isin) |
+                (Future.underlying_index_isin == instrument.isin)
+            ).all()
+            response["derivatives"] = [
+                {"isin": f[0], "symbol": f[1]} for f in future_rows if f[0]
+            ]
+    else:
+        response["derivatives"] = []
+    
+    # Add underlying instrument lookup for futures
+    if instrument_type == "future":
+        underlying_isin = (
+            getattr(instrument, "underlying_single_isin", None)
+            or getattr(instrument, "basket_isin", None)
+            or getattr(instrument, "underlying_index_isin", None)
+        )
+        underlying_full_name = None
+        if underlying_isin:
+            from ..database.session import get_session
+            with get_session() as session:
+                underlying_inst = session.query(Instrument).filter_by(isin=underlying_isin).first()
+                if underlying_inst:
+                    underlying_full_name = underlying_inst.full_name
+        response["underlying_instrument"] = {"full_name": underlying_full_name}
+    else:
+        response["underlying_instrument"] = {"full_name": None}
     
     return response

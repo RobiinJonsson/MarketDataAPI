@@ -18,54 +18,137 @@ function switchTab(tabName) {
 
 async function searchAndDisplay() {
     const isin = document.getElementById("search-isin-input").value;
-    if (!isin) {
-        alert("Please enter an ISIN");
-        return;
-    }    try {
-        document.getElementById("spinner").style.display = "block";
-        const url = `${APP_CONFIG.ENDPOINTS.SEARCH}/${isin}`;
+    if (!isin) return;
+    
+    try {
+        // Use the new API endpoint
+        const url = buildApiUrl(`${APP_CONFIG.ENDPOINTS.SEARCH}/${isin}`);
+        console.log('Searching with URL:', url); // Debug log
+        
         const response = await fetch(url);
-        const data = await response.json();
-
-        if (!response.ok) {
-            showResultsError(data.message || "Error fetching data");
-            return;
-        }
-
-        if (!data || (!data.instrument && !data.figi && !data.lei)) {
-            showResultsError("No data found for this ISIN");
-            return;
-        }
-
-        // Hide all instrument views first
-        document.querySelectorAll('.instrument-view').forEach(view => {
-            view.style.display = 'none';
-        });
-
-        // Show the appropriate view based on instrument type
-        const instrumentType = data.instrument?.type?.toLowerCase() || '';
-        if (instrumentType === 'debt') {
-            logDebugInfo(data);
-        }
-        const viewElement = document.getElementById(`${instrumentType}-view`);
-        if (viewElement) {
-            viewElement.style.display = 'grid';
+        const responseData = await response.json();
+        
+        console.log('Raw API response:', responseData); // Debug log
+        console.log('Response type:', typeof responseData);
+        console.log('Response keys:', Object.keys(responseData || {}));
+        
+        if (response.ok && responseData) {
+            // Handle the new API response structure that wraps data in {status, data}
+            let data;
+            if (responseData.status === 'success' && responseData.data) {
+                data = responseData.data;
+            } else if (responseData.type && responseData.isin) {
+                // Direct data response (fallback)
+                data = responseData;
+            } else {
+                console.error('Invalid data structure:', responseData);
+                showResultsError('Invalid response from server');
+                return;
+            }
+            
+            console.log('Extracted data:', data);
+            
+            // Check if data has the expected structure
+            if (!data.type || !data.isin) {
+                console.error('Invalid data structure after extraction:', data);
+                showResultsError('Invalid response from server');
+                return;
+            }
+            
+            // Transform the API response to match the legacy structure
+            const transformedData = {
+                instrument: {
+                    id: data.id,
+                    type: data.type,
+                    isin: data.isin,
+                    full_name: data.full_name,
+                    short_name: data.short_name,
+                    symbol: data.symbol,
+                    cfi_code: data.cfi_code,
+                    currency: data.currency,
+                    trading_venue: data.trading_venue,
+                    relevant_authority: data.relevant_authority,
+                    relevant_venue: data.relevant_venue,
+                    commodity_derivative: data.commodity_derivative,
+                    first_trade_date: data.first_trade_date,
+                    termination_date: data.termination_date,
+                    cfi_decoded: data.cfi_decoded
+                },
+                // Map the new API structure to legacy structure
+                figi: data.figi || {},
+                lei: data.legal_entity || {},
+                derivatives: data.derivatives || [],
+                underlying_instrument: data.underlying_instrument || { full_name: null }
+            };
+            
+            // Add type-specific attributes from the new API structure
+            if (data.type === "future" && data.future_attributes) {
+                // Map future_attributes to instrument level for legacy compatibility
+                transformedData.instrument.expiration_date = data.future_attributes.expiration_date;
+                transformedData.instrument.price_multiplier = data.future_attributes.price_multiplier;
+                transformedData.instrument.delivery_type = data.future_attributes.delivery_type;
+                transformedData.instrument.underlying_single_isin = data.future_attributes.underlying_single_isin;
+                transformedData.instrument.basket_isin = data.future_attributes.basket_isin;
+                transformedData.instrument.underlying_index_isin = data.future_attributes.underlying_index_isin;
+                transformedData.instrument.underlying_single_index_name = data.future_attributes.underlying_single_index_name;
+            }
+            
+            if (data.type === "debt" && data.debt_attributes) {
+                // Map debt_attributes to instrument level for legacy compatibility
+                transformedData.instrument.maturity_date = data.debt_attributes.maturity_date;
+                transformedData.instrument.total_issued_nominal = data.debt_attributes.total_issued_nominal;
+                transformedData.instrument.nominal_value_per_unit = data.debt_attributes.nominal_value_per_unit;
+                transformedData.instrument.debt_seniority = data.debt_attributes.debt_seniority;
+                transformedData.instrument.floating_rate_term_unit = data.debt_attributes.floating_rate_term_unit;
+                transformedData.instrument.floating_rate_term_value = data.debt_attributes.floating_rate_term_value;
+                transformedData.instrument.floating_rate_basis_points_spread = data.debt_attributes.floating_rate_basis_points_spread;
+                transformedData.instrument.interest_rate_floating_reference_index = data.debt_attributes.interest_rate_floating_reference_index;
+            }
+            
+            if (data.type === "equity" && data.equity_attributes) {
+                // Map equity_attributes to instrument level for legacy compatibility
+                transformedData.instrument.asset_class = data.equity_attributes.asset_class;
+                transformedData.instrument.shares_outstanding = data.equity_attributes.shares_outstanding;
+                transformedData.instrument.market_cap = data.equity_attributes.market_cap;
+                transformedData.instrument.sector = data.equity_attributes.sector;
+                transformedData.instrument.industry = data.equity_attributes.industry;
+            }
+            
+            console.log('Transformed data:', transformedData);
+            console.log('Instrument type:', transformedData.instrument?.type);
+            
+            // Hide all instrument views first
+            document.querySelectorAll('.instrument-view').forEach(view => {
+                view.style.display = 'none';
+            });
+            
+            // Show appropriate view based on instrument type
+            const instrumentType = transformedData.instrument?.type;
+            
+            if (!instrumentType) {
+                console.error('No instrument type found in transformed data');
+                showResultsError('Invalid instrument data - missing type');
+                return;
+            }
+            
+            const viewElement = document.getElementById(`${instrumentType}-view`);
+            console.log(`Looking for view element: ${instrumentType}-view`, viewElement);
+            
+            if (viewElement) {
+                viewElement.style.display = 'grid';
+                updateInstrumentView(instrumentType, transformedData);
+                displayRawData(data);
+            } else {
+                console.error(`No view element found for type: ${instrumentType}`);
+                showResultsError(`Unsupported instrument type: ${instrumentType}`);
+            }
         } else {
-            showResultsError("Unsupported instrument type");
-            return;
+            console.error('Search failed:', responseData);
+            showResultsError(responseData?.error || responseData?.message || 'Instrument not found');
         }
-
-        // Update the sections based on instrument type
-        updateInstrumentView(instrumentType, data);
-        
-        // Add raw JSON data to the Data tab
-        displayRawData(data);
-        
-        switchTab('overview');
     } catch (error) {
-        showResultsError('An error occurred while fetching the data');
-    } finally {
-        document.getElementById("spinner").style.display = "none";
+        console.error('Search error:', error);
+        showResultsError('An error occurred while searching');
     }
 }
 
@@ -398,14 +481,37 @@ function formatDateResults(dateString) {
 }
 
 function showResultsError(message) {
-    const sections = ['instrument-details', 'issuer-data', 'trading-venue', 'underlying-instruments'];
-    sections.forEach(section => {
+    // Find any available section content containers to show the error
+    const possibleSections = [
+        'equity-instrument-details', 'future-instrument-details', 'debt-instrument-details',
+        'instrument-details', 'issuer-data', 'trading-venue', 'underlying-instruments'
+    ];
+    
+    let errorShown = false;
+    possibleSections.forEach(section => {
         const sectionContent = document.querySelector(`#${section} .section-content`);
-        if (sectionContent) {
+        if (sectionContent && !errorShown) {
             sectionContent.innerHTML = `<div class="error-message">${message}</div>`;
+            errorShown = true;
         }
     });
-    document.getElementById("spinner").style.display = "none";
+    
+    // If no section found, try to show in results area
+    if (!errorShown) {
+        const resultsSection = document.querySelector('.results-section');
+        if (resultsSection) {
+            resultsSection.innerHTML = `<div class="error-message">${message}</div>`;
+        } else {
+            // Fallback to alert if no suitable container found
+            alert(message);
+        }
+    }
+    
+    // Hide spinner if it exists
+    const spinner = document.getElementById("spinner");
+    if (spinner) {
+        spinner.style.display = "none";
+    }
 }
 
 // Add a special logging function for debugging debt fields

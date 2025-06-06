@@ -50,9 +50,11 @@ async function searchBySchema() {
             filters: {
                 identifier: searchIdentifier
             },
-            schema_type: schemaType,  // Use the selected schema type
+            schema_type: schemaType,
             format: 'json'
-        };        document.getElementById("spinner").style.display = "block";
+        };
+        
+        document.getElementById("spinner").style.display = "block";
 
         const url = `/api/schema/search`;
         const response = await fetch(url, {
@@ -137,13 +139,20 @@ function formatDateSchema(dateString) {
 }
 
 // Add a function to populate the schema type dropdown
-async function populateSchemaTypes() {    try {
+async function populateSchemaTypes() {
+    try {
         const url = buildApiUrl(APP_CONFIG.ENDPOINTS.SCHEMAS);
         const response = await fetch(url);
         const data = await response.json();
         
         const schemaTypeSelect = document.getElementById("schema-type");
-        if (!schemaTypeSelect) return;
+        if (!schemaTypeSelect) {
+            console.warn("Schema type dropdown not found in HTML - using default 'base' schema");
+            return;
+        }
+        
+        // Clear existing options
+        schemaTypeSelect.innerHTML = '';
         
         // Add base option
         const baseOption = document.createElement("option");
@@ -207,7 +216,7 @@ document.addEventListener('DOMContentLoaded', function() {
             searchBySchema();
         });
     } else {
-        console.error('Schema search form not found');
+        console.warn('Schema search form not found');
     }
     
     // Only try to populate schema types if the dropdown exists
@@ -216,7 +225,5 @@ document.addEventListener('DOMContentLoaded', function() {
         populateSchemaTypes();
     } else {
         console.warn("Schema type dropdown not found, using default 'base' schema");
-        // If the dropdown doesn't exist in the HTML, we might need to create it
-        // or we can just use the default 'base' schema
     }
 });

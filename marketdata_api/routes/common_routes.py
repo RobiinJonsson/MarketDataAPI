@@ -1,5 +1,5 @@
 import logging
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, render_template
 from sqlalchemy.exc import SQLAlchemyError
 from ..constants import (
     API, Endpoints, ResponseFields, ErrorMessages, HTTPStatus,
@@ -11,6 +11,9 @@ logger = logging.getLogger(__name__)
 
 # Create blueprint for common routes
 common_bp = Blueprint("common", __name__, url_prefix=API.PREFIX)
+
+# Create a separate blueprint for non-API routes (without prefix)
+frontend_bp = Blueprint("frontend", __name__)
 
 # Error handler for database errors
 @common_bp.errorhandler(SQLAlchemyError)
@@ -48,4 +51,14 @@ def health_check():
         ResponseFields.STATUS: "healthy",
         "message": "API is running"
     })
+
+# Route for the admin page
+@common_bp.route("/admin", methods=["GET"])
+def admin():
+    return render_template("admin.html")
+
+# Route for the home page (no API prefix)
+@frontend_bp.route("/", methods=["GET"])
+def home():
+    return render_template("index.html")
 

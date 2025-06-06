@@ -13,7 +13,7 @@
             <h1>MarketDataAPI</h1>
             <p>Search, request, manage, and analyze market data</p>            <nav class="main-nav">
                 <a href="/" class="nav-link active">Home</a>
-                <a href="/admin" class="nav-link">Admin</a>
+                <a href="/api/v1/admin" class="nav-link">Admin</a>
                 <a href="/api/v1/swagger" class="nav-link">API Docs (Swagger)</a>
                 <a href="/api/v1/docs" class="nav-link">API Docs (ReDoc)</a>
             </nav>
@@ -36,7 +36,7 @@
                     <button type="submit" class="btn btn-primary">Search</button>
                 </div>
                 <div class="admin-redirect-note">
-                    Looking to create or manage instruments? Visit the <a href="/admin" class="admin-link">Admin Portal</a>.
+                    Looking to create or manage instruments? Visit the <a href="/api/v1/admin" class="admin-link">Admin Portal</a>.
                 </div>
             </form>
         </section>
@@ -196,8 +196,8 @@
         <!-- Toast Notification -->
         <div id="toast" class="toast"></div>    </div>
 
+    <!-- Scripts -->
     <script src="{{ url_for('static', filename='config.js') }}"></script>
-    <script src="{{ url_for('static', filename='search.js') }}"></script>
     <script src="{{ url_for('static', filename='results.js') }}"></script>
     <script src="{{ url_for('static', filename='schema.js') }}"></script>
 </body>
