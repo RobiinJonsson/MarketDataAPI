@@ -138,6 +138,53 @@ components:
                   type: string
                   example: CORPORATION
 
+    EntityAddress:
+      type: object
+      properties:
+        type:
+          type: string
+          example: HEADQUARTERS
+        address_lines:
+          type: string
+          example: ONE APPLE PARK WAY
+        country:
+          type: string
+          example: US
+        city:
+          type: string
+          example: CUPERTINO
+        region:
+          type: string
+          example: CA
+        postal_code:
+          type: string
+          example: 95014
+
+    EntityRegistration:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ISSUED
+        initial_date:
+          type: string
+          format: date-time
+          example: 2012-06-06T00:00:00Z
+        last_update:
+          type: string
+          format: date-time
+          example: 2022-12-08T00:00:00Z
+        next_renewal:
+          type: string
+          format: date-time
+          example: 2023-12-31T00:00:00Z
+        managing_lou:
+          type: string
+          example: EVK05KS7XY1DEII3R011
+        validation_sources:
+          type: string
+          example: FULLY_CORROBORATED
+
     LegalEntityBase:
       type: object
       properties:
@@ -174,6 +221,7 @@ components:
             bic:
               type: string
               nullable: true
+              example: null
             next_renewal_date:
               type: string
               format: date-time
@@ -184,6 +232,16 @@ components:
             managing_lou:
               type: string
               example: EVK05KS7XY1DEII3R011
+            creation_date:
+              type: string
+              format: date-time
+              example: 2012-06-06T00:00:00Z
+            addresses:
+              type: array
+              items:
+                $ref: '#/components/schemas/EntityAddress'
+            registration:
+              $ref: '#/components/schemas/EntityRegistration'
 
     RelationshipBase:
       type: object
@@ -402,4 +460,139 @@ paths:
       security:
         - ApiKeyAuth: []
 
-  # Additional paths (similar structure) for other endpoints...
+  /legal-entities:
+    get:
+      summary: Get All Legal Entities
+      description: Retrieves a paginated list of legal entities.
+      tags:
+        - Legal Entities
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE, PENDING]
+          description: Filter by entity status
+        - in: query
+          name: jurisdiction
+          schema:
+            type: string
+          description: Filter by jurisdiction code (ISO 3166-1)
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Page number for paginated results
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Number of records per page
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LegalEntityBase'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+      security:
+        - ApiKeyAuth: []
+
+  /legal-entities/{lei}:
+    get:
+      summary: Get Legal Entity by LEI
+      description: Retrieves detailed information about a specific legal entity by its LEI.
+      tags:
+        - Legal Entities
+      parameters:
+        - in: path
+          name: lei
+          schema:
+            type: string
+          required: true
+          description: Legal Entity Identifier (20 characters)
+          example: HWUPKR0MPOU8FGXBT394
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    $ref: '#/components/schemas/LegalEntityDetailed'
+      security:
+        - ApiKeyAuth: []
+
+  /relationships/{lei}:
+    get:
+      summary: Get Entity Relationships
+      description: Retrieves all relationships for a specific legal entity.
+      tags:
+        - Relationships
+      parameters:
+        - in: path
+          name: lei
+          schema:
+            type: string
+          required: true
+          description: Legal Entity Identifier (20 characters)
+        - in: query
+          name: relationship_type
+          schema:
+            type: string
+            enum: [DIRECT, ULTIMATE]
+          description: Filter by relationship type
+        - in: query
+          name: relationship_status
+          schema:
+            type: string
+            enum: [ACTIVE, INACTIVE]
+          description: Filter by relationship status
+        - in: query
+          name: direction
+          schema:
+            type: string
+            enum: [PARENT, CHILD]
+          description: Filter by relationship direction
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  data:
+                    type: object
+                    properties:
+                      entity:
+                        $ref: '#/components/schemas/LegalEntityBase'
+                      relationships:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/RelationshipBase'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+      security:
+        - ApiKeyAuth: []

@@ -44,16 +44,18 @@ Authorization: Bearer YOUR_API_KEY
     "entity": {
       "lei": "HWUPKR0MPOU8FGXBT394",
       "name": "APPLE INC",
-      "jurisdiction": "US"
+      "jurisdiction": "US",
+      "legal_form": "CORPORATION",
+      "status": "ACTIVE"
     },
     "relationships": [
       {
         "relationship_type": "DIRECT",
         "relationship_status": "ACTIVE",
-        "child_lei": "HWUPKR0MPOU8FGXBT394",
-        "child_name": "APPLE INC",
         "parent_lei": "529900ODI3047E2LIV03",
         "parent_name": "Apple Operations",
+        "child_lei": "HWUPKR0MPOU8FGXBT394",
+        "child_name": "APPLE INC",
         "relationship_period_start": "2022-01-15T00:00:00Z",
         "relationship_period_end": null,
         "percentage_ownership": 75.5
@@ -61,10 +63,10 @@ Authorization: Bearer YOUR_API_KEY
       {
         "relationship_type": "ULTIMATE",
         "relationship_status": "ACTIVE",
-        "child_lei": "HWUPKR0MPOU8FGXBT394",
-        "child_name": "APPLE INC",
         "parent_lei": "529900AB12345E67890Z",
         "parent_name": "Apple Holding Corporation",
+        "child_lei": "HWUPKR0MPOU8FGXBT394",
+        "child_name": "APPLE INC",
         "relationship_period_start": "2020-06-10T00:00:00Z",
         "relationship_period_end": null,
         "percentage_ownership": 100
@@ -74,8 +76,7 @@ Authorization: Bearer YOUR_API_KEY
   "meta": {
     "page": 1,
     "per_page": 20,
-    "total": 2,
-    "entity_lei": "HWUPKR0MPOU8FGXBT394"
+    "total": 2
   }
 }
 ```
@@ -118,7 +119,9 @@ Authorization: Bearer YOUR_API_KEY
     "entity": {
       "lei": "HWUPKR0MPOU8FGXBT394",
       "name": "APPLE INC",
-      "jurisdiction": "US"
+      "jurisdiction": "US",
+      "legal_form": "CORPORATION",
+      "status": "ACTIVE"
     },
     "direct_parent": {
       "relationship_type": "DIRECT",

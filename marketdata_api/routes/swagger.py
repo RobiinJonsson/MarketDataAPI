@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, send_from_directory, send_file, current_app
+from flask import Blueprint, render_template, send_from_directory, send_file, current_app, jsonify
 from flask import Blueprint
 from flask_restx import Api, Resource, fields
 from ..constants import (
@@ -6,6 +6,7 @@ from ..constants import (
     ErrorMessages, Endpoints
 )
 import os
+
 
 # Create a blueprint for Swagger documentation
 swagger_bp = Blueprint('swagger', __name__, url_prefix=APIConstants.PREFIX)
@@ -96,12 +97,35 @@ legal_entity_base = api.model('LegalEntityBase', {
     'status': fields.String(description="Current status (Active, Inactive, Pending)")
 })
 
+# Add address model
+entity_address_model = api.model('EntityAddress', {
+    'type': fields.String(description="Address type"),
+    'address_lines': fields.String(description="Address lines"),
+    'country': fields.String(description="Country code"),
+    'city': fields.String(description="City"),
+    'region': fields.String(description="Region/State"),
+    'postal_code': fields.String(description="Postal code")
+})
+
+# Add registration model
+entity_registration_model = api.model('EntityRegistration', {
+    'status': fields.String(description="Registration status"),
+    'initial_date': fields.DateTime(description="Initial registration date"),
+    'last_update': fields.DateTime(description="Last update date"),
+    'next_renewal': fields.DateTime(description="Next renewal date"),
+    'managing_lou': fields.String(description="Managing LOU"),
+    'validation_sources': fields.String(description="Validation sources")
+})
+
 legal_entity_detailed = api.inherit('LegalEntityDetailed', legal_entity_base, {
     'registered_as': fields.String(description="How the entity is registered"),
     'bic': fields.String(description="Business Identifier Code"),
     'next_renewal_date': fields.DateTime(description="Next renewal date for LEI"),
     'registration_status': fields.String(description="Registration status"),
-    'managing_lou': fields.String(description="Managing Local Operating Unit")
+    'managing_lou': fields.String(description="Managing Local Operating Unit"),
+    'creation_date': fields.DateTime(description="Entity creation date"),
+    'addresses': fields.List(fields.Nested(entity_address_model), description="Entity addresses"),
+    'registration': fields.Nested(entity_registration_model, description="Registration details")
 })
 
 legal_entity_list_response = api.model('LegalEntityListResponse', {
@@ -377,10 +401,70 @@ class LegalEntityDetail(Resource):
             HTTPStatus.UNAUTHORIZED: 'Unauthorized'
         }
     )
-    @legal_entities_ns.marshal_with(legal_entity_detail_response)
+    # Remove the marshal_with decorator to prevent field filtering
     def get(self, lei):
         '''Retrieves detailed information about a specific legal entity by its LEI'''
-        return None
+        from ..services.legal_entity_service import LegalEntityService
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            service = LegalEntityService()
+            session, entity = service.get_entity(lei)
+            
+            if not entity:
+                return {ResponseFields.STATUS: "error", ResponseFields.ERROR: {"code": str(HTTPStatus.NOT_FOUND), ResponseFields.MESSAGE: ErrorMessages.ENTITY_NOT_FOUND}}, HTTPStatus.NOT_FOUND
+            
+            # Build comprehensive response - same logic as entity_routes.py
+            result = {
+                "lei": entity.lei,
+                "name": entity.name,
+                "jurisdiction": entity.jurisdiction,
+                "legal_form": entity.legal_form,
+                "registered_as": entity.registered_as,
+                "status": entity.status,
+                "bic": entity.bic,
+                "next_renewal_date": entity.next_renewal_date.isoformat() if entity.next_renewal_date else None,
+                "registration_status": entity.registration_status,
+                "managing_lou": entity.managing_lou,
+                "creation_date": entity.creation_date.isoformat() if entity.creation_date else None
+            }
+            
+            # Add addresses
+            if entity.addresses:
+                result["addresses"] = []
+                for address in entity.addresses:
+                    result["addresses"].append({
+                        "type": address.type,
+                        "address_lines": address.address_lines,
+                        "country": address.country,
+                        "city": address.city,
+                        "region": address.region,
+                        "postal_code": address.postal_code
+                    })
+            
+            # Add registration details
+            if entity.registration:
+                result["registration"] = {
+                    "status": entity.registration.status,
+                    "initial_date": entity.registration.initial_date.isoformat() if entity.registration.initial_date else None,
+                    "last_update": entity.registration.last_update.isoformat() if entity.registration.last_update else None,
+                    "next_renewal": entity.registration.next_renewal.isoformat() if entity.registration.next_renewal else None,
+                    "managing_lou": entity.registration.managing_lou,
+                    "validation_sources": entity.registration.validation_sources
+                }
+            
+            session.close()
+            
+            return {
+                ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                ResponseFields.DATA: result
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in swagger get_entity: {str(e)}")
+            return {ResponseFields.STATUS: "error", ResponseFields.ERROR: {"code": str(HTTPStatus.INTERNAL_SERVER_ERROR), ResponseFields.MESSAGE: str(e)}}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 # Relationships endpoints
 @relationships_ns.route('/<string:lei>')
@@ -391,7 +475,8 @@ class EntityRelationships(Resource):
         params={
             'relationship_type': 'Filter by relationship type ("DIRECT", "ULTIMATE")',
             'relationship_status': 'Filter by relationship status ("ACTIVE", "INACTIVE")',
-            'direction': 'Filter by relationship direction ("PARENT", "CHILD")',            'page': f'Page number for paginated results (default: {Pagination.DEFAULT_PAGE})',
+            'direction': 'Filter by relationship direction ("PARENT", "CHILD")',
+            'page': f'Page number for paginated results (default: {Pagination.DEFAULT_PAGE})',
             'per_page': f'Number of records per page (default: {Pagination.DEFAULT_PER_PAGE}, max: {Pagination.MAX_PER_PAGE})'
         },
         responses={
@@ -400,10 +485,94 @@ class EntityRelationships(Resource):
             HTTPStatus.UNAUTHORIZED: 'Unauthorized'
         }
     )
-    @relationships_ns.marshal_with(relationship_list_response)
     def get(self, lei):
         '''Retrieves all relationships for a specific legal entity'''
-        return None
+        from flask import request
+        from ..services.legal_entity_service import LegalEntityService
+        from ..database.session import get_session
+        from ..models.legal_entity import EntityRelationship
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # First check if the entity exists
+            service = LegalEntityService()
+            session, entity = service.get_entity(lei)
+            
+            if not entity:
+                return {ResponseFields.STATUS: "error", ResponseFields.ERROR: {"code": str(HTTPStatus.NOT_FOUND), ResponseFields.MESSAGE: ErrorMessages.ENTITY_NOT_FOUND}}, HTTPStatus.NOT_FOUND
+            
+            # Get query parameters
+            relationship_type = request.args.get('relationship_type')
+            relationship_status = request.args.get('relationship_status')
+            direction = request.args.get('direction')
+            page = request.args.get('page', Pagination.DEFAULT_PAGE, type=int)
+            per_page = min(request.args.get('per_page', Pagination.DEFAULT_PER_PAGE, type=int), Pagination.MAX_PER_PAGE)
+            
+            # Query relationships where this entity is either parent or child
+            with get_session() as rel_session:
+                query = rel_session.query(EntityRelationship).filter(
+                    (EntityRelationship.parent_lei == lei) | (EntityRelationship.child_lei == lei)
+                )
+                
+                # Apply filters
+                if relationship_type:
+                    query = query.filter(EntityRelationship.relationship_type == relationship_type)
+                if relationship_status:
+                    query = query.filter(EntityRelationship.relationship_status == relationship_status)
+                if direction:
+                    if direction.upper() == 'PARENT':
+                        query = query.filter(EntityRelationship.child_lei == lei)
+                    elif direction.upper() == 'CHILD':
+                        query = query.filter(EntityRelationship.parent_lei == lei)
+                
+                relationships = query.all()
+                
+                # Build response
+                relationship_data = []
+                for rel in relationships:
+                    # Determine if this entity is parent or child in this relationship
+                    is_parent = rel.parent_lei == lei
+                    
+                    relationship_data.append({
+                        "relationship_type": rel.relationship_type,
+                        "relationship_status": rel.relationship_status,
+                        "parent_lei": rel.parent_lei,
+                        "parent_name": rel.parent.name if rel.parent else None,
+                        "child_lei": rel.child_lei,
+                        "child_name": rel.child.name if rel.child else None,
+                        "relationship_period_start": rel.relationship_period_start.isoformat() if rel.relationship_period_start else None,
+                        "relationship_period_end": rel.relationship_period_end.isoformat() if rel.relationship_period_end else None,
+                        "percentage_ownership": rel.percentage_of_ownership
+                    })
+            
+            result = {
+                "entity": {
+                    "lei": entity.lei,
+                    "name": entity.name,
+                    "jurisdiction": entity.jurisdiction,
+                    "legal_form": entity.legal_form,
+                    "status": entity.status
+                },
+                "relationships": relationship_data
+            }
+            
+            session.close()
+            
+            return {
+                ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                ResponseFields.DATA: result,
+                ResponseFields.META: {
+                    ResponseFields.PAGE: page,
+                    ResponseFields.PER_PAGE: per_page,
+                    ResponseFields.TOTAL: len(relationship_data)
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in swagger get_relationships: {str(e)}")
+            return {ResponseFields.STATUS: "error", ResponseFields.ERROR: {"code": str(HTTPStatus.INTERNAL_SERVER_ERROR), ResponseFields.MESSAGE: str(e)}}, HTTPStatus.INTERNAL_SERVER_ERROR
 
 # Schema management endpoints
 @schemas_ns.route('/')
@@ -430,9 +599,20 @@ class SchemaList(Resource):
 # Add a route to serve the OpenAPI specification
 @swagger_bp.route('/openapi.yaml')
 def serve_openapi_spec():
-    # Get the absolute path to the openapi.yaml file
-    openapi_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'docs', 'openapi.yaml')
-    return send_file(openapi_path, mimetype='text/yaml')
+    # Get the absolute path to the generated openapi.yaml file
+    try:
+        openapi_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'docs', 'openapi', 'openapi.yaml')
+        if os.path.exists(openapi_path):
+            return send_file(openapi_path, mimetype='text/yaml')
+        else:
+            # If generated file doesn't exist, return basic error
+            return jsonify({
+                "error": "OpenAPI specification not found",
+                "message": "Run 'python scripts/generate_docs.py' to generate the OpenAPI specification",
+                "expected_path": openapi_path
+            }), 404
+    except Exception as e:
+        return jsonify({"error": f"Failed to serve OpenAPI spec: {str(e)}"}), 500
 
 # Add a route to serve the Redoc documentation UI
 @swagger_bp.route('/docs')
@@ -453,7 +633,7 @@ def serve_redoc_ui():
         </style>
       </head>
       <body>
-        <redoc spec-url="{APIConstants.PREFIX}/openapi.yaml"></redoc>
+        <redoc spec-url="/docs/openapi"></redoc>
         <script src="https://cdn.jsdelivr.net/npm/redoc@next/bundles/redoc.standalone.js"></script>
       </body>
     </html>

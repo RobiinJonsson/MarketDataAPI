@@ -1,0 +1,136 @@
+{
+  "info": {
+    "name": "MarketDataAPI",
+    "description": "Generated from OpenAPI specification",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": "1.0"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "Authorization",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "Bearer {{api_key}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:5000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "api_key",
+      "value": "your_api_key_here",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Retrieves a paginated list of instruments",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/instruments/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "instruments"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Retrieves detailed information about a specific instrument by its ISIN",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/instruments/{isin}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "instruments",
+            "{isin}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Retrieves a paginated list of legal entities",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/legal-entities/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "legal-entities"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Retrieves detailed information about a specific legal entity by its LEI",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/legal-entities/{lei}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "legal-entities",
+            "{lei}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Retrieves all relationships for a specific legal entity",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/relationships/{lei}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "relationships",
+            "{lei}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Retrieves a list of all available schemas",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/schemas/",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "schemas"
+          ]
+        }
+      }
+    }
+  ]
+}

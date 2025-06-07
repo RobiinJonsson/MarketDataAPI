@@ -91,11 +91,11 @@ Authorization: Bearer YOUR_API_KEY
     "next_renewal_date": "2023-12-31T00:00:00Z",
     "registration_status": "ISSUED",
     "managing_lou": "EVK05KS7XY1DEII3R011",
+    "creation_date": "2012-06-06T00:00:00Z",
     "addresses": [
       {
         "type": "HEADQUARTERS",
-        "line1": "ONE APPLE PARK WAY",
-        "line2": null,
+        "address_lines": "ONE APPLE PARK WAY",
         "city": "CUPERTINO",
         "region": "CA",
         "country": "US",
@@ -103,8 +103,7 @@ Authorization: Bearer YOUR_API_KEY
       },
       {
         "type": "LEGAL",
-        "line1": "ONE APPLE PARK WAY",
-        "line2": null,
+        "address_lines": "ONE APPLE PARK WAY",
         "city": "CUPERTINO",
         "region": "CA",
         "country": "US",
@@ -112,11 +111,12 @@ Authorization: Bearer YOUR_API_KEY
       }
     ],
     "registration": {
-      "initial_registration_date": "2012-06-06T00:00:00Z",
-      "last_update_date": "2022-12-08T00:00:00Z",
-      "registration_status": "ISSUED",
-      "next_renewal_date": "2023-12-31T00:00:00Z",
-      "managing_lou": "EVK05KS7XY1DEII3R011"
+      "status": "ISSUED",
+      "initial_date": "2012-06-06T00:00:00Z",
+      "last_update": "2022-12-08T00:00:00Z",
+      "next_renewal": "2023-12-31T00:00:00Z",
+      "managing_lou": "EVK05KS7XY1DEII3R011",
+      "validation_sources": "FULLY_CORROBORATED"
     }
   }
 }

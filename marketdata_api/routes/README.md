@@ -66,3 +66,34 @@ When creating an entity via `POST /api/v1/entities`, the following fields are re
 ```
 
 See the Swagger documentation (`/swagger`) for complete API details.
+
+## Documentation Sources
+
+The API documentation is maintained in multiple formats:
+
+### 1. Swagger/OpenAPI Documentation
+- **swagger.py**: Interactive Swagger UI documentation available at `/api/v1/swagger`
+- **docs/openapi.yaml**: OpenAPI 3.0 specification file
+- Both provide the same information but swagger.py is the primary source for interactive testing
+
+### 2. Markdown Documentation
+- **docs/api/**: Static markdown documentation files
+  - **README.md**: API overview and common patterns
+  - **instruments.md**: Instruments API documentation
+  - **legal_entities.md**: Legal entities API documentation
+  - **relationships.md**: Entity relationships API documentation
+  - **schemas.md**: Schema management API documentation
+
+### 3. Route Documentation
+- **docs.py**: Route for serving static documentation
+- **routes/README.md**: This file - technical documentation for developers
+
+## Documentation Synchronization
+
+When updating API endpoints:
+
+1. **Primary**: Update the implementation in swagger.py
+2. **Secondary**: Update the corresponding markdown files in docs/api/
+3. **Tertiary**: Update the OpenAPI YAML if using external tools
+
+The swagger.py file serves as the source of truth for API behavior and interactive documentation.

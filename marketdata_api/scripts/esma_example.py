@@ -1,17 +1,20 @@
-# Search and Download ESMA's data for data frame testing and analysis pre-model building
-# EsmaDataLoader is a class that handles the downloading and processing of ESMA data files, using dates to filter the data.
-# It is part of the marketdata_api module, which is a Python package for handling market data.
-# The class is used to load data from ESMA's FIRDS (Financial Instruments Reference Data System) files,
-# which are provided in a specific format (MIFID) and contain information about financial instruments.
-# The FIRDS files are used to identify and classify financial instruments, and they are essential for compliance with MiFID II regulations.
-# The EsmaDataLoader class provides methods to download, parse, and process these files.
-# It also processes FITRS (Financial Instruments Transparency System) files, which contain information about the transparency of financial instruments.
-# The class is designed to be flexible and can handle different types of files and data formats.
-# -*- coding: utf-8 -*-
+"""
+ESMA Data Loader Example Script
+
+Search and Download ESMA's data for data frame testing and analysis pre-model building.
+EsmaDataLoader is a class that handles the downloading and processing of ESMA data files, using dates to filter the data.
+It is part of the marketdata_api module, which is a Python package for handling market data.
+The class is used to load data from ESMA's FIRDS (Financial Instruments Reference Data System) files,
+which are provided in a specific format (MIFID) and contain information about financial instruments.
+The FIRDS files are used to identify and classify financial instruments, and they are essential for compliance with MiFID II regulations.
+The EsmaDataLoader class provides methods to download, parse, and process these files.
+It also processes FITRS (Financial Instruments Transparency System) files, which contain information about the transparency of financial instruments.
+The class is designed to be flexible and can handle different types of files and data formats.
+"""
 
 import os
 import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../../')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../')))
 
 from marketdata_api.services.esma_data_loader import EsmaDataLoader
 from marketdata_api.services.esma_utils import Cfi

@@ -1,0 +1,416 @@
+openapi: 3.0.0
+info:
+  title: MarketDataAPI
+  version: '1.0'
+  description: API for financial market data, instrument details, and legal entity
+    information
+servers:
+- url: http://127.0.0.1:5000/api/v1
+  description: Development server
+paths:
+  /instruments/:
+    get:
+      summary: Retrieves a paginated list of instruments
+      description: Retrieves a paginated list of instruments
+      operationId: get_instrument_list
+      tags:
+      - instruments
+      parameters:
+      - name: type
+        in: query
+        description: Filter by instrument type (e.g., "equity", "debt", "future")
+        required: false
+        schema:
+          type: string
+      - name: currency
+        in: query
+        description: Filter by currency code
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        description: 'Page number for paginated results (default: 1)'
+        required: false
+        schema:
+          type: string
+      - name: per_page
+        in: query
+        description: 'Number of records per page (default: 20, max: 100)'
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        description: Maximum number of records to return
+        required: false
+        schema:
+          type: string
+      - name: offset
+        in: query
+        description: Number of records to skip
+        required: false
+        schema:
+          type: string
+      - name: X-Fields
+        in: header
+        description: An optional fields mask
+        required: false
+        schema:
+          type: string
+          format: mask
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentListResponse'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+  /instruments/{isin}:
+    get:
+      summary: Retrieves detailed information about a specific instrument by its ISIN
+      description: Retrieves detailed information about a specific instrument by its
+        ISIN
+      operationId: get_instrument_detail
+      tags:
+      - instruments
+      parameters: []
+      responses:
+        '200':
+          description: Success
+        '404':
+          description: Instrument not found
+        '401':
+          description: Unauthorized
+  /legal-entities/:
+    get:
+      summary: Retrieves a paginated list of legal entities
+      description: Retrieves a paginated list of legal entities
+      operationId: get_legal_entity_list
+      tags:
+      - legal-entities
+      parameters:
+      - name: status
+        in: query
+        description: Filter by entity status (e.g., "ACTIVE", "INACTIVE", "PENDING")
+        required: false
+        schema:
+          type: string
+      - name: jurisdiction
+        in: query
+        description: Filter by jurisdiction code (ISO 3166-1)
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        description: 'Page number for paginated results (default: 1)'
+        required: false
+        schema:
+          type: string
+      - name: per_page
+        in: query
+        description: 'Number of records per page (default: 20, max: 100)'
+        required: false
+        schema:
+          type: string
+      - name: limit
+        in: query
+        description: Maximum number of records to return
+        required: false
+        schema:
+          type: string
+      - name: offset
+        in: query
+        description: Number of records to skip
+        required: false
+        schema:
+          type: string
+      - name: X-Fields
+        in: header
+        description: An optional fields mask
+        required: false
+        schema:
+          type: string
+          format: mask
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalEntityListResponse'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+  /legal-entities/{lei}:
+    get:
+      summary: Retrieves detailed information about a specific legal entity by its
+        LEI
+      description: Retrieves detailed information about a specific legal entity by
+        its LEI
+      operationId: get_legal_entity_detail
+      tags:
+      - legal-entities
+      parameters: []
+      responses:
+        '200':
+          description: Success
+        '404':
+          description: Legal entity not found
+        '401':
+          description: Unauthorized
+  /relationships/{lei}:
+    get:
+      summary: Retrieves all relationships for a specific legal entity
+      description: Retrieves all relationships for a specific legal entity
+      operationId: get_entity_relationships
+      tags:
+      - relationships
+      parameters:
+      - name: relationship_type
+        in: query
+        description: Filter by relationship type ("DIRECT", "ULTIMATE")
+        required: false
+        schema:
+          type: string
+      - name: relationship_status
+        in: query
+        description: Filter by relationship status ("ACTIVE", "INACTIVE")
+        required: false
+        schema:
+          type: string
+      - name: direction
+        in: query
+        description: Filter by relationship direction ("PARENT", "CHILD")
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        description: 'Page number for paginated results (default: 1)'
+        required: false
+        schema:
+          type: string
+      - name: per_page
+        in: query
+        description: 'Number of records per page (default: 20, max: 100)'
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+        '404':
+          description: Legal entity not found
+        '401':
+          description: Unauthorized
+  /schemas/:
+    get:
+      summary: Retrieves a list of all available schemas
+      description: Retrieves a list of all available schemas
+      operationId: get_schema_list
+      tags:
+      - schemas
+      parameters:
+      - name: type
+        in: query
+        description: Filter by schema type ("instrument", "legal_entity", "relationship")
+        required: false
+        schema:
+          type: string
+      - name: status
+        in: query
+        description: Filter by schema status ("active", "draft", "deprecated")
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        description: 'Page number for paginated results (default: 1)'
+        required: false
+        schema:
+          type: string
+      - name: per_page
+        in: query
+        description: 'Number of records per page (default: 20, max: 100)'
+        required: false
+        schema:
+          type: string
+      - name: X-Fields
+        in: header
+        description: An optional fields mask
+        required: false
+        schema:
+          type: string
+          format: mask
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchemaListResponse'
+        '400':
+          description: Invalid request
+        '401':
+          description: Unauthorized
+components:
+  schemas:
+    InstrumentListResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Response status
+          example: success
+          enum:
+          - success
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/InstrumentBase'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+      required:
+      - status
+    InstrumentBase:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier
+        isin:
+          type: string
+          description: International Securities Identification Number
+        type:
+          type: string
+          description: Instrument type (equity, debt, future, etc.)
+        full_name:
+          type: string
+          description: Full name of the instrument
+        symbol:
+          type: string
+          description: Symbol or short name
+        currency:
+          type: string
+          description: Currency code (ISO 4217)
+        cfi_code:
+          type: string
+          description: CFI code
+      required:
+      - full_name
+      - id
+      - isin
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          description: Current page number
+        per_page:
+          type: integer
+          description: Items per page
+        total:
+          type: integer
+          description: Total number of items
+    LegalEntityListResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Response status
+          example: success
+          enum:
+          - success
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LegalEntityBase'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+      required:
+      - status
+    LegalEntityBase:
+      type: object
+      properties:
+        lei:
+          type: string
+          description: Legal Entity Identifier (20 characters)
+        name:
+          type: string
+          description: Legal name of the entity
+        jurisdiction:
+          type: string
+          description: Jurisdiction code (ISO 3166-1)
+        legal_form:
+          type: string
+          description: Legal form of the entity
+        status:
+          type: string
+          description: Current status (Active, Inactive, Pending)
+      required:
+      - lei
+      - name
+    SchemaListResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Response status
+          example: success
+          enum:
+          - success
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/SchemaBase'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+      required:
+      - status
+    SchemaBase:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the schema
+        name:
+          type: string
+          description: Display name for the schema
+        description:
+          type: string
+          description: Description of the schema and its purpose
+        type:
+          type: string
+          description: Type of the schema (instrument, legal_entity, relationship)
+        status:
+          type: string
+          description: Status of the schema (active, draft, deprecated)
+        version:
+          type: string
+          description: Version of the schema
+        created_at:
+          type: string
+          description: Creation date
+          format: date-time
+        updated_at:
+          type: string
+          description: Last update date
+          format: date-time
+      required:
+      - id
+      - name
+      - type
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+security:
+- ApiKeyAuth: []
