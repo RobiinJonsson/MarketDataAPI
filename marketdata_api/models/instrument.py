@@ -104,6 +104,14 @@ class Instrument(BaseModel):
         cascade="all, delete-orphan",
         passive_deletes=True
     )
+    
+    # Add relationship to transparency calculations
+    transparency_calculations = relationship(
+        "TransparencyCalculation",
+        back_populates="instrument",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
 
 
 class Equity(Instrument):
