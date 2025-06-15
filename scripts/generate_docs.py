@@ -1,22 +1,40 @@
+#!/usr/bin/env python3
 """
-Documentation generation script for MarketDataAPI
+Generate comprehensive API documentation from swagger.py definitions.
 
-This script generates various documentation formats from the swagger.py definitions:
-- OpenAPI YAML specification
-- Markdown API reference
-- Postman collection
-- Validation of documentation consistency
+This script creates:
+1. Clean OpenAPI 3.0 YAML specification
+2. Postman collection for API testing
+3. Validation of generated documentation
+
+The script handles encoding issues on Windows and provides fallback mechanisms.
 """
 
 import sys
 import os
-import yaml
 import json
+import yaml
 from pathlib import Path
+from datetime import datetime
 
-# Add the project root to the path
+# Set UTF-8 encoding for Windows compatibility
+if sys.platform.startswith('win'):
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
+
+# Add project root to path for imports
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+
+def safe_print(message):
+    """Print message with encoding safety for Windows terminals."""
+    try:
+        print(message)
+    except UnicodeEncodeError:
+        # Fallback: replace problematic characters
+        safe_message = message.encode('ascii', 'replace').decode('ascii')
+        print(safe_message)
 
 def generate_openapi_yaml():
     """Generate OpenAPI YAML from Flask-RESTX API object"""
@@ -264,7 +282,7 @@ def convert_schema(schema):
     return converted_schema
 
 def create_fallback_spec():
-    """Create a clean fallback OpenAPI specification"""
+    """Create a comprehensive fallback OpenAPI specification with transparency endpoints"""
     return {
         'openapi': '3.0.0',
         'info': {
@@ -283,6 +301,14 @@ def create_fallback_spec():
                 'get': {
                     'summary': 'Get All Instruments',
                     'tags': ['Instruments'],
+                    'parameters': [
+                        {
+                            'name': 'type',
+                            'in': 'query',
+                            'description': 'Filter by instrument type',
+                            'schema': {'type': 'string'}
+                        }
+                    ],
                     'responses': {
                         '200': {
                             'description': 'Success',
@@ -298,6 +324,25 @@ def create_fallback_spec():
                                 }
                             }
                         }
+                    }
+                }
+            },
+            '/instruments/{identifier}': {
+                'get': {
+                    'summary': 'Get Instrument by ID or ISIN',
+                    'tags': ['Instruments'],
+                    'parameters': [
+                        {
+                            'name': 'identifier',
+                            'in': 'path',
+                            'required': True,
+                            'description': 'Instrument ID or ISIN',
+                            'schema': {'type': 'string'}
+                        }
+                    ],
+                    'responses': {
+                        '200': {'description': 'Success'},
+                        '404': {'description': 'Instrument not found'}
                     }
                 }
             },
@@ -322,10 +367,319 @@ def create_fallback_spec():
                         }
                     }
                 }
+            },
+            '/legal-entities/{lei}': {
+                'get': {
+                    'summary': 'Get Legal Entity by LEI',
+                    'tags': ['Legal Entities'],
+                    'parameters': [
+                        {
+                            'name': 'lei',
+                            'in': 'path',
+                            'required': True,
+                            'description': 'Legal Entity Identifier',
+                            'schema': {'type': 'string'}
+                        }
+                    ],
+                    'responses': {
+                        '200': {'description': 'Success'},
+                        '404': {'description': 'Entity not found'}
+                    }
+                }
+            },
+            '/transparency': {
+                'get': {
+                    'summary': 'Get All Transparency Calculations',
+                    'description': 'Retrieves a list of transparency calculations with optional filtering by calculation type, instrument type, or ISIN',
+                    'tags': ['Transparency'],
+                    'parameters': [
+                        {
+                            'name': 'calculation_type',
+                            'in': 'query',
+                            'description': 'Filter by calculation type',
+                            'schema': {'type': 'string', 'enum': ['EQUITY', 'NON_EQUITY']}
+                        },
+                        {
+                            'name': 'instrument_type',
+                            'in': 'query',
+                            'description': 'Filter by instrument type',
+                            'schema': {'type': 'string', 'enum': ['equity', 'debt', 'futures']}
+                        },
+                        {
+                            'name': 'isin',
+                            'in': 'query',
+                            'description': 'Filter by ISIN',
+                            'schema': {'type': 'string'}
+                        },
+                        {
+                            'name': 'page',
+                            'in': 'query',
+                            'description': 'Page number',
+                            'schema': {'type': 'integer', 'default': 1}
+                        },
+                        {
+                            'name': 'per_page',
+                            'in': 'query',
+                            'description': 'Items per page',
+                            'schema': {'type': 'integer', 'default': 20}
+                        }
+                    ],
+                    'responses': {
+                        '200': {
+                            'description': 'Success',
+                            'content': {
+                                'application/json': {
+                                    'schema': {
+                                        'type': 'object',
+                                        'properties': {
+                                            'status': {'type': 'string'},
+                                            'data': {
+                                                'type': 'array',
+                                                'items': {
+                                                    'type': 'object',
+                                                    'properties': {
+                                                        'id': {'type': 'string'},
+                                                        'isin': {'type': 'string'},
+                                                        'calculation_type': {'type': 'string'},
+                                                        'liquidity': {'type': 'boolean'},
+                                                        'total_transactions_executed': {'type': 'integer'},
+                                                        'total_volume_executed': {'type': 'number'}
+                                                    }
+                                                }
+                                            },
+                                            'meta': {
+                                                'type': 'object',
+                                                'properties': {
+                                                    'page': {'type': 'integer'},
+                                                    'per_page': {'type': 'integer'},
+                                                    'total': {'type': 'integer'}
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                'post': {
+                    'summary': 'Create Transparency Calculation',
+                    'description': 'Creates a new transparency calculation with the provided data',
+                    'tags': ['Transparency'],
+                    'requestBody': {
+                        'content': {
+                            'application/json': {
+                                'schema': {
+                                    'type': 'object',
+                                    'required': ['ISIN', 'TechRcrdId'],
+                                    'properties': {
+                                        'ISIN': {'type': 'string', 'description': 'International Securities Identification Number'},
+                                        'TechRcrdId': {'type': 'string', 'description': 'Technical record identifier'},
+                                        'calculation_type': {'type': 'string', 'enum': ['EQUITY', 'NON_EQUITY'], 'default': 'NON_EQUITY'},
+                                        'FrDt': {'type': 'string', 'format': 'date', 'description': 'From date (YYYY-MM-DD)'},
+                                        'ToDt': {'type': 'string', 'format': 'date', 'description': 'To date (YYYY-MM-DD)'},
+                                        'Lqdty': {'type': 'string', 'description': 'Liquidity indicator (true/false)'},
+                                        'TtlNbOfTxsExctd': {'type': 'integer', 'description': 'Total number of transactions executed'},
+                                        'TtlVolOfTxsExctd': {'type': 'number', 'description': 'Total volume of transactions executed'}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    'responses': {
+                        '201': {'description': 'Transparency calculation created successfully'},
+                        '400': {'description': 'Bad request - invalid data provided'}
+                    }
+                }
+            },
+            '/transparency/{transparency_id}': {
+                'get': {
+                    'summary': 'Get Transparency Calculation by ID',
+                    'description': 'Retrieves detailed information about a specific transparency calculation',
+                    'tags': ['Transparency'],
+                    'parameters': [
+                        {
+                            'name': 'transparency_id',
+                            'in': 'path',
+                            'required': True,
+                            'description': 'Transparency calculation ID',
+                            'schema': {'type': 'string'}
+                        }
+                    ],
+                    'responses': {
+                        '200': {
+                            'description': 'Success',
+                            'content': {
+                                'application/json': {
+                                    'schema': {
+                                        'type': 'object',
+                                        'properties': {
+                                            'id': {'type': 'string'},
+                                            'isin': {'type': 'string'},
+                                            'calculation_type': {'type': 'string'},
+                                            'tech_record_id': {'type': 'string'},
+                                            'from_date': {'type': 'string', 'format': 'date'},
+                                            'to_date': {'type': 'string', 'format': 'date'},
+                                            'liquidity': {'type': 'boolean'},
+                                            'total_transactions_executed': {'type': 'integer'},
+                                            'total_volume_executed': {'type': 'number'},
+                                            'created_at': {'type': 'string', 'format': 'date-time'},
+                                            'updated_at': {'type': 'string', 'format': 'date-time'}
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        '404': {'description': 'Transparency calculation not found'}
+                    }
+                }
+            },
+            '/transparency/isin/{isin}': {
+                'get': {
+                    'summary': 'Get Transparency by ISIN',
+                    'description': 'Retrieves transparency calculations for a specific ISIN, optionally creating them if they do not exist',
+                    'tags': ['Transparency'],
+                    'parameters': [
+                        {
+                            'name': 'isin',
+                            'in': 'path',
+                            'required': True,
+                            'description': 'ISIN to search for',
+                            'schema': {'type': 'string'}
+                        },
+                        {
+                            'name': 'calculation_type',
+                            'in': 'query',
+                            'description': 'Calculation type to get/create',
+                            'schema': {'type': 'string', 'enum': ['EQUITY', 'NON_EQUITY']}
+                        },
+                        {
+                            'name': 'ensure_instrument',
+                            'in': 'query',
+                            'description': 'Ensure instrument exists before creating transparency data',
+                            'schema': {'type': 'boolean', 'default': True}
+                        }
+                    ],
+                    'responses': {
+                        '200': {'description': 'Success'},
+                        '404': {'description': 'No calculations found for this ISIN'}
+                    }
+                }
+            },
+            '/transparency/batch': {
+                'post': {
+                    'summary': 'Batch Source Transparency from FITRS',
+                    'description': 'Batch source transparency calculations from FITRS data based on specified criteria',
+                    'tags': ['Transparency'],
+                    'requestBody': {
+                        'content': {
+                            'application/json': {
+                                'schema': {
+                                    'type': 'object',
+                                    'required': ['calculation_type'],
+                                    'properties': {
+                                        'calculation_type': {'type': 'string', 'enum': ['EQUITY', 'NON_EQUITY']},
+                                        'isin_prefix': {'type': 'string', 'description': 'ISIN prefix filter (e.g., NL for Netherlands)'},
+                                        'limit': {'type': 'integer', 'default': 10, 'description': 'Maximum number of calculations to create'},
+                                        'cfi_type': {'type': 'string', 'enum': ['D', 'F', 'E'], 'description': 'CFI type filter'}
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    'responses': {
+                        '201': {'description': 'Batch transparency calculations created successfully'},
+                        '400': {'description': 'Bad request - invalid parameters'}
+                    }
+                }
+            },
+            '/transparency/batch-create': {
+                'post': {
+                    'summary': 'Batch Create Transparency Calculations',
+                    'description': 'Create multiple transparency calculations from provided data array',
+                    'tags': ['Transparency'],
+                    'requestBody': {
+                        'content': {
+                            'application/json': {
+                                'schema': {
+                                    'type': 'object',
+                                    'required': ['records'],
+                                    'properties': {
+                                        'records': {
+                                            'type': 'array',
+                                            'items': {
+                                                'type': 'object',
+                                                'properties': {
+                                                    'ISIN': {'type': 'string'},
+                                                    'TechRcrdId': {'type': 'string'},
+                                                    'calculation_type': {'type': 'string', 'enum': ['EQUITY', 'NON_EQUITY']},
+                                                    'FrDt': {'type': 'string', 'format': 'date'},
+                                                    'ToDt': {'type': 'string', 'format': 'date'},
+                                                    'Lqdty': {'type': 'string'},
+                                                    'TtlNbOfTxsExctd': {'type': 'integer'},
+                                                    'TtlVolOfTxsExctd': {'type': 'number'}
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    'responses': {
+                        '201': {'description': 'Batch creation completed'},
+                        '400': {'description': 'Bad request - invalid records provided'}
+                    }
+                }
+            },
+            '/schemas': {
+                'get': {
+                    'summary': 'Get All Schemas',
+                    'tags': ['Schemas'],
+                    'responses': {
+                        '200': {
+                            'description': 'Success',
+                            'content': {
+                                'application/json': {
+                                    'schema': {
+                                        'type': 'object',
+                                        'properties': {
+                                            'status': {'type': 'string'},
+                                            'data': {'type': 'array', 'items': {'type': 'object'}}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         'components': {
-            'schemas': {},
+            'schemas': {
+                'Error': {
+                    'type': 'object',
+                    'properties': {
+                        'error': {'type': 'string'}
+                    }
+                },
+                'TransparencyCalculation': {
+                    'type': 'object',
+                    'properties': {
+                        'id': {'type': 'string'},
+                        'isin': {'type': 'string'},
+                        'calculation_type': {'type': 'string', 'enum': ['EQUITY', 'NON_EQUITY']},
+                        'tech_record_id': {'type': 'string'},
+                        'from_date': {'type': 'string', 'format': 'date'},
+                        'to_date': {'type': 'string', 'format': 'date'},
+                        'liquidity': {'type': 'boolean'},
+                        'total_transactions_executed': {'type': 'integer'},
+                        'total_volume_executed': {'type': 'number'},
+                        'created_at': {'type': 'string', 'format': 'date-time'},
+                        'updated_at': {'type': 'string', 'format': 'date-time'}
+                    }
+                }
+            },
             'securitySchemes': {
                 'ApiKeyAuth': {
                     'type': 'apiKey',

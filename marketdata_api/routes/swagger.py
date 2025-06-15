@@ -1,6 +1,10 @@
 from flask import Blueprint, render_template, send_from_directory, send_file, current_app, jsonify
 from flask import Blueprint
 from flask_restx import Api, Resource, fields
+
+# Import transparency routes to register endpoints
+from .transparency_routes import transparency_bp
+
 from ..constants import (
     HTTPStatus, Pagination, API as APIConstants, ResponseFields,
     ErrorMessages, Endpoints
@@ -16,7 +20,7 @@ api = Api(swagger_bp,
          version=APIConstants.VERSION,
          title='MarketDataAPI',
          description='API for financial market data, instrument details, and legal entity information',
-         doc='/swagger',
+         doc='/swagger/',
          authorizations={
             'apikey': {
                 'type': 'apiKey',
@@ -31,6 +35,7 @@ instruments_ns = api.namespace('instruments', description='Instrument operations
 legal_entities_ns = api.namespace('legal-entities', description='Legal entity operations')
 relationships_ns = api.namespace('relationships', description='Entity relationship operations')
 schemas_ns = api.namespace('schemas', description='Schema management operations')
+transparency_ns = api.namespace('transparency', description='Transparency calculation operations')
 
 # Define response models
 error_model = api.model('Error', {
@@ -190,6 +195,88 @@ schema_list_response = api.model('SchemaListResponse', {
 schema_detail_response = api.model('SchemaDetailResponse', {
     'status': fields.String(required=True, description="Response status", enum=["success"]),
     'data': fields.Nested(schema_detailed)
+})
+
+# Transparency models
+transparency_base = api.model('TransparencyBase', {
+    'id': fields.String(required=True, description="Unique identifier"),
+    'isin': fields.String(required=True, description="International Securities Identification Number"),
+    'calculation_type': fields.String(required=True, description="Type of calculation", enum=['EQUITY', 'NON_EQUITY']),
+    'tech_record_id': fields.String(description="Technical record identifier"),
+    'from_date': fields.DateTime(description="From date"),
+    'to_date': fields.DateTime(description="To date"),
+    'liquidity': fields.Boolean(description="Liquidity indicator"),
+    'total_transactions_executed': fields.Integer(description="Total number of transactions executed"),
+    'total_volume_executed': fields.Float(description="Total volume of transactions executed"),
+    'created_at': fields.DateTime(description="Creation timestamp"),
+    'updated_at': fields.DateTime(description="Last update timestamp")
+})
+
+equity_transparency_details = api.model('EquityTransparencyDetails', {
+    'financial_instrument_classification': fields.String(description="Financial instrument classification"),
+    'methodology': fields.String(description="Methodology used"),
+    'average_daily_turnover': fields.Float(description="Average daily turnover"),
+    'large_in_scale': fields.Float(description="Large in scale threshold"),
+    'average_daily_number_of_transactions': fields.Float(description="Average daily number of transactions"),
+    'average_transaction_value': fields.Float(description="Average transaction value"),
+    'standard_market_size': fields.Float(description="Standard market size")
+})
+
+debt_transparency_details = api.model('DebtTransparencyDetails', {
+    'description': fields.String(description="Description"),
+    'bond_type': fields.String(description="Bond type"),
+    'is_liquid': fields.Boolean(description="Liquidity indicator"),
+    'pre_trade_large_in_scale_threshold': fields.Float(description="Pre-trade large in scale threshold"),
+    'post_trade_large_in_scale_threshold': fields.Float(description="Post-trade large in scale threshold"),
+    'criterion_name': fields.String(description="Criterion name"),
+    'criterion_value': fields.String(description="Criterion value")
+})
+
+futures_transparency_details = api.model('FuturesTransparencyDetails', {
+    'description': fields.String(description="Description"),
+    'underlying_isin': fields.String(description="Underlying instrument ISIN"),
+    'is_stock_dividend_future': fields.Boolean(description="Stock dividend future indicator"),
+    'pre_trade_large_in_scale_threshold': fields.Float(description="Pre-trade large in scale threshold"),
+    'post_trade_large_in_scale_threshold': fields.Float(description="Post-trade large in scale threshold"),
+    'criterion_name': fields.String(description="Criterion name"),
+    'criterion_value': fields.String(description="Criterion value")
+})
+
+transparency_detailed = api.inherit('TransparencyDetailed', transparency_base, {
+    'equity_details': fields.Nested(equity_transparency_details, description="Equity transparency details"),
+    'debt_details': fields.Nested(debt_transparency_details, description="Debt transparency details"),
+    'futures_details': fields.Nested(futures_transparency_details, description="Futures transparency details")
+})
+
+transparency_list_response = api.model('TransparencyListResponse', {
+    'status': fields.String(required=True, description="Response status", enum=["success"]),
+    'data': fields.List(fields.Nested(transparency_detailed)),
+    'meta': fields.Nested(pagination_meta)
+})
+
+transparency_create_request = api.model('TransparencyCreateRequest', {
+    'ISIN': fields.String(required=True, description="International Securities Identification Number"),
+    'TechRcrdId': fields.String(required=True, description="Technical record identifier"),
+    'calculation_type': fields.String(description="Type of calculation", enum=['EQUITY', 'NON_EQUITY']),
+    'FrDt': fields.String(description="From date (YYYY-MM-DD)"),
+    'ToDt': fields.String(description="To date (YYYY-MM-DD)"),
+    'Lqdty': fields.String(description="Liquidity (true/false)"),
+    'TtlNbOfTxsExctd': fields.Integer(description="Total number of transactions executed"),
+    'TtlVolOfTxsExctd': fields.Float(description="Total volume of transactions executed"),
+    'Desc': fields.String(description="Description"),
+    'CritNm': fields.String(description="Criterion name"),
+    'CritVal': fields.String(description="Criterion value")
+})
+
+batch_transparency_request = api.model('BatchTransparencyRequest', {
+    'calculation_type': fields.String(required=True, description="Type of calculation", enum=['EQUITY', 'NON_EQUITY']),
+    'isin_prefix': fields.String(description="ISIN prefix filter (e.g., 'NL' for Netherlands)"),
+    'limit': fields.Integer(description="Maximum number of calculations to create", default=10),
+    'cfi_type': fields.String(description="CFI type filter (D, F, E)", enum=['D', 'F', 'E'])
+})
+
+batch_create_transparency_request = api.model('BatchCreateTransparencyRequest', {
+    'records': fields.List(fields.Nested(transparency_create_request), required=True, description="List of transparency records to create")
 })
 
 # Swagger documentation for instrument endpoints
@@ -595,6 +682,95 @@ class SchemaList(Resource):
     def get(self):
         '''Retrieves a list of all available schemas'''
         return None
+
+# Import the transparency routes blueprint to ensure endpoints are registered
+from . import transparency_routes
+
+# Add transparency endpoints to the API
+@transparency_ns.route('')
+class TransparencyList(Resource):
+    @api.doc('list_transparency_calculations')
+    @api.marshal_with(transparency_list_response)
+    @api.param('calculation_type', 'Filter by calculation type', enum=['EQUITY', 'NON_EQUITY'])
+    @api.param('instrument_type', 'Filter by instrument type', enum=['equity', 'debt', 'futures'])
+    @api.param('isin', 'Filter by ISIN')
+    @api.param('page', 'Page number', type='integer', default=1)
+    @api.param('per_page', 'Items per page', type='integer', default=20)
+    def get(self):
+        """Get all transparency calculations with optional filtering"""
+        from .transparency_routes import list_transparency_calculations
+        return list_transparency_calculations()
+    
+    @api.doc('create_transparency_calculation')
+    @api.expect(transparency_create_request)
+    @api.response(201, 'Transparency calculation created')
+    @api.response(400, 'Bad request', error_model)
+    def post(self):
+        """Create a new transparency calculation"""
+        from .transparency_routes import create_transparency_calculation
+        return create_transparency_calculation()
+
+@transparency_ns.route('/<string:transparency_id>')
+@api.param('transparency_id', 'The transparency calculation identifier')
+class TransparencyItem(Resource):
+    @api.doc('get_transparency_calculation')
+    @api.marshal_with(transparency_detailed)
+    @api.response(404, 'Transparency calculation not found', error_model)
+    def get(self, transparency_id):
+        """Get transparency calculation by ID"""
+        from .transparency_routes import get_transparency_calculation
+        return get_transparency_calculation(transparency_id)
+    
+    @api.doc('update_transparency_calculation')
+    @api.expect(transparency_create_request)
+    @api.response(200, 'Transparency calculation updated')
+    @api.response(404, 'Transparency calculation not found', error_model)
+    def put(self, transparency_id):
+        """Update an existing transparency calculation"""
+        from .transparency_routes import update_transparency_calculation
+        return update_transparency_calculation(transparency_id)
+    
+    @api.doc('delete_transparency_calculation')
+    @api.response(200, 'Transparency calculation deleted')
+    @api.response(404, 'Transparency calculation not found', error_model)
+    def delete(self, transparency_id):
+        """Delete a transparency calculation"""
+        from .transparency_routes import delete_transparency_calculation
+        return delete_transparency_calculation(transparency_id)
+
+@transparency_ns.route('/isin/<string:isin>')
+@api.param('isin', 'The ISIN to search for')
+class TransparencyByIsin(Resource):
+    @api.doc('get_transparency_by_isin')
+    @api.marshal_with(transparency_list_response)
+    @api.param('calculation_type', 'Calculation type to get/create', enum=['EQUITY', 'NON_EQUITY'])
+    @api.param('ensure_instrument', 'Ensure instrument exists before creating transparency data', type='boolean', default=True)
+    def get(self, isin):
+        """Get transparency calculations for a specific ISIN"""
+        from .transparency_routes import get_transparency_by_isin
+        return get_transparency_by_isin(isin)
+
+@transparency_ns.route('/batch')
+class TransparencyBatch(Resource):
+    @api.doc('batch_source_transparency')
+    @api.expect(batch_transparency_request)
+    @api.response(201, 'Transparency calculations sourced from FITRS')
+    @api.response(400, 'Bad request', error_model)
+    def post(self):
+        """Batch source transparency calculations from FITRS data"""
+        from .transparency_routes import batch_source_transparency
+        return batch_source_transparency()
+
+@transparency_ns.route('/batch-create')
+class TransparencyBatchCreate(Resource):
+    @api.doc('batch_create_transparency')
+    @api.expect(batch_create_transparency_request)
+    @api.response(201, 'Transparency calculations created')
+    @api.response(400, 'Bad request', error_model)
+    def post(self):
+        """Batch create transparency calculations from provided data"""
+        from .transparency_routes import batch_create_transparency
+        return batch_create_transparency()
 
 # Add a route to serve the OpenAPI specification
 @swagger_bp.route('/openapi.yaml')

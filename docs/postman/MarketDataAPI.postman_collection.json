@@ -131,6 +131,141 @@
           ]
         }
       }
+    },
+    {
+      "name": "Get all transparency calculations with optional filtering",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/transparency",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "transparency"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Create a new transparency calculation",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/transparency",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "transparency"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Batch source transparency calculations from FITRS data",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/transparency/batch",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "transparency",
+            "batch"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Batch create transparency calculations from provided data",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/transparency/batch-create",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "transparency",
+            "batch-create"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get transparency calculations for a specific ISIN",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/transparency/isin/{isin}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "transparency",
+            "isin",
+            "{isin}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get transparency calculation by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/transparency/{transparency_id}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "transparency",
+            "{transparency_id}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Delete a transparency calculation",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/transparency/{transparency_id}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "transparency",
+            "{transparency_id}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Update an existing transparency calculation",
+      "request": {
+        "method": "PUT",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/transparency/{transparency_id}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "transparency",
+            "{transparency_id}"
+          ]
+        }
+      }
     }
   ]
 }

@@ -44,10 +44,13 @@ def create_app():
     # Set root logger
     root_logger.setLevel(logging.DEBUG)
     root_logger.addHandler(debug_handler)
-    root_logger.addHandler(console_handler)    # Initialize database and create tables
+    root_logger.addHandler(console_handler)
+    
+    # Initialize database and create tables
     app.logger.info("Initializing database...")
     init_db()
     app.logger.info("Database initialization complete")
+    
     from marketdata_api.routes.schema import schema_bp
     from marketdata_api.routes.swagger import swagger_bp  # Import the Swagger API blueprint
     from marketdata_api.routes.docs import docs_bp  # Import the Docs API blueprint
@@ -63,11 +66,8 @@ def create_app():
     # Register all the refactored CRUD routes
     register_routes(app)
 
-    @app.route('/health')
-    def health_check():
-        return {'status': 'healthy'}, 200
-
     return app
+
 
 if __name__ == "__main__":
     app = create_app()

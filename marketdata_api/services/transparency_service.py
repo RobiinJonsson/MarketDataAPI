@@ -3,6 +3,8 @@ import logging
 import pandas as pd
 from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import joinedload
+
 from ..database.session import get_session, SessionLocal
 from ..database.model_mapper import map_transparency_data
 from ..models.transparency import TransparencyCalculation, EquityTransparency, NonEquityTransparency, DebtTransparency, FuturesTransparency
@@ -10,6 +12,7 @@ from ..models.instrument import Instrument
 from datetime import datetime, UTC
 from .esma_data_loader import EsmaDataLoader
 from ..config import esmaConfig
+
 
 logger = logging.getLogger(__name__)
 
@@ -106,25 +109,36 @@ class TransparencyService:
         finally:
             session.close()
 
-    def get_transparency_by_isin(self, isin: str) -> Tuple[Session, List[TransparencyCalculation]]:
-        """
-        Retrieve transparency calculations by ISIN.
+    def get_transparency_by_isin(self, isin: str, calculation_type: str = None) -> Tuple[Session, List[TransparencyCalculation]]:
+        """Get transparency calculations for a specific ISIN"""
+        session = SessionLocal()  # Use SessionLocal() instead of get_session()
         
-        Args:
-            isin: The ISIN to search for
-            
-        Returns:
-            Tuple of (Session, List[TransparencyCalculation])
-        """
-        session = SessionLocal()
         try:
-            calculations = (
-                session.query(TransparencyCalculation)
-                .filter(TransparencyCalculation.isin == isin)
-                .all()
+            query = session.query(TransparencyCalculation).filter(
+                TransparencyCalculation.isin == isin
             )
+            
+            if calculation_type:
+                query = query.filter(TransparencyCalculation.calculation_type == calculation_type)
+            
+            # Add eager loading for related entities
+            if calculation_type == "EQUITY":
+                query = query.options(joinedload(TransparencyCalculation.equity_transparency))
+            elif calculation_type == "NON_EQUITY":
+                query = query.options(
+                    joinedload(TransparencyCalculation.non_equity_transparency),
+                    joinedload(TransparencyCalculation.debt_transparency),
+                    joinedload(TransparencyCalculation.futures_transparency)
+                )
+            
+            calculations = query.all()
+            
+            logger.info(f"Found {len(calculations)} transparency calculations for ISIN {isin} with type {calculation_type}")
+            
             return session, calculations
-        except:
+            
+        except Exception as e:
+            logger.error(f"Error getting transparency by ISIN {isin}: {str(e)}")
             session.close()
             raise
 
@@ -525,21 +539,20 @@ class TransparencyService:
             
             # Determine file type based on calculation type
             if calculation_type == 'EQUITY':
-                # Look for FULECR files (equity transparency)
-                fitrs_files = list_files[list_files['download_link'].str.contains('FULECR', na=False)]
-                self.logger.info(f"Found {len(fitrs_files)} FULECR files")
+                # For EQUITY, ONLY look for FULECR_E files (equity transparency with CFI "E")
+                fitrs_files = list_files[list_files['download_link'].str.contains('FULECR_E', na=False)]
+                self.logger.info(f"Found {len(fitrs_files)} FULECR_E files for equity calculations")
             else:
-                # For NON_EQUITY, we need to check multiple FULNCR file types
-                # Only target specific types: D (Debt), F (Futures), E (ETFs)
-                # Exclude R, C, H, and other types for now
-                fitrs_files = list_files[list_files['download_link'].str.contains('FULNCR', na=False)]
+                # For NON_EQUITY, ONLY search target FULNCR file types: D, F, E
+                target_types = ['D', 'F', 'E']  # Debt, Futures, ETFs only
+                fitrs_files = pd.DataFrame()
                 
-                # Strategy 1: Try to get CFI from existing instrument data
+                # Strategy 1: Try to get CFI from existing instrument data for targeted search
                 instrument_cfi = self._get_instrument_cfi_from_isin(isin)
                 if instrument_cfi:
                     cfi_type = instrument_cfi[0].upper()  # First character of CFI
                     # Only proceed if it's one of our target types
-                    if cfi_type in ['D', 'F', 'E']:
+                    if cfi_type in target_types:
                         specific_pattern = f'FULNCR_{cfi_type}'
                         specific_files = list_files[list_files['download_link'].str.contains(specific_pattern, na=False)]
                         if not specific_files.empty:
@@ -548,30 +561,25 @@ class TransparencyService:
                         else:
                             self.logger.info(f"No specific {specific_pattern} files found for CFI {cfi_type}")
                     else:
-                        self.logger.info(f"CFI type {cfi_type} not in target types (D, F, E), will search all FULNCR files")
+                        self.logger.info(f"CFI type {cfi_type} not in target types (D, F, E), will search only target types")
                 
-                # Strategy 2: If no specific files found or no instrument data, search only target types
-                if fitrs_files.empty or instrument_cfi is None or instrument_cfi[0].upper() not in ['D', 'F', 'E']:
-                    # Only search target FULNCR file types: D, F, E
-                    target_types = ['D', 'F', 'E']  # Debt, Futures, ETFs only
-                    filtered_files = pd.DataFrame()
-                    
+                # Strategy 2: If no instrument CFI or not in target types, search ALL target types
+                if fitrs_files.empty:
                     for cfi_type in target_types:
                         pattern = f'FULNCR_{cfi_type}'
                         type_files = list_files[list_files['download_link'].str.contains(pattern, na=False)]
                         if not type_files.empty:
-                            if filtered_files.empty:
-                                filtered_files = type_files
+                            if fitrs_files.empty:
+                                fitrs_files = type_files
                             else:
-                                filtered_files = pd.concat([filtered_files, type_files])
+                                fitrs_files = pd.concat([fitrs_files, type_files])
                     
-                    if not filtered_files.empty:
-                        fitrs_files = filtered_files
-                        
                     if instrument_cfi is None:
-                        self.logger.info(f"No instrument found for ISIN {isin}, will search target FULNCR file types (D, F, E)")
+                        self.logger.info(f"No instrument found for ISIN {isin}, searching target FULNCR file types (D, F, E)")
+                    else:
+                        self.logger.info(f"Instrument CFI {instrument_cfi} not in target types, searching all target FULNCR file types (D, F, E)")
                 
-                self.logger.info(f"Found {len(fitrs_files)} FULNCR files total")
+                self.logger.info(f"Found {len(fitrs_files)} target FULNCR files total")
             
             if fitrs_files.empty:
                 self.logger.warning(f"No FITRS files found for calculation type {calculation_type}")
@@ -581,11 +589,24 @@ class TransparencyService:
             all_isin_data = []
             for _, file_info in fitrs_files.iterrows():
                 try:
-                    self.logger.info(f"Searching in file: {file_info['download_link']}")
-                    df = self.esma_loader.download_file(file_info['download_link'])
+                    # Double-check file URL contains only our target patterns
+                    file_url = file_info['download_link']
+                    if calculation_type == 'EQUITY':
+                        # Ensure this file is actually FULECR_E
+                        if 'FULECR_E' not in file_url:
+                            self.logger.warning(f"Skipping non-FULECR_E file: {file_url}")
+                            continue
+                    elif calculation_type == 'NON_EQUITY':
+                        # Ensure this file is actually one of our target types
+                        if not any(f'FULNCR_{target}' in file_url for target in ['D', 'F', 'E']):
+                            self.logger.warning(f"Skipping non-target file: {file_url}")
+                            continue
+                    
+                    self.logger.info(f"Searching in file: {file_url}")
+                    df = self.esma_loader.download_file(file_url)
                     
                     if df.empty:
-                        self.logger.warning(f"Empty dataframe from file: {file_info['download_link']}")
+                        self.logger.warning(f"Empty dataframe from file: {file_url}")
                         continue
 
                     # Search for ISIN in the dataframe - check multiple possible column names
@@ -601,7 +622,7 @@ class TransparencyService:
                                 break
                     
                     if isin_data is not None and not isin_data.empty:
-                        self.logger.info(f"Found {len(isin_data)} FITRS records for ISIN {isin} in file: {file_info['download_link']}")
+                        self.logger.info(f"Found {len(isin_data)} FITRS records for ISIN {isin} in file: {file_url}")
                         # Convert each row to dict and add to our collection
                         for _, row in isin_data.iterrows():
                             record_dict = row.to_dict()
@@ -656,19 +677,24 @@ class TransparencyService:
             
             # Filter files based on calculation type and optional CFI type
             if calculation_type == 'EQUITY':
-                fitrs_files = list_files[list_files['download_link'].str.contains('FULECR', na=False)]
+                # For EQUITY, ONLY use FULECR_E files
+                fitrs_files = list_files[list_files['download_link'].str.contains('FULECR_E', na=False)]
+                self.logger.info(f"Found {len(fitrs_files)} FULECR_E files for equity calculations")
             else:
-                if cfi_type and cfi_type.upper() in ['D', 'F', 'E']:
+                # For NON_EQUITY, ONLY use target FULNCR file types: D, F, E
+                target_types = ['D', 'F', 'E']  # Debt, Futures, ETFs only
+                
+                if cfi_type and cfi_type.upper() in target_types:
                     # Filter by specific FULNCR type (only target types)
                     pattern = f'FULNCR_{cfi_type.upper()}'
                     fitrs_files = list_files[list_files['download_link'].str.contains(pattern, na=False)]
                     self.logger.info(f"Filtering for {pattern} files")
                 else:
                     # Get only target FULNCR files (D, F, E)
-                    target_patterns = ['FULNCR_D', 'FULNCR_F', 'FULNCR_E']
                     fitrs_files = pd.DataFrame()
                     
-                    for pattern in target_patterns:
+                    for target_type in target_types:
+                        pattern = f'FULNCR_{target_type}'
                         pattern_files = list_files[list_files['download_link'].str.contains(pattern, na=False)]
                         if not pattern_files.empty:
                             if fitrs_files.empty:
@@ -685,8 +711,20 @@ class TransparencyService:
             count = 0
             for _, file_info in fitrs_files.iterrows():
                 try:
-                    self.logger.info(f"Processing file: {file_info['download_link']}")
-                    df = self.esma_loader.download_file(file_info['download_link'])
+                    file_url = file_info['download_link']
+                    
+                    # Double-check file URL contains only our target patterns
+                    if calculation_type == 'EQUITY':
+                        if 'FULECR_E' not in file_url:
+                            self.logger.warning(f"Skipping non-FULECR_E file: {file_url}")
+                            continue
+                    elif calculation_type == 'NON_EQUITY':
+                        if not any(f'FULNCR_{target}' in file_url for target in ['D', 'F', 'E']):
+                            self.logger.warning(f"Skipping non-target file: {file_url}")
+                            continue
+                    
+                    self.logger.info(f"Processing file: {file_url}")
+                    df = self.esma_loader.download_file(file_url)
                     
                     if df.empty:
                         continue
@@ -700,7 +738,7 @@ class TransparencyService:
                             break
                     
                     if not isin_column:
-                        self.logger.warning(f"No ISIN column found in file {file_info['download_link']}")
+                        self.logger.warning(f"No ISIN column found in file {file_url}")
                         continue
                     
                     if isin_prefix:
@@ -759,3 +797,40 @@ class TransparencyService:
         except Exception as e:
             self.logger.error(f"Batch sourcing failed: {str(e)}")
             return []
+
+    def get_all_calculations(self, calculation_type=None, instrument_type=None, isin=None, page=1, per_page=20):
+        """Get all transparency calculations with optional filtering"""
+        session = SessionLocal()  # Use SessionLocal() instead of get_session()
+        
+        try:
+            logger.info(f"Service called with: calculation_type={calculation_type}, instrument_type={instrument_type}, isin={isin}")
+            
+            query = session.query(TransparencyCalculation)
+            
+            # Apply filters
+            if calculation_type:
+                query = query.filter(TransparencyCalculation.calculation_type == calculation_type)
+                logger.info(f"Applied calculation_type filter: {calculation_type}")
+            
+            if isin:
+                query = query.filter(TransparencyCalculation.isin == isin)
+                logger.info(f"Applied isin filter: {isin}")
+            
+            # Note: instrument_type filtering would need to join with instruments table
+            # For now, we'll skip this filter or implement it later
+            
+            # Add pagination
+            offset = (page - 1) * per_page
+            query = query.offset(offset).limit(per_page)
+            
+            calculations = query.all()
+            logger.info(f"Query returned {len(calculations)} calculations")
+            
+            return session, calculations
+            
+        except Exception as e:
+            logger.error(f"Error in get_all_calculations: {str(e)}")
+            session.close()
+            raise
+
+    

@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 common_bp = Blueprint("common", __name__, url_prefix=API.PREFIX)
 
 # Create a separate blueprint for non-API routes (without prefix)
-frontend_bp = Blueprint("frontend", __name__)
+frontend_bp = Blueprint("frontend_routes", __name__)  # Changed name to avoid conflict
 
 # Error handler for database errors
 @common_bp.errorhandler(SQLAlchemyError)

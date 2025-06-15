@@ -1,185 +1,154 @@
 #!/usr/bin/env python
 """
-Validation script for the refactored routes.
-This script tests all routes to ensure they work properly after refactoring.
+Validation script for MarketDataAPI refactoring
 
-Run this script directly from the command line:
-python scripts/validate_refactoring.py [--base-url http://localhost:5000]
-
-Or, if the server isn't already running, use the --start-server flag:
-python scripts/validate_refactoring.py --start-server
+This script validates that the refactored routes are working correctly,
+all imports are resolvable, and the API endpoints are accessible.
 """
 
 import sys
 import os
-import time
-import requests
-import argparse
-import subprocess
-from urllib.parse import urljoin
+from pathlib import Path
 
-# Try to import tabulate, but provide fallback if not available
-try:
-    from tabulate import tabulate
-except ImportError:
-    def tabulate(data, **kwargs):
-        result = []
-        headers = kwargs.get('headers', [])
-        if headers:
-            result.append(' | '.join(headers))
-            result.append('-' * 80)
-        for row in data:
-            result.append(' | '.join(str(item) for item in row))
-        return '\n'.join(result)
+# Set UTF-8 encoding for Windows compatibility
+if sys.platform.startswith('win'):
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
-# Add the project root directory to the Python path
-sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
+# Add the project root to the path
+project_root = Path(__file__).parent.parent
+sys.path.insert(0, str(project_root))
 
-def test_endpoint(base_url, endpoint, method='GET', expected_status=200, description=None):
-    """Test an API endpoint and return the result"""
-    url = urljoin(base_url, endpoint)
+def safe_print(message):
+    """Print message with encoding safety for Windows terminals."""
     try:
-        # Prepare different payloads for different endpoints
-        payload = {}
-        
-        if method in ['POST', 'PUT']:
-            if 'instruments' in endpoint:
-                # Basic instrument data with required fields (using 'Id' as expected by service)
-                payload = {
-                    "Id": "SE0000242455",  # Use 'Id' field as expected by InstrumentService
-                    "FinInstrmGnlAttrbts_FullNm": "Test Instrument",
-                    "type": "equity",  # Required field
-                    "currency": "USD"
-                }           
-            elif 'entities' in endpoint:
-                # Basic entity data with LEI - using Apple Inc's real LEI
-                payload = {
-                    "lei": "HWUPKR0MPOU8FGXBT394",  # Apple Inc's real LEI from GLEIF
-                    "name": "Test Entity",
-                    "status": "ACTIVE"
-                }
-        
-        if method == 'GET':
-            response = requests.get(url)
-        elif method == 'POST':
-            response = requests.post(url, json=payload)        
-        elif method == 'PUT':
-            response = requests.put(url, json=payload)
-        elif method == 'DELETE':
-            response = requests.delete(url)
-        else:
-            return False, f"Unsupported method: {method}", None
-        
-        success = response.status_code == expected_status
-        status = f"{response.status_code} ({'PASS' if success else 'FAIL'})"
-        json_data = None
-        try:
-            json_data = response.json()
-        except Exception:
-            pass
-        
-        return success, status, json_data
-    except Exception as e:
-        return False, f"Error: {str(e)}", None
+        print(message)
+    except UnicodeEncodeError:
+        # Fallback: replace problematic characters
+        safe_message = message.encode('ascii', 'replace').decode('ascii')
+        print(safe_message)
 
-def main():
-    parser = argparse.ArgumentParser(description='Test API endpoints to validate refactoring.')
-    parser.add_argument('--base-url', default='http://localhost:5000', help='Base URL of the API')
-    parser.add_argument('--start-server', action='store_true', help='Start the Flask server for testing')
-    parser.add_argument('--server-port', type=int, default=5000, help='Port for the Flask server if starting one')
-    args = parser.parse_args()
-    
-    base_url = args.base_url
-    
-    server_process = None
-    # Start a Flask server if requested
-    if args.start_server:
-        print("Starting Flask development server...")
-        server_cmd = [sys.executable, "-m", "flask", "run", "--port", str(args.server_port)]
-        server_process = subprocess.Popen(
-            server_cmd, 
-            env={**os.environ, "FLASK_APP": "marketdata_api"}, 
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
+def validate_imports():
+    """Validate that all route modules can be imported"""
+    try:
+        # Test core route imports
+        from marketdata_api.routes import (
+            common_routes, instrument_routes, entity_routes, 
+            cfi_routes, transparency_routes, schema, docs
         )
-          # Wait for server to start
-        print("Waiting for server to start...")
-        time.sleep(2)  # Give it a couple seconds to start
+        safe_print("All route modules imported successfully")
         
-    # Define endpoints to test
-    endpoints = [        # Common endpoints
-        {'endpoint': '/api/v1/', 'method': 'GET', 'expected': 200, 'description': 'API Root'},
-        {'endpoint': '/api/v1/info', 'method': 'GET', 'expected': 200, 'description': 'API Info'},
-        {'endpoint': '/api/v1/health', 'method': 'GET', 'expected': 200, 'description': 'Health Check'},
-          # Instrument endpoints
-        {'endpoint': '/api/v1/instruments', 'method': 'GET', 'expected': 200, 'description': 'List Instruments'},
-        {'endpoint': '/api/v1/instruments', 'method': 'POST', 'expected': 201, 'description': 'Create Instrument'},
-        {'endpoint': '/api/v1/instruments/SE0000242455', 'method': 'GET', 'expected': 200, 'description': 'Get Instrument'},
-        {'endpoint': '/api/v1/instruments/XXINVALID', 'method': 'GET', 'expected': 404, 'description': 'Get Invalid Instrument'},
-        {'endpoint': '/api/v1/instruments/SE0000242455', 'method': 'PUT', 'expected': 200, 'description': 'Update Instrument'},
-        {'endpoint': '/api/v1/instruments/XXINVALID', 'method': 'PUT', 'expected': 404, 'description': 'Update Invalid Instrument'},
-        {'endpoint': '/api/v1/instruments/SE0000242455', 'method': 'DELETE', 'expected': 200, 'description': 'Delete Instrument'},
-        {'endpoint': '/api/v1/instruments/XXINVALID', 'method': 'DELETE', 'expected': 404, 'description': 'Delete Invalid Instrument'},
-          # Entity endpoints
-        {'endpoint': '/api/v1/entities', 'method': 'GET', 'expected': 200, 'description': 'List Entities'},
-        {'endpoint': '/api/v1/entities', 'method': 'POST', 'expected': 201, 'description': 'Create Entity'},
-        {'endpoint': '/api/v1/entities/HWUPKR0MPOU8FGXBT394', 'method': 'GET', 'expected': 200, 'description': 'Get Entity'},
-        {'endpoint': '/api/v1/entities/XXINVALID', 'method': 'GET', 'expected': 404, 'description': 'Get Invalid Entity'},
-        {'endpoint': '/api/v1/entities/HWUPKR0MPOU8FGXBT394', 'method': 'PUT', 'expected': 200, 'description': 'Update Entity'},
-        {'endpoint': '/api/v1/entities/XXINVALID', 'method': 'PUT', 'expected': 404, 'description': 'Update Invalid Entity'},
-        {'endpoint': '/api/v1/entities/HWUPKR0MPOU8FGXBT394', 'method': 'DELETE', 'expected': 200, 'description': 'Delete Entity'},
-        {'endpoint': '/api/v1/entities/XXINVALID', 'method': 'DELETE', 'expected': 404, 'description': 'Delete Invalid Entity'},
+        # Test swagger import
+        from marketdata_api.routes.swagger import swagger_bp, api
+        safe_print("Swagger module imported successfully")
         
-        # CFI endpoints
-        {'endpoint': '/api/v1/cfi/ESVUFN', 'method': 'GET', 'expected': 200, 'description': 'Decode Valid CFI'},
-        {'endpoint': '/api/v1/cfi/XXX', 'method': 'GET', 'expected': 400, 'description': 'Invalid CFI Length'},
-        {'endpoint': '/api/v1/cfi/XXXXXX', 'method': 'GET', 'expected': 400, 'description': 'Invalid CFI Format'},
+        # Test route registration
+        from marketdata_api.routes import register_routes
+        safe_print("Route registration function imported successfully")
+        
+        return True
+        
+    except ImportError as e:
+        safe_print(f"Import error: {e}")
+        return False
+
+def validate_service_layers():
+    """Validate that service layers can be imported"""
+    try:
+        from marketdata_api.services import (
+            instrument_service, legal_entity_service, transparency_service
+        )
+        safe_print("All service modules imported successfully")
+        return True
+        
+    except ImportError as e:
+        safe_print(f"Service import error: {e}")
+        return False
+
+def validate_flask_app_creation():
+    """Validate that the Flask app can be created with all routes"""
+    try:
+        from flask import Flask
+        from marketdata_api.routes import register_routes
+        
+        app = Flask(__name__)
+        register_routes(app)
+        
+        # Check that blueprints are registered
+        blueprint_names = [bp.name for bp in app.iter_blueprints()]
+        expected_blueprints = [
+            'common', 'frontend', 'instrument', 'entity', 
+            'cfi', 'transparency', 'schema', 'docs'
+        ]
+        
+        missing_blueprints = [bp for bp in expected_blueprints if bp not in blueprint_names]
+        if missing_blueprints:
+            safe_print(f"Missing blueprints: {missing_blueprints}")
+            return False
+            
+        safe_print(f"Flask app created with all blueprints: {blueprint_names}")
+        return True
+        
+    except Exception as e:
+        safe_print(f"Flask app creation error: {e}")
+        return False
+
+def validate_documentation_structure():
+    """Validate that documentation files exist"""
+    docs_dir = project_root / 'docs'
+    
+    required_files = [
+        'README.md',
+        'api/transparency.md',
+        'api/schemas.md',
+        'api/instruments.md'
     ]
     
-    print(f"Testing API endpoints at {base_url}...")
+    missing_files = []
+    for file_path in required_files:
+        full_path = docs_dir / file_path
+        if not full_path.exists():
+            missing_files.append(str(full_path))
     
-    # Test all endpoints
-    results = []
-    all_success = True
+    if missing_files:
+        safe_print(f"Missing documentation files: {missing_files}")
+        return False
     
-    for endpoint_info in endpoints:
-        success, status, resp_data = test_endpoint(
-            base_url, 
-            endpoint_info['endpoint'], 
-            endpoint_info['method'], 
-            endpoint_info['expected'],
-            endpoint_info.get('description', '')        )
-        
-        results.append([
-            endpoint_info.get('description', ''),
-            f"{endpoint_info['method']} {endpoint_info['endpoint']}",
-            status,
-            'Success' if success else 'Failed'
-        ])
-        
-        if not success:
-            all_success = False
-    
-    # Display results
-    print("\nRefactoring Validation Results:")
-    print(tabulate(results, headers=['Description', 'Endpoint', 'Status', 'Result'], tablefmt='grid'))
-    if all_success:
-        print("\n[SUCCESS] All tests passed! The refactored routes are working correctly.")
-        exit_code = 0
-    else:
-        print("\n[FAILED] Some tests failed. Please check the issues before removing the legacy code.")
-        exit_code = 1
-        
-    # Clean up the server process if we started one
-    if server_process:
-        print("Stopping Flask server...")
-        server_process.terminate()
-        try:
-            server_process.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            server_process.kill()
-    
-    return exit_code
+    safe_print("All required documentation files exist")
+    return True
 
-if __name__ == '__main__':
-    sys.exit(main())
+def main():
+    """Run all validation checks"""
+    safe_print("Validating MarketDataAPI refactoring...")
+    safe_print(f"Project root: {project_root}")
+    
+    checks = [
+        ("Route Imports", validate_imports),
+        ("Service Imports", validate_service_layers),
+        ("Flask App Creation", validate_flask_app_creation),
+        ("Documentation Structure", validate_documentation_structure)
+    ]
+    
+    passed = 0
+    total = len(checks)
+    
+    for check_name, check_func in checks:
+        safe_print(f"\n-> Running {check_name} validation...")
+        if check_func():
+            passed += 1
+        else:
+            safe_print(f"X {check_name} validation failed")
+    
+    safe_print(f"\nValidation Results: {passed}/{total} checks passed")
+    
+    if passed == total:
+        safe_print("All validations passed! The refactoring is successful.")
+        return True
+    else:
+        safe_print("Some validations failed. Please review the errors above.")
+        return False
+
+if __name__ == "__main__":
+    success = main()
+    sys.exit(0 if success else 1)

@@ -124,19 +124,13 @@ class Endpoints:
     ROOT = "/"
     INSTRUMENTS = "/instruments"
     ENTITIES = "/entities"
+    TRANSPARENCY = "/transparency"
     CFI = "/cfi"
+    BATCH = "/batch"
     BATCH_INSTRUMENTS = "/batch/instruments"
-    FIRDS = "/firds"
-    SEARCH = "/api/search"
-    FETCH = "/api/fetch"
-    GLEIF = "/api/gleif"
-    ADMIN = "/admin"
-    
-    # Schema endpoints
-    SCHEMA_SEARCH = "/api/schema/search"
-    SCHEMA_VALIDATE = "/api/schema/validate"
-    SCHEMA_EXAMPLES = "/api/schema/examples"
-    SCHEMA_BASE = "/api/schema"
+    BATCH_ENTITIES = "/batch/entities"
+    HEALTH = "/health"
+    INFO = "/info"
 
 # Request Headers
 class Headers:
@@ -153,6 +147,7 @@ class ContentTypes:
 # Query Parameters
 class QueryParams:
     TYPE = "type"
+    CALCULATION_TYPE = "calculation_type"
     CURRENCY = "currency"
     LIMIT = "limit"
     OFFSET = "offset"

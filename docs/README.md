@@ -21,7 +21,8 @@ docs/
 │   ├── instruments.md          # Instruments API
 │   ├── legal-entities.md       # Legal entities API  
 │   ├── relationships.md        # Relationships API
-│   └── schemas.md              # Schema management API
+│   ├── schemas.md              # Schema management API
+│   └── transparency.md         # Transparency calculations API
 ├── openapi/                    # Generated OpenAPI specifications
 │   └── openapi.yaml           # Auto-generated from swagger.py
 └── postman/                   # Generated Postman collections
@@ -30,26 +31,25 @@ docs/
 
 ## API Overview
 
-### Core Resources
+The MarketDataAPI provides access to:
 
-1. **Instruments** (`/instruments`)
-   - Financial instruments (stocks, bonds, derivatives)
-   - ISIN-based identification
-   - Rich metadata including CFI codes, trading venues
+- **Financial Instruments**: ISIN-based instrument data from FIRDS
+- **Legal Entities**: LEI-based entity information from GLEIF
+- **Entity Relationships**: Parent-child relationships between entities  
+- **Schema Management**: Custom data transformation schemas
+- **Transparency Calculations**: MiFID II transparency data from FITRS
+- **CFI Code Decoding**: Classification of Financial Instruments decoding
 
-2. **Legal Entities** (`/legal-entities`) 
-   - Entity information via LEI codes
-   - Addresses and registration details
-   - Status and jurisdiction data
+### Core Endpoints
 
-3. **Relationships** (`/relationships`)
-   - Parent-child entity relationships
-   - Ownership percentages
-   - Direct vs ultimate relationships
-
-4. **Schemas** (`/schemas`)
-   - Data transformation schemas
-   - Mapping rules for different formats
+- `GET /instruments` - List financial instruments
+- `GET /instruments/{isin}` - Get instrument details
+- `GET /legal-entities` - List legal entities
+- `GET /legal-entities/{lei}` - Get entity details
+- `GET /transparency` - List transparency calculations
+- `GET /transparency/isin/{isin}` - Get transparency data for instrument
+- `GET /schemas` - List available schemas
+- `POST /schema/search` - Transform data using schemas
 
 ### Response Format
 
