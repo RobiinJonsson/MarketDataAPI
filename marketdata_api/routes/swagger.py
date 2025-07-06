@@ -698,8 +698,74 @@ class TransparencyList(Resource):
     @api.param('per_page', 'Items per page', type='integer', default=20)
     def get(self):
         """Get all transparency calculations with optional filtering"""
-        from .transparency_routes import list_transparency_calculations
-        return list_transparency_calculations()
+        # Don't try to call the blueprint function directly - this causes issues
+        # with how Flask handles the request context
+        from flask import request
+        from ..database.session import SessionLocal
+        from ..models.transparency import TransparencyCalculation
+        from sqlalchemy.orm import joinedload
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # Get query parameters
+            calculation_type = request.args.get('calculation_type')
+            instrument_type = request.args.get('instrument_type')
+            isin = request.args.get('isin')
+            page = request.args.get('page', 1, type=int)
+            per_page = min(request.args.get('per_page', 20, type=int), 100)
+            
+            # Create a new session
+            session = SessionLocal()
+            try:
+                # Build query with eager loading
+                query = session.query(TransparencyCalculation).options(
+                    joinedload(TransparencyCalculation.equity_transparency),
+                    joinedload(TransparencyCalculation.non_equity_transparency),
+                    joinedload(TransparencyCalculation.debt_transparency),
+                    joinedload(TransparencyCalculation.futures_transparency)
+                )
+                
+                # Apply filters
+                if calculation_type:
+                    query = query.filter(TransparencyCalculation.calculation_type == calculation_type)
+                if isin:
+                    query = query.filter(TransparencyCalculation.isin == isin)
+                
+                # Get total count
+                total_count = query.count()
+                
+                # Apply pagination
+                offset = (page - 1) * per_page
+                calculations = query.offset(offset).limit(per_page).all()
+                
+                # Use the direct formatting function from transparency_routes
+                from .transparency_routes import direct_format_transparency
+                
+                # Format each calculation
+                result = []
+                for calc in calculations:
+                    formatted_calc = direct_format_transparency(calc)
+                    if formatted_calc:
+                        result.append(formatted_calc)
+                
+                # Return in the expected format
+                return {
+                    'status': '200 OK',
+                    'data': result,
+                    'meta': {
+                        'page': page,
+                        'per_page': per_page,
+                        'total': total_count
+                    }
+                }
+            finally:
+                session.close()
+        except Exception as e:
+            logger.error(f"Error in swagger transparency list: {str(e)}")
+            logger.exception(e)
+            return {'status': '500 Internal Server Error', 'error': str(e)}, 500
     
     @api.doc('create_transparency_calculation')
     @api.expect(transparency_create_request)
@@ -714,12 +780,35 @@ class TransparencyList(Resource):
 @api.param('transparency_id', 'The transparency calculation identifier')
 class TransparencyItem(Resource):
     @api.doc('get_transparency_calculation')
-    @api.marshal_with(transparency_detailed)
+    # Remove the marshal_with decorator that might be causing issues
     @api.response(404, 'Transparency calculation not found', error_model)
     def get(self, transparency_id):
         """Get transparency calculation by ID"""
-        from .transparency_routes import get_transparency_calculation
-        return get_transparency_calculation(transparency_id)
+        # Implement the endpoint directly rather than calling the blueprint function
+        from ..services.transparency_service import TransparencyService
+        from flask import jsonify
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            service = TransparencyService()
+            session, calculation = service.get_transparency_by_id(transparency_id)
+            
+            if not calculation:
+                session.close()
+                return {'status': '404 Not Found', 'error': 'Transparency calculation not found'}, 404
+            
+            # Use the direct formatting function
+            from .transparency_routes import direct_format_transparency
+            result = direct_format_transparency(calculation)
+            session.close()
+            
+            return result
+        except Exception as e:
+            logger.error(f"Error in swagger get transparency: {str(e)}")
+            logger.exception(e)
+            return {'status': '500 Internal Server Error', 'error': str(e)}, 500
     
     @api.doc('update_transparency_calculation')
     @api.expect(transparency_create_request)
@@ -742,35 +831,135 @@ class TransparencyItem(Resource):
 @api.param('isin', 'The ISIN to search for')
 class TransparencyByIsin(Resource):
     @api.doc('get_transparency_by_isin')
-    @api.marshal_with(transparency_list_response)
+    # Remove the marshal_with decorator that might be causing issues
     @api.param('calculation_type', 'Calculation type to get/create', enum=['EQUITY', 'NON_EQUITY'])
     @api.param('ensure_instrument', 'Ensure instrument exists before creating transparency data', type='boolean', default=True)
     def get(self, isin):
         """Get transparency calculations for a specific ISIN"""
-        from .transparency_routes import get_transparency_by_isin
-        return get_transparency_by_isin(isin)
-
-@transparency_ns.route('/batch')
-class TransparencyBatch(Resource):
-    @api.doc('batch_source_transparency')
-    @api.expect(batch_transparency_request)
-    @api.response(201, 'Transparency calculations sourced from FITRS')
-    @api.response(400, 'Bad request', error_model)
-    def post(self):
-        """Batch source transparency calculations from FITRS data"""
-        from .transparency_routes import batch_source_transparency
-        return batch_source_transparency()
-
-@transparency_ns.route('/batch-create')
-class TransparencyBatchCreate(Resource):
-    @api.doc('batch_create_transparency')
-    @api.expect(batch_create_transparency_request)
-    @api.response(201, 'Transparency calculations created')
-    @api.response(400, 'Bad request', error_model)
-    def post(self):
-        """Batch create transparency calculations from provided data"""
-        from .transparency_routes import batch_create_transparency
-        return batch_create_transparency()
+        # Implement directly instead of calling blueprint function
+        from flask import request
+        from ..database.session import SessionLocal
+        from ..models.transparency import TransparencyCalculation
+        from sqlalchemy.orm import joinedload
+        from ..services.transparency_service import TransparencyService
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # Get query parameters
+            calculation_type = request.args.get('calculation_type')
+            ensure_instrument = request.args.get('ensure_instrument', 'false').lower() == 'true'
+            page = request.args.get('page', 1, type=int)
+            per_page = min(request.args.get('per_page', 20, type=int), 100)
+            
+            # Create a new session
+            session = SessionLocal()
+            try:
+                # Build query with eager loading
+                query = session.query(TransparencyCalculation).filter(
+                    TransparencyCalculation.isin == isin
+                ).options(
+                    joinedload(TransparencyCalculation.equity_transparency),
+                    joinedload(TransparencyCalculation.non_equity_transparency),
+                    joinedload(TransparencyCalculation.debt_transparency),
+                    joinedload(TransparencyCalculation.futures_transparency)
+                )
+                
+                # Apply filter for calculation type
+                if calculation_type:
+                    query = query.filter(TransparencyCalculation.calculation_type == calculation_type)
+                
+                # Execute query
+                calculations = query.all()
+                logger.info(f"Found {len(calculations)} transparency calculations for ISIN {isin}")
+                
+                # If no results and ensure_instrument is true, try to create
+                if not calculations and ensure_instrument:
+                    session.close()
+                    service = TransparencyService()
+                    
+                    created_calcs = service.get_or_create_transparency_calculation(
+                        isin=isin,
+                        calculation_type=calculation_type or 'EQUITY',
+                        ensure_instrument=True
+                    )
+                    
+                    # Ensure we have a list
+                    if not isinstance(created_calcs, list):
+                        created_calcs = [created_calcs] if created_calcs else []
+                    
+                    logger.info(f"Created {len(created_calcs)} new calculations")
+                    calculations = created_calcs
+                    
+                # Format calculations
+                from .transparency_routes import direct_format_transparency
+                
+                result = []
+                for calc in calculations:
+                    if calc:
+                        formatted_calc = direct_format_transparency(calc)
+                        if formatted_calc:
+                            result.append(formatted_calc)
+                
+                # If still no results and ensure_instrument is true, return minimal response
+                if not result and ensure_instrument:
+                    calculation_type = calculation_type or "EQUITY"
+                    minimal_response = {
+                        "id": None,
+                        "isin": isin,
+                        "calculation_type": calculation_type,
+                        "tech_record_id": None,
+                        "from_date": None,
+                        "to_date": None,
+                        "liquidity": None,
+                        "total_transactions_executed": None,
+                        "total_volume_executed": None,
+                        "created_at": None,
+                        "updated_at": None
+                    }
+                    
+                    # Add minimal details based on calculation_type
+                    if calculation_type == "EQUITY":
+                        minimal_response["details"] = {
+                            "financial_instrument_classification": None,
+                            "methodology": None,
+                            "average_daily_turnover": None,
+                            "large_in_scale": None,
+                            "average_daily_number_of_transactions": None,
+                            "average_transaction_value": None,
+                            "standard_market_size": None,
+                            "type": "equity"
+                        }
+                    else:
+                        minimal_response["details"] = {
+                            "description": None,
+                            "criterion_name": None,
+                            "criterion_value": None,
+                            "pre_trade_large_in_scale_threshold": None,
+                            "post_trade_large_in_scale_threshold": None,
+                            "type": "non_equity"
+                        }
+                        
+                    result = [minimal_response]
+                
+                # Return formatted response
+                return {
+                    'status': '200 OK',
+                    'data': result,
+                    'meta': {
+                        'page': page,
+                        'per_page': per_page,
+                        'total': len(result)
+                    }
+                }
+            finally:
+                if session:
+                    session.close()
+        except Exception as e:
+            logger.error(f"Error in swagger transparency by ISIN: {str(e)}")
+            logger.exception(e)
+            return {'status': '500 Internal Server Error', 'error': str(e)}, 500
 
 # Add a route to serve the OpenAPI specification
 @swagger_bp.route('/openapi.yaml')
@@ -814,3 +1003,4 @@ def serve_redoc_ui():
       </body>
     </html>
     '''
+

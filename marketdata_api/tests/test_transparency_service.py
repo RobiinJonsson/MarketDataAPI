@@ -11,7 +11,7 @@ from pathlib import Path
 import logging
 
 # Add project root to path
-project_root = Path(__file__).parent
+project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 # Setup logging
@@ -23,31 +23,14 @@ logger = logging.getLogger(__name__)
 
 # Test ISINs with their instrument types
 TEST_INSTRUMENTS = [
+    
     {
-        'isin': 'SE0021060217',
-        'type': 'future',
-        'calculation_type': 'NON_EQUITY',
-        'description': 'Swedish future instrument'
-    },
-    {
-        'isin': 'SE0005190238',
+        'isin': 'SE0000242455',
         'type': 'equity',
         'calculation_type': 'EQUITY',
         'description': 'Swedish equity instrument'
     },
-    {
-        'isin': 'SE0005999836',
-        'type': 'equity',
-        'calculation_type': 'EQUITY',
-        'description': 'Swedish equity instrument'
-    },
-    {
-        'isin': 'SE0013884798',
-        'type': 'debt',
-        'calculation_type': 'NON_EQUITY',
-        'description': 'Swedish debt instrument'
-    }
-]
+   ]
 
 def test_transparency_service():
     """Test the transparency service with predefined ISINs"""

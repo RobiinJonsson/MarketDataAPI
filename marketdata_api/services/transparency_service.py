@@ -111,7 +111,7 @@ class TransparencyService:
 
     def get_transparency_by_isin(self, isin: str, calculation_type: str = None) -> Tuple[Session, List[TransparencyCalculation]]:
         """Get transparency calculations for a specific ISIN"""
-        session = SessionLocal()  # Use SessionLocal() instead of get_session()
+        session = SessionLocal()
         
         try:
             query = session.query(TransparencyCalculation).filter(
@@ -121,15 +121,13 @@ class TransparencyService:
             if calculation_type:
                 query = query.filter(TransparencyCalculation.calculation_type == calculation_type)
             
-            # Add eager loading for related entities
-            if calculation_type == "EQUITY":
-                query = query.options(joinedload(TransparencyCalculation.equity_transparency))
-            elif calculation_type == "NON_EQUITY":
-                query = query.options(
-                    joinedload(TransparencyCalculation.non_equity_transparency),
-                    joinedload(TransparencyCalculation.debt_transparency),
-                    joinedload(TransparencyCalculation.futures_transparency)
-                )
+            # Add eager loading for related entities to prevent lazy loading errors
+            query = query.options(
+                joinedload(TransparencyCalculation.equity_transparency),
+                joinedload(TransparencyCalculation.non_equity_transparency),
+                joinedload(TransparencyCalculation.debt_transparency),
+                joinedload(TransparencyCalculation.futures_transparency)
+            )
             
             calculations = query.all()
             
@@ -396,18 +394,53 @@ class TransparencyService:
         """
         try:
             # Check if transparency calculations exist first
-            session, existing_calculations = self.get_transparency_by_isin(isin)
+            session = SessionLocal()
             try:
-                type_calculations = [calc for calc in existing_calculations if calc.calculation_type == calculation_type]
-                if type_calculations:
-                    for calc in type_calculations:
-                        session.refresh(calc)
-                    self.logger.info(f"Found {len(type_calculations)} existing transparency calculations for ISIN {isin}")
-                    return type_calculations
+                # Debug the connection
+                self.logger.info(f"Database URL: {session.bind.engine.url}")
+                
+                # Use eager loading to avoid lazy loading issues
+                query = (
+                    session.query(TransparencyCalculation)
+                    .filter(TransparencyCalculation.isin == isin)
+                )
+                
+                if calculation_type:
+                    query = query.filter(TransparencyCalculation.calculation_type == calculation_type)
+                    
+                # Add eager loading for related entities - modified to use options correctly
+                query = query.options(
+                    joinedload(TransparencyCalculation.equity_transparency),
+                    joinedload(TransparencyCalculation.non_equity_transparency),
+                    joinedload(TransparencyCalculation.debt_transparency),
+                    joinedload(TransparencyCalculation.futures_transparency)
+                )
+                
+                self.logger.debug(f"Executing query for ISIN {isin} with calculation_type {calculation_type}")
+                existing_calculations = query.all()
+                self.logger.info(f"Query returned {len(existing_calculations)} calculations")
+                
+                if existing_calculations:
+                    # Process relationships to ensure they're loaded
+                    for calc in existing_calculations:
+                        self.logger.info(f"Found calculation: {calc.id}, type: {calc.calculation_type}")
+                        if calc.calculation_type == "EQUITY":
+                            if hasattr(calc, 'equity_transparency') and calc.equity_transparency:
+                                self.logger.info(f"  With equity transparency: {calc.equity_transparency.id}")
+                        elif calc.calculation_type == "NON_EQUITY":
+                            if hasattr(calc, 'non_equity_transparency') and calc.non_equity_transparency:
+                                self.logger.info(f"  With non-equity transparency: {calc.non_equity_transparency.id}")
+                            if hasattr(calc, 'debt_transparency') and calc.debt_transparency:
+                                self.logger.info(f"  With debt transparency: {calc.debt_transparency.id}")
+                            if hasattr(calc, 'futures_transparency') and calc.futures_transparency:
+                                self.logger.info(f"  With futures transparency: {calc.futures_transparency.id}")
+                    
+                    self.logger.info(f"Found {len(existing_calculations)} existing transparency calculations for ISIN {isin}")
+                    return existing_calculations
             finally:
                 session.close()
 
-            # If ensure_instrument is True, check/create instrument first
+        # If ensure_instrument is True, check/create instrument first
             if ensure_instrument:
                 try:
                     from .instrument_service import InstrumentService
@@ -441,9 +474,26 @@ class TransparencyService:
                     
                     calculation = self.create_transparency_calculation(transparency_data, calculation_type)
                     if calculation:
-                        created_calculations.append(calculation)
-                        self.logger.info(f"Created transparency calculation {i+1}/{len(transparency_records)}: {calculation.id}")
-                        
+                        # Reload the calculation with relationships to prevent lazy loading errors
+                        session = SessionLocal()
+                        try:
+                            loaded_calculation = (
+                                session.query(TransparencyCalculation)
+                                .filter(TransparencyCalculation.id == calculation.id)
+                                .options(
+                                    joinedload(TransparencyCalculation.equity_transparency),
+                                    joinedload(TransparencyCalculation.non_equity_transparency),
+                                    joinedload(TransparencyCalculation.debt_transparency),
+                                    joinedload(TransparencyCalculation.futures_transparency)
+                                )
+                                .first()
+                            )
+                            if loaded_calculation:
+                                created_calculations.append(loaded_calculation)
+                                self.logger.info(f"Created transparency calculation {i+1}/{len(transparency_records)}: {loaded_calculation.id}")
+                        finally:
+                            session.close()
+                    
                 except Exception as e:
                     self.logger.error(f"Failed to create transparency calculation for record {i+1}: {str(e)}")
                     continue
@@ -833,4 +883,3 @@ class TransparencyService:
             session.close()
             raise
 
-    

@@ -1,7 +1,7 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from contextlib import contextmanager
 from typing import Generator
-from .base import SessionLocal
+from .base import SessionLocal, engine
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,3 +21,16 @@ def get_session() -> Generator[Session, None, None]:
         raise
     finally:
         session.close()
+
+def get_session_with_expiration(expire_on_commit=False):
+    """
+    Get a SQLAlchemy session with custom expire_on_commit setting.
+    
+    Args:
+        expire_on_commit: If False, doesn't expire objects when committing, useful for detached objects.
+        
+    Returns:
+        A SQLAlchemy Session
+    """
+    SessionWithExpiration = sessionmaker(bind=engine, expire_on_commit=expire_on_commit)
+    return SessionWithExpiration()

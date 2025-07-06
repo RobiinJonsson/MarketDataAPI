@@ -1,1 +1,3 @@
-# Empty file to make tests a package
+"""
+Test package for MarketDataAPI
+"""

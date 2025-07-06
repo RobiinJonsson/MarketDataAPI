@@ -32,6 +32,43 @@ class TransparencyCalculation(Base):
         passive_deletes=True
     )
     
+    # Relationship to equity transparency - no conflicts here
+    equity_transparency = relationship(
+        "EquityTransparency", 
+        back_populates="parent_calculation",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
+    
+    # Relationships that need overlaps
+    non_equity_transparency = relationship(
+        "NonEquityTransparency", 
+        back_populates="parent_calculation",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        overlaps="debt_transparency,futures_transparency"
+    )
+    
+    debt_transparency = relationship(
+        "DebtTransparency", 
+        back_populates="parent_calculation",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        overlaps="non_equity_transparency"
+    )
+    
+    futures_transparency = relationship(
+        "FuturesTransparency", 
+        back_populates="parent_calculation",
+        uselist=False,
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        overlaps="non_equity_transparency"
+    )
+    
     __table_args__ = (
         Index('idx_transparency_isin', 'isin'),
         Index('idx_transparency_type', 'calculation_type'),
@@ -59,9 +96,10 @@ class EquityTransparency(Base):
     average_transaction_value = Column(Float)  # AvrgTxVal
     standard_market_size = Column(Float)  # StdMktSz
     
-    # Relationship to base transparency calculation
-    transparency_calculation = relationship(
+    # Reference back to parent calculation
+    parent_calculation = relationship(
         "TransparencyCalculation",
+        back_populates="equity_transparency",
         passive_deletes=True
     )
 
@@ -87,11 +125,21 @@ class NonEquityTransparency(Base):
     criterion_name_secondary = Column(String)  # CritNm_2
     criterion_value_secondary = Column(String)  # CritVal_2
     
-    # Relationship to base transparency calculation
-    transparency_calculation = relationship(
+    # Reference back to parent calculation
+    parent_calculation = relationship(
         "TransparencyCalculation",
-        passive_deletes=True
+        back_populates="non_equity_transparency",
+        passive_deletes=True,
+        overlaps="debt_transparency,futures_transparency"
     )
+    
+    # Add discriminator column for inheritance
+    type = Column(String)
+    
+    __mapper_args__ = {
+        'polymorphic_on': type,
+        'polymorphic_identity': 'non_equity'
+    }
 
 class DebtTransparency(NonEquityTransparency):
     """Debt-specific transparency data - extends NonEquityTransparency for debt instruments"""
@@ -109,6 +157,14 @@ class DebtTransparency(NonEquityTransparency):
     
     # Liquidity flag (from Lqdty field)
     is_liquid = Column(Boolean)  # Lqdty field from FITRS data
+    
+    # Reference back to parent calculation
+    parent_calculation = relationship(
+        "TransparencyCalculation",
+        back_populates="debt_transparency",
+        passive_deletes=True,
+        overlaps="non_equity_transparency"
+    )
     
     __mapper_args__ = {
         'polymorphic_identity': 'debt',
@@ -155,6 +211,14 @@ class FuturesTransparency(NonEquityTransparency):
     # Futures classification fields
     is_stock_dividend_future = Column(Boolean, default=False)  # Based on "Stock dividend futures/forwards"
     underlying_isin = Column(String)  # Extracted from CritVal_2 if CritNm_2 = "UINS"
+    
+    # Reference back to parent calculation
+    parent_calculation = relationship(
+        "TransparencyCalculation",
+        back_populates="futures_transparency",
+        passive_deletes=True,
+        overlaps="non_equity_transparency"
+    )
     
     __mapper_args__ = {
         'polymorphic_identity': 'futures',
