@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Configuration - modify these as needed
 START_DATE = '2025-04-26'  # Start date for FITRS data
 END_DATE = '2025-04-26'    # End date for FITRS data
-CFI_CODE = 'F'             # CFI code: E=Equity, D=Debt, F=Future, etc.
+CFI_CODE = 'D'             # CFI code: E=Equity, D=Debt, F=Future, etc.
 EQUITY_INSTRUMENTS = False # True for equity instruments, False for non-equity
 FILE_TYPE = 'Full'         # File type to download
 UPDATE_DATA = False        # True to force download, False to use cached

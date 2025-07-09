@@ -212,40 +212,29 @@ transparency_base = api.model('TransparencyBase', {
     'updated_at': fields.DateTime(description="Last update timestamp")
 })
 
-equity_transparency_details = api.model('EquityTransparencyDetails', {
-    'financial_instrument_classification': fields.String(description="Financial instrument classification"),
-    'methodology': fields.String(description="Methodology used"),
-    'average_daily_turnover': fields.Float(description="Average daily turnover"),
-    'large_in_scale': fields.Float(description="Large in scale threshold"),
-    'average_daily_number_of_transactions': fields.Float(description="Average daily number of transactions"),
-    'average_transaction_value': fields.Float(description="Average transaction value"),
-    'standard_market_size': fields.Float(description="Standard market size")
-})
-
-debt_transparency_details = api.model('DebtTransparencyDetails', {
-    'description': fields.String(description="Description"),
-    'bond_type': fields.String(description="Bond type"),
-    'is_liquid': fields.Boolean(description="Liquidity indicator"),
-    'pre_trade_large_in_scale_threshold': fields.Float(description="Pre-trade large in scale threshold"),
-    'post_trade_large_in_scale_threshold': fields.Float(description="Post-trade large in scale threshold"),
-    'criterion_name': fields.String(description="Criterion name"),
-    'criterion_value': fields.String(description="Criterion value")
-})
-
-futures_transparency_details = api.model('FuturesTransparencyDetails', {
-    'description': fields.String(description="Description"),
-    'underlying_isin': fields.String(description="Underlying instrument ISIN"),
-    'is_stock_dividend_future': fields.Boolean(description="Stock dividend future indicator"),
-    'pre_trade_large_in_scale_threshold': fields.Float(description="Pre-trade large in scale threshold"),
-    'post_trade_large_in_scale_threshold': fields.Float(description="Post-trade large in scale threshold"),
-    'criterion_name': fields.String(description="Criterion name"),
-    'criterion_value': fields.String(description="Criterion value")
+# Updated details models to match the actual response format
+transparency_details = api.model('TransparencyDetails', {
+    'type': fields.String(required=True, description="Type of transparency details", enum=['equity', 'debt', 'futures', 'non_equity', 'unknown']),
+    'financial_instrument_classification': fields.String(description="Financial instrument classification (equity only)"),
+    'methodology': fields.String(description="Methodology used (equity only)"),
+    'average_daily_turnover': fields.Float(description="Average daily turnover (equity only)"),
+    'large_in_scale': fields.Float(description="Large in scale threshold (equity only)"),
+    'average_daily_number_of_transactions': fields.Float(description="Average daily number of transactions (equity only)"),
+    'average_transaction_value': fields.Float(description="Average transaction value (equity only)"),
+    'standard_market_size': fields.Float(description="Standard market size (equity only)"),
+    'description': fields.String(description="Description (non-equity only)"),
+    'bond_type': fields.String(description="Bond type (debt only)"),
+    'is_liquid': fields.Boolean(description="Liquidity indicator (debt only)"),
+    'underlying_isin': fields.String(description="Underlying instrument ISIN (futures only)"),
+    'is_stock_dividend_future': fields.Boolean(description="Stock dividend future indicator (futures only)"),
+    'pre_trade_large_in_scale_threshold': fields.Float(description="Pre-trade large in scale threshold (non-equity)"),
+    'post_trade_large_in_scale_threshold': fields.Float(description="Post-trade large in scale threshold (non-equity)"),
+    'criterion_name': fields.String(description="Criterion name (non-equity)"),
+    'criterion_value': fields.String(description="Criterion value (non-equity)")
 })
 
 transparency_detailed = api.inherit('TransparencyDetailed', transparency_base, {
-    'equity_details': fields.Nested(equity_transparency_details, description="Equity transparency details"),
-    'debt_details': fields.Nested(debt_transparency_details, description="Debt transparency details"),
-    'futures_details': fields.Nested(futures_transparency_details, description="Futures transparency details")
+    'details': fields.Nested(transparency_details, description="Type-specific transparency details")
 })
 
 transparency_list_response = api.model('TransparencyListResponse', {
@@ -254,18 +243,10 @@ transparency_list_response = api.model('TransparencyListResponse', {
     'meta': fields.Nested(pagination_meta)
 })
 
+# Update the transparency create request model
 transparency_create_request = api.model('TransparencyCreateRequest', {
-    'ISIN': fields.String(required=True, description="International Securities Identification Number"),
-    'TechRcrdId': fields.String(required=True, description="Technical record identifier"),
-    'calculation_type': fields.String(description="Type of calculation", enum=['EQUITY', 'NON_EQUITY']),
-    'FrDt': fields.String(description="From date (YYYY-MM-DD)"),
-    'ToDt': fields.String(description="To date (YYYY-MM-DD)"),
-    'Lqdty': fields.String(description="Liquidity (true/false)"),
-    'TtlNbOfTxsExctd': fields.Integer(description="Total number of transactions executed"),
-    'TtlVolOfTxsExctd': fields.Float(description="Total volume of transactions executed"),
-    'Desc': fields.String(description="Description"),
-    'CritNm': fields.String(description="Criterion name"),
-    'CritVal': fields.String(description="Criterion value")
+    'isin': fields.String(required=True, description="International Securities Identification Number"),
+    'instrument_type': fields.String(required=True, description="Type of instrument", enum=['equity', 'debt', 'futures', 'fund', 'derivative'])
 })
 
 batch_transparency_request = api.model('BatchTransparencyRequest', {
@@ -769,12 +750,113 @@ class TransparencyList(Resource):
     
     @api.doc('create_transparency_calculation')
     @api.expect(transparency_create_request)
-    @api.response(201, 'Transparency calculation created')
-    @api.response(400, 'Bad request', error_model)
+    @api.response(201, 'Transparency calculations created from FITRS data')
+    @api.response(400, 'Bad request - missing required fields', error_model)
+    @api.response(404, 'No transparency data found in FITRS for the given ISIN', error_model)
     def post(self):
-        """Create a new transparency calculation"""
-        from .transparency_routes import create_transparency_calculation
-        return create_transparency_calculation()
+        """Create transparency calculations from FITRS data for a given ISIN"""
+        # Import here to avoid circular imports
+        from flask import request, jsonify
+        from ..services.transparency_service import TransparencyService
+        from ..services.instrument_service import InstrumentService
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            data = request.get_json()
+            if not data:
+                return {'status': '400 Bad Request', 'error': 'No data provided'}, 400
+            
+            # Get required parameters
+            isin = data.get('isin')
+            instrument_type = data.get('instrument_type')
+            
+            if not isin:
+                return {'status': '400 Bad Request', 'error': 'ISIN is required'}, 400
+            
+            if not instrument_type:
+                return {'status': '400 Bad Request', 'error': 'instrument_type is required'}, 400
+            
+            logger.info(f"Creating transparency calculations for ISIN={isin}, instrument_type={instrument_type}")
+            
+            # 1. Check if instrument exists, if not create it
+            instrument_service = InstrumentService()
+            
+            # First check if instrument exists
+            session, instrument = instrument_service.get_instrument(isin)
+            if session:
+                session.close()
+            
+            if not instrument:
+                logger.info(f"Instrument {isin} not found, creating from FITRS data")
+                # Create instrument using FITRS data
+                instrument = instrument_service.get_or_create_instrument(
+                    isin=isin,
+                    instrument_type=instrument_type,
+                    create_from_fitrs=True
+                )
+                
+                if not instrument:
+                    return {
+                        'status': '400 Bad Request',
+                        'error': f'Failed to create instrument {isin} from FITRS data'
+                    }, 400
+            
+            # 2. Derive calculation_type from instrument_type
+            calculation_type = "EQUITY" if instrument_type.lower() == "equity" else "NON_EQUITY"
+            logger.info(f"Derived calculation_type={calculation_type} from instrument_type={instrument_type}")
+            
+            # 3. Use TransparencyService to get transparency data
+            service = TransparencyService()
+            
+            # Get or create transparency calculations
+            created_calculations = service.get_or_create_transparency_calculation(
+                isin=isin,
+                calculation_type=calculation_type,
+                ensure_instrument=True
+            )
+            
+            # Ensure we have a list
+            if not isinstance(created_calculations, list):
+                created_calculations = [created_calculations] if created_calculations else []
+            
+            # Filter out None values
+            created_calculations = [calc for calc in created_calculations if calc is not None]
+            
+            if not created_calculations:
+                return {
+                    'status': '404 Not Found',
+                    'error': f'No transparency data found for ISIN {isin}'
+                }, 404
+            
+            # 4. Format response with created calculations
+            from .transparency_routes import direct_format_transparency
+            
+            result = []
+            for calc in created_calculations:
+                formatted_calc = direct_format_transparency(calc)
+                if formatted_calc:
+                    result.append(formatted_calc)
+            
+            logger.info(f"Successfully created {len(result)} transparency calculations for ISIN {isin}")
+            
+            return {
+                'status': '201 Created',
+                'message': f'Successfully created {len(result)} transparency calculations',
+                'data': result,
+                'meta': {
+                    'isin': isin,
+                    'instrument_type': instrument_type,
+                    'calculation_type': calculation_type,
+                    'total_created': len(result)
+                }
+            }, 201
+            
+        except Exception as e:
+            logger.error(f"Error in swagger create transparency: {str(e)}")
+            logger.exception(e)
+            return {'status': '500 Internal Server Error', 'error': str(e)}, 500
 
 @transparency_ns.route('/<string:transparency_id>')
 @api.param('transparency_id', 'The transparency calculation identifier')

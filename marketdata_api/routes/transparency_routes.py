@@ -79,7 +79,7 @@ def list_transparency_calculations():
             
             logger.info(f"Formatted {len(result)} calculations for response")
             
-            # Return the data in the expected format
+            # Return the data in the expected format - same as get_transparency_by_isin
             return jsonify({
                 ResponseFields.STATUS: f"{HTTPStatus.OK} OK",
                 ResponseFields.DATA: result,
@@ -193,27 +193,101 @@ def get_transparency_calculation(transparency_id):
 
 @transparency_bp.route(Endpoints.TRANSPARENCY, methods=["POST"])
 def create_transparency_calculation():
-    """Create a new transparency calculation"""
+    """Create transparency calculations from FITRS data for a given ISIN"""
     try:
         data = request.get_json()
         if not data:
             return jsonify({ResponseFields.ERROR: "No data provided"}), HTTPStatus.BAD_REQUEST
         
-        calculation_type = data.get('calculation_type', 'NON_EQUITY')
+        # Get required parameters
+        isin = data.get('isin')
+        instrument_type = data.get('instrument_type')
         
+        if not isin:
+            return jsonify({ResponseFields.ERROR: "ISIN is required"}), HTTPStatus.BAD_REQUEST
+        
+        if not instrument_type:
+            return jsonify({ResponseFields.ERROR: "instrument_type is required"}), HTTPStatus.BAD_REQUEST
+        
+        logger.info(f"Creating transparency calculations for ISIN={isin}, instrument_type={instrument_type}")
+        
+        # 1. Check if instrument exists, if not create it
+        from ..services.instrument_service import InstrumentService
+        instrument_service = InstrumentService()
+        
+        # First check if instrument exists
+        session, instrument = instrument_service.get_instrument(isin)
+        if session:
+            session.close()
+        
+        if not instrument:
+            logger.info(f"Instrument {isin} not found, creating from FITRS data")
+            # Create instrument using FITRS data
+            instrument = instrument_service.get_or_create_instrument(
+                isin=isin,
+                instrument_type=instrument_type,
+                create_from_fitrs=True
+            )
+            
+            if not instrument:
+                return jsonify({
+                    ResponseFields.ERROR: f"Failed to create instrument {isin} from FITRS data"
+                }), HTTPStatus.BAD_REQUEST
+        
+        # 2. Derive calculation_type from instrument_type
+        calculation_type = "EQUITY" if instrument_type.lower() == "equity" else "NON_EQUITY"
+        logger.info(f"Derived calculation_type={calculation_type} from instrument_type={instrument_type}")
+        
+        # 3. Use TransparencyService to get transparency data from FITRS
         service = TransparencyService()
-        calculation = service.create_transparency_calculation(data, calculation_type)
+        
+        # Get or create transparency calculations - remove the unsupported fetch_from_fitrs parameter
+        created_calculations = service.get_or_create_transparency_calculation(
+            isin=isin,
+            calculation_type=calculation_type,
+            ensure_instrument=True
+        )
+        
+        # Ensure we have a list
+        if not isinstance(created_calculations, list):
+            created_calculations = [created_calculations] if created_calculations else []
+        
+        # Filter out None values
+        created_calculations = [calc for calc in created_calculations if calc is not None]
+        
+        if not created_calculations:
+            return jsonify({
+                ResponseFields.ERROR: f"No transparency data found for ISIN {isin}"
+            }), HTTPStatus.NOT_FOUND
+        
+        # 4. Format response with created calculations
+        result = []
+        for calc in created_calculations:
+            formatted_calc = direct_format_transparency(calc)
+            if formatted_calc:
+                result.append(formatted_calc)
+        
+        logger.info(f"Successfully created {len(result)} transparency calculations for ISIN {isin}")
         
         return jsonify({
-            ResponseFields.MESSAGE: "Transparency calculation created successfully",
-            "id": calculation.id,
-            "isin": calculation.isin,
-            "calculation_type": calculation.calculation_type
+            ResponseFields.STATUS: f"{HTTPStatus.CREATED} Created",
+            ResponseFields.MESSAGE: f"Successfully created {len(result)} transparency calculations",
+            ResponseFields.DATA: result,
+            ResponseFields.META: {
+                "isin": isin,
+                "instrument_type": instrument_type,
+                "calculation_type": calculation_type,
+                "total_created": len(result)
+            }
         }), HTTPStatus.CREATED
         
     except Exception as e:
         logger.error(f"Error in create_transparency_calculation: {str(e)}")
-        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+        logger.exception(e)
+        return jsonify({
+            ResponseFields.STATUS: f"{HTTPStatus.INTERNAL_SERVER_ERROR} Internal Server Error",
+            ResponseFields.ERROR: str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
 
 @transparency_bp.route(f"{Endpoints.TRANSPARENCY}/<string:transparency_id>", methods=["PUT"])
 def update_transparency_calculation(transparency_id):
@@ -447,7 +521,7 @@ def direct_format_transparency(calc):
             "updated_at": calc.updated_at.isoformat() if calc.updated_at else None
         }
         
-        # Include only the relevant details based on calculation_type
+        # Include only the relevant details based on calculation_type - matching get_transparency_by_isin format
         if calc.calculation_type == "EQUITY" and hasattr(calc, 'equity_transparency') and calc.equity_transparency:
             et = calc.equity_transparency
             result["details"] = {
@@ -457,7 +531,8 @@ def direct_format_transparency(calc):
                 "large_in_scale": et.large_in_scale,
                 "average_daily_number_of_transactions": et.average_daily_number_of_transactions,
                 "average_transaction_value": et.average_transaction_value,
-                "standard_market_size": et.standard_market_size
+                "standard_market_size": et.standard_market_size,
+                "type": "equity"
             }
         elif calc.calculation_type == "NON_EQUITY":
             # For NON_EQUITY, check which specific type applies
@@ -500,6 +575,11 @@ def direct_format_transparency(calc):
                 result["details"] = {
                     "type": "unknown"
                 }
+        else:
+            # Default case - add minimal details structure
+            result["details"] = {
+                "type": "unknown"
+            }
         
         return result
         
