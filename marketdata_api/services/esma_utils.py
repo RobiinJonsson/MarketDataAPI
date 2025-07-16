@@ -81,54 +81,50 @@ class Utils:
     @staticmethod
     @functools.lru_cache(maxsize=None)
     def _create_folder(folder: str = "data"):
-
         """
-        Create a folder in the user's home directory to store data.
-
-        Args:
-            folder (str): The name of the folder to create. Default is "data".
-
-        Returns:
-            Path: The path to the created folder.
-
-        Example:
-            >>> folder_path = Utils._create_folder("my_data")
-            >>> print(folder_path)
-            "/home/user/esma_data_py/my_data"
+        Create a folder structure for storing ESMA data files.
+        Now properly organized by file type.
         """
+        downloads_folder = esmaConfig.downloads_path
+        
+        if not downloads_folder.exists():
+            downloads_folder.mkdir(parents=True)
 
-        main_folder = esmaConfig.file_path
+        # Create ESMA subdirectory for FIRDS files
+        esma_folder = downloads_folder / "esma"
+        if not esma_folder.exists():
+            esma_folder.mkdir(parents=True)
 
-        if not main_folder.exists():
-            main_folder.mkdir(parents=True)
+        # Create FITRS subdirectory for transparency data
+        fitrs_folder = downloads_folder / "fitrs"
+        if not fitrs_folder.exists():
+            fitrs_folder.mkdir(parents=True)
 
-        return main_folder
+        return downloads_folder
 
     def save_df(obj=pd.DataFrame, print_cached_data=True, folder="data"):
-
         """
-        Decorator to save and retrieve DataFrames to/from cache as pickled files. If a file already exists and `update` is False,
-        the cached version will be used.
-
-        Args:
-            obj (pd.DataFrame): Default object that will be returned if no new data is fetched.
-            print_cached_data (bool): Whether to print a warning when cached data is used. Defaults to True.
-            folder (str): The folder where the data is stored. Defaults to "data".
-
-        Returns:
-            function: A decorated function that will save and load data as necessary.
-        
-        Example:
-            >>> @Utils.save_df()
-            >>> def fetch_data():
-            >>>     return pd.DataFrame({'col': [1, 2, 3]})
+        Enhanced decorator to save and retrieve DataFrames with improved file organization.
         """
-
         def decorator(func):
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
                 logger = Utils.set_logger('EsmaDataUtils')
-                data_folder = Utils._create_folder(folder=folder)
+                
+                # Determine file type and target directory
+                url = kwargs.get('url') or (args[0] if args else '')
+                is_fitrs = 'fitrs' in str(url).lower() or 'transparency' in str(url).lower()
+                is_firds = 'firds' in str(url).lower() or 'fulins' in str(url).lower() or 'delvins' in str(url).lower()
+                
+                base_folder = Utils._create_folder(folder)
+                
+                if is_fitrs:
+                    data_folder = base_folder / "fitrs"
+                elif is_firds:
+                    data_folder = base_folder / "esma"
+                else:
+                    # Default to esma folder for other ESMA data
+                    data_folder = base_folder / "esma"
 
                 non_update_save_args = [str(value) for key, value in kwargs.items() if key not in ["update"]]
                 string_file_arg = non_update_save_args + [func.__name__] + [str(arg) for arg in args]
@@ -142,6 +138,22 @@ class Utils:
                     try:
                         df.to_pickle(file_name)
                         logger.info(f"Data saved: {file_name}")
+                        
+                        # Also save original file if it's a download
+                        if 'download' in func.__name__.lower() and url:
+                            original_filename = Utils.extract_file_name_from_url(url) + '.zip'
+                            original_path = data_folder / original_filename
+                            
+                            # Save the original file alongside the processed data
+                            if not original_path.exists():
+                                try:
+                                    response = requests.get(url)
+                                    with open(original_path, 'wb') as f:
+                                        f.write(response.content)
+                                    logger.info(f"Original file saved: {original_path}")
+                                except Exception as e:
+                                    logger.warning(f"Could not save original file: {e}")
+                                    
                     except Exception as e:
                         warnings.warn(f"Error saving file: {file_name}\n{str(e)}")
                         logger.error(f"Error, file not saved: {file_name}\n{df}")

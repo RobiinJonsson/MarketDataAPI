@@ -22,9 +22,23 @@ class Config:
 
 class esmaConfig:
     # Use environment variables with fallback defaults
-    file_path = Path(os.getenv("ESMA_DATA_PATH", "downloads/esma"))  # Path to ESMA data directory
+    # Updated to point to the actual downloads folder structure
+    downloads_path = Path(os.getenv("DOWNLOADS_PATH", r"C:\Users\robin\Projects\MarketDataAPI\downloads"))
+    file_path = downloads_path / "esma"  # For FIRDS files
+    fitrs_path = downloads_path / "fitrs"  # For FITRS files
+    
     start_date = os.getenv("ESMA_START_DATE", "2025-04-26")  # Start date for data processing
     end_date = os.getenv("ESMA_END_DATE", "2025-04-26")      # End date for data processing
+    
+    # File management settings
+    retention_days = int(os.getenv("ESMA_RETENTION_DAYS", "30"))  # Days to keep files
+    max_files_per_type = int(os.getenv("ESMA_MAX_FILES_PER_TYPE", "100"))  # Max files per type
+    auto_cleanup = os.getenv("ESMA_AUTO_CLEANUP", "true").lower() == "true"  # Auto cleanup enabled
+    
+    # Azure storage settings for future use
+    azure_storage_account = os.getenv("AZURE_STORAGE_ACCOUNT")
+    azure_container_name = os.getenv("AZURE_CONTAINER_NAME", "marketdata-files")
+    azure_connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
 
 # Exchange code mappings for OpenFIGI
 EXCHANGE_CODES = {

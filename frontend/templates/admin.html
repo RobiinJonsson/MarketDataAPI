@@ -23,6 +23,7 @@
             <button class="admin-tab active" data-tab="instruments">Instruments</button>
             <button class="admin-tab" data-tab="entities">Legal Entities</button>
             <button class="admin-tab" data-tab="batch">Batch Operations</button>
+            <button class="admin-tab" data-tab="files">File Management</button>
             <button class="admin-tab" data-tab="cfi">CFI Decoder</button>
         </div>
 
@@ -307,6 +308,103 @@
                 </div>
             </div>
 
+            <!-- File Management Tab -->
+            <div class="tab-pane" id="files-tab">
+                <div class="admin-actions">
+                    <h3>File Management</h3>
+                    <div class="action-buttons">
+                        <button id="refresh-files-btn" class="btn btn-primary">Refresh</button>
+                        <button id="organize-files-btn" class="btn btn-tertiary">Organize Files</button>
+                        <button id="cleanup-files-btn" class="btn btn-secondary">Cleanup Old Files</button>
+                    </div>
+                </div>
+
+                <!-- Storage Statistics -->
+                <div class="file-stats">
+                    <h4>Storage Statistics</h4>
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <h5>FIRDS Files</h5>
+                            <div class="stat-value" id="firds-count">-</div>
+                            <div class="stat-label">Files</div>
+                            <div class="stat-value" id="firds-size">-</div>
+                            <div class="stat-label">MB</div>
+                        </div>
+                        <div class="stat-card">
+                            <h5>FITRS Files</h5>
+                            <div class="stat-value" id="fitrs-count">-</div>
+                            <div class="stat-label">Files</div>
+                            <div class="stat-value" id="fitrs-size">-</div>
+                            <div class="stat-label">MB</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File Type Filters -->
+                <div class="filter-row">
+                    <div class="filter-group">
+                        <label for="file-type-filter">File Type:</label>
+                        <select id="file-type-filter">
+                            <option value="">All</option>
+                            <option value="firds">FIRDS</option>
+                            <option value="fitrs">FITRS</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="dataset-filter">Dataset:</label>
+                        <select id="dataset-filter">
+                            <option value="">All</option>
+                            <option value="FULINS_E">Equity (FULINS_E)</option>
+                            <option value="FULINS_D">Debt (FULINS_D)</option>
+                            <option value="FULINS_F">Future (FULINS_F)</option>
+                            <option value="FITRS">Transparency (FITRS)</option>
+                            <option value="DVCAP">Volume Cap (DVCAP)</option>
+                        </select>
+                    </div>
+                    <button id="apply-file-filters" class="btn btn-secondary">Apply Filters</button>
+                </div>
+
+                <!-- File List -->
+                <div class="results-container">
+                    <table id="files-table" class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Dataset</th>
+                                <th>Size</th>
+                                <th>Modified</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="files-tbody">
+                            <!-- Will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Cleanup Configuration -->
+                <div class="cleanup-config">
+                    <h4>Cleanup Configuration</h4>
+                    <div class="config-form">
+                        <div class="form-group">
+                            <label for="retention-days">Retention Days:</label>
+                            <input type="number" id="retention-days" value="30" min="1" max="365">
+                        </div>
+                        <div class="form-group">
+                            <label for="max-files">Max Files per Type:</label>
+                            <input type="number" id="max-files" value="100" min="1" max="1000">
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="dry-run" checked>
+                                Dry Run (preview only)
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- CFI Decoder Tab -->
             <div class="tab-pane" id="cfi-tab">
                 <div class="admin-actions">
@@ -358,6 +456,7 @@
     <script src="{{ url_for('static', filename='admin_instruments.js') }}"></script>
     <script src="{{ url_for('static', filename='admin_legal_entities.js') }}"></script>
     <script src="{{ url_for('static', filename='admin_batch.js') }}"></script>
+    <script src="{{ url_for('static', filename='admin_files.js') }}"></script>
     <script src="{{ url_for('static', filename='admin_cfi.js') }}"></script>
     <script src="{{ url_for('static', filename='admin.js') }}"></script>
 </body>
