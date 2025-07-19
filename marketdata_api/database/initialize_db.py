@@ -1,14 +1,29 @@
 import logging
 import os
-from sqlalchemy import inspect
-from .base import engine, Base, DB_PATH
+from sqlalchemy import inspect, text
+from .base import engine, Base, get_database_url
 from ..models import instrument, legal_entity  # Import all your model files
 
 logger = logging.getLogger(__name__)
 
 def database_exists():
-    """Check if database file exists"""
-    return os.path.exists(DB_PATH)
+    """Check if database exists (works for both SQLite and Azure SQL)"""
+    from ..config import DATABASE_TYPE
+    
+    if DATABASE_TYPE.lower() == "azure_sql":
+        try:
+            # For Azure SQL, try to connect and run a simple query
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return True
+        except Exception as e:
+            logger.info(f"Azure SQL database connection failed: {e}")
+            return False
+    else:
+        # For SQLite, check if file exists
+        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+        DB_PATH = os.path.join(BASE_DIR, "marketdata.db")
+        return os.path.exists(DB_PATH)
 
 def verify_tables():
     """Verify that all expected tables and columns exist"""
@@ -35,6 +50,8 @@ def verify_tables():
 
 def init_database(force_recreate=False):
     """Initialize database with all models"""
+    from ..config import DATABASE_TYPE
+    
     try:
         # Add environment check to prevent accidental resets
         if force_recreate and os.environ.get('FLASK_ENV') == 'production':
@@ -42,13 +59,24 @@ def init_database(force_recreate=False):
             return False
             
         if force_recreate and database_exists():
-            logger.warning("⚠️ WARNING: About to drop existing database - ALL DATA WILL BE LOST")
-            user_input = input("Are you sure you want to reset the database? (yes/no): ")
-            if user_input.lower() != 'yes':
-                logger.info("Database reset cancelled")
-                return False
-            logger.warning("Dropping existing database")
-            os.remove(DB_PATH)
+            if DATABASE_TYPE.lower() == "azure_sql":
+                logger.warning("⚠️ WARNING: About to drop all tables in Azure SQL Database - ALL DATA WILL BE LOST")
+                user_input = input("Are you sure you want to reset the Azure SQL database? (yes/no): ")
+                if user_input.lower() != 'yes':
+                    logger.info("Database reset cancelled")
+                    return False
+                logger.warning("Dropping all tables in Azure SQL Database")
+                Base.metadata.drop_all(bind=engine)
+            else:
+                logger.warning("⚠️ WARNING: About to drop existing SQLite database - ALL DATA WILL BE LOST")
+                user_input = input("Are you sure you want to reset the database? (yes/no): ")
+                if user_input.lower() != 'yes':
+                    logger.info("Database reset cancelled")
+                    return False
+                logger.warning("Dropping existing SQLite database")
+                BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+                DB_PATH = os.path.join(BASE_DIR, "marketdata.db")
+                os.remove(DB_PATH)
         elif database_exists():
             logger.info("Database exists, verifying tables...")
             if verify_tables():

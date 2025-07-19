@@ -11,11 +11,26 @@ OPENFIGI_API_KEY = os.getenv("OPENFIGI_API_KEY")
 FLASK_ENV = os.getenv("FLASK_ENV", "production")
 SECRET_KEY = os.getenv("SECRET_KEY", "default_secret_key")
 
+# Database configuration
+DATABASE_TYPE = os.getenv("DATABASE_TYPE", "sqlite")  # "sqlite" or "azure_sql"
+
+# SQLite Database configuration
+SQLITE_DB_FILE = os.getenv("SQLITE_DB_FILE", "marketdata.db")
+SQLITE_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SQLITE_DB_PATH = os.getenv("SQLITE_DB_PATH", os.path.join(SQLITE_BASE_DIR, 'database', SQLITE_DB_FILE))
+
+# Azure SQL Database configuration
+AZURE_SQL_SERVER = os.getenv("AZURE_SQL_SERVER")
+AZURE_SQL_DATABASE = os.getenv("AZURE_SQL_DATABASE")
+AZURE_SQL_USERNAME = os.getenv("AZURE_SQL_USERNAME")
+AZURE_SQL_PASSWORD = os.getenv("AZURE_SQL_PASSWORD")
+AZURE_SQL_PORT = int(os.getenv("AZURE_SQL_PORT", "1433"))
+
 class Config:
     # Use environment variables with fallback defaults
     BASE_DIR = os.path.abspath(os.path.dirname(__file__))
     ROOT_PATH = os.path.dirname(BASE_DIR)  # Path to project root
-    DATABASE_PATH = os.getenv("DATABASE_PATH", os.path.join(BASE_DIR, 'database', 'marketdata.db'))
+    DATABASE_PATH = SQLITE_DB_PATH  # Use the new SQLite configuration
 
     UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", 'uploads')
     MAX_CONTENT_LENGTH = int(os.getenv("MAX_UPLOAD_SIZE", "500")) * 1024 * 1024  # Convert MB to bytes
