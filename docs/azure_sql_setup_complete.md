@@ -63,18 +63,13 @@ DATABASE_TYPE=sqlite
 
 ### Test Connection
 ```bash
-python scripts/test_database_connection.py
+python marketdata_api/tests/test_database_connection.py
 ```
 
 ### Initialize/Clean Database
 ```bash
+# Initialize Azure SQL Database (creates tables if they don't exist)
 python scripts/init_azure_sql.py
-python scripts/clean_azure_sql.py
-```
-
-### Raw Connection Test
-```bash
-python scripts/test_raw_connection.py
 ```
 
 ## Known Issues & Workarounds

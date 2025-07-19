@@ -39,8 +39,11 @@ class esmaConfig:
     # Use environment variables with fallback defaults
     # Updated to point to the actual downloads folder structure
     downloads_path = Path(os.getenv("DOWNLOADS_PATH", r"C:\Users\robin\Projects\MarketDataAPI\downloads"))
-    file_path = downloads_path / "esma"  # For FIRDS files
+    firds_path= downloads_path / "firds"  # For FIRDS files
     fitrs_path = downloads_path / "fitrs"  # For FITRS files
+    
+    # Backward compatibility - some code might still reference file_path
+    file_path = firds_path
     
     start_date = os.getenv("ESMA_START_DATE", "2025-04-26")  # Start date for data processing
     end_date = os.getenv("ESMA_END_DATE", "2025-04-26")      # End date for data processing

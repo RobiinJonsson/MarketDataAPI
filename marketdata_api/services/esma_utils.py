@@ -90,10 +90,10 @@ class Utils:
         if not downloads_folder.exists():
             downloads_folder.mkdir(parents=True)
 
-        # Create ESMA subdirectory for FIRDS files
-        esma_folder = downloads_folder / "esma"
-        if not esma_folder.exists():
-            esma_folder.mkdir(parents=True)
+        # Create FIRDS subdirectory for FIRDS files
+        firds_folder = downloads_folder / "firds"
+        if not firds_folder.exists():
+            firds_folder.mkdir(parents=True)
 
         # Create FITRS subdirectory for transparency data
         fitrs_folder = downloads_folder / "fitrs"
@@ -111,25 +111,51 @@ class Utils:
             def wrapper(*args, **kwargs):
                 logger = Utils.set_logger('EsmaDataUtils')
                 
-                # Determine file type and target directory
+                # Determine file type and target directory based on URL and content
                 url = kwargs.get('url') or (args[0] if args else '')
-                is_fitrs = 'fitrs' in str(url).lower() or 'transparency' in str(url).lower()
-                is_firds = 'firds' in str(url).lower() or 'fulins' in str(url).lower() or 'delvins' in str(url).lower()
+                url_str = str(url).lower()
+                
+                # More comprehensive URL pattern matching
+                is_fitrs = (
+                    'fitrs' in url_str or 
+                    'transparency' in url_str or 
+                    'fulncr' in url_str or  # Non-equity transparency
+                    'fulecr' in url_str     # Equity transparency
+                )
+                is_firds = (
+                    'firds' in url_str or 
+                    'fulins' in url_str or  # Full instrument reference data
+                    'delvins' in url_str    # Delta instrument reference data
+                )
+                # DVCAP (volume cap) files also go to FIRDS folder
+                is_dvcap = 'dvcap' in url_str or 'dvcres' in url_str
                 
                 base_folder = Utils._create_folder(folder)
                 
                 if is_fitrs:
                     data_folder = base_folder / "fitrs"
-                elif is_firds:
-                    data_folder = base_folder / "esma"
+                elif is_firds or is_dvcap:
+                    data_folder = base_folder / "firds"
                 else:
-                    # Default to esma folder for other ESMA data
-                    data_folder = base_folder / "esma"
+                    # Default to firds folder for other ESMA data
+                    data_folder = base_folder / "firds"
 
                 non_update_save_args = [str(value) for key, value in kwargs.items() if key not in ["update"]]
                 string_file_arg = non_update_save_args + [func.__name__] + [str(arg) for arg in args]
 
-                file_name = os.path.join(data_folder, Utils._hash("".join(string_file_arg)) + ".csv")
+                # Create meaningful filename based on URL if available
+                if url and ('download' in func.__name__.lower() or url.startswith('http')):
+                    # Extract meaningful filename from URL
+                    original_filename = Utils.extract_file_name_from_url(url)
+                    if is_fitrs:
+                        file_name = os.path.join(data_folder, f"{original_filename}_fitrs_data.csv")
+                    elif is_firds or is_dvcap:
+                        file_name = os.path.join(data_folder, f"{original_filename}_firds_data.csv")
+                    else:
+                        file_name = os.path.join(data_folder, f"{original_filename}_data.csv")
+                else:
+                    # Use hash-based filename for other functions
+                    file_name = os.path.join(data_folder, Utils._hash("".join(string_file_arg)) + ".csv")
 
                 update = kwargs.get("update", False)
                 
@@ -138,21 +164,6 @@ class Utils:
                     try:
                         df.to_pickle(file_name)
                         logger.info(f"Data saved: {file_name}")
-                        
-                        # Also save original file if it's a download
-                        if 'download' in func.__name__.lower() and url:
-                            original_filename = Utils.extract_file_name_from_url(url) + '.zip'
-                            original_path = data_folder / original_filename
-                            
-                            # Save the original file alongside the processed data
-                            if not original_path.exists():
-                                try:
-                                    response = requests.get(url)
-                                    with open(original_path, 'wb') as f:
-                                        f.write(response.content)
-                                    logger.info(f"Original file saved: {original_path}")
-                                except Exception as e:
-                                    logger.warning(f"Could not save original file: {e}")
                                     
                     except Exception as e:
                         warnings.warn(f"Error saving file: {file_name}\n{str(e)}")

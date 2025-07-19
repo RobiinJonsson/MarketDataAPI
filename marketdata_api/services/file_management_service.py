@@ -29,7 +29,7 @@ class FileManagementConfig:
 class FileManagementService:
     def __init__(self, config: Optional[FileManagementConfig] = None):
         self.config = config or FileManagementConfig(
-            base_path=esmaConfig.file_path,
+            base_path=esmaConfig.firds_path,
             retention_days=30,
             max_files_per_type=100
         )
@@ -38,10 +38,10 @@ class FileManagementService:
 
     def _ensure_directories(self):
         """Ensure the required directory structure exists."""
-        esma_dir = self.config.base_path
-        fitrs_dir = esma_dir / "fitrs"
+        firds_dir = self.config.base_path
+        fitrs_dir = esmaConfig.fitrs_path
         
-        for directory in [esma_dir, fitrs_dir]:
+        for directory in [firds_dir, fitrs_dir]:
             directory.mkdir(parents=True, exist_ok=True)
 
     def get_files_by_type(self, file_type: str) -> List[FileInfo]:
@@ -49,7 +49,7 @@ class FileManagementService:
         if file_type == 'firds':
             folder_path = self.config.base_path
         elif file_type == 'fitrs':
-            folder_path = self.config.base_path / "fitrs"
+            folder_path = esmaConfig.fitrs_path
         else:
             raise ValueError(f"Unknown file type: {file_type}")
 
@@ -79,17 +79,31 @@ class FileManagementService:
 
     def _extract_dataset_type(self, filename: str) -> str:
         """Extract dataset type from filename."""
-        # Map common patterns in cached filenames to dataset types
-        if 'FULINS_E' in filename or 'equity' in filename.lower():
+        filename_upper = filename.upper()
+        
+        # Check for specific patterns in cached filenames
+        if 'FULINS_E' in filename_upper or 'EQUITY' in filename_upper:
             return 'FULINS_E'
-        elif 'FULINS_D' in filename or 'debt' in filename.lower():
+        elif 'FULINS_D' in filename_upper or 'DEBT' in filename_upper:
             return 'FULINS_D'
-        elif 'FULINS_F' in filename or 'future' in filename.lower():
+        elif 'FULINS_F' in filename_upper or 'FUTURE' in filename_upper:
             return 'FULINS_F'
-        elif 'FITRS' in filename or 'fitrs' in filename.lower():
+        elif 'FULINS_C' in filename_upper:
+            return 'FULINS_C'
+        elif 'DELVINS' in filename_upper or 'DELTA' in filename_upper:
+            return 'DELVINS'
+        elif 'FITRS' in filename_upper or 'TRANSPARENCY' in filename_upper:
             return 'FITRS'
-        elif 'DVCAP' in filename or 'dvcap' in filename.lower():
+        elif 'FULNCR' in filename_upper or 'FULECR' in filename_upper:
+            return 'FITRS'
+        elif 'DVCAP' in filename_upper or 'VOLUME' in filename_upper or 'DVCRES' in filename_upper:
             return 'DVCAP'
+        # Check for hash-based cached files by looking at file extension and length
+        elif filename.endswith('.csv') and len(filename) == 36:  # MD5 hash + .csv
+            # This is likely a cached file, determine type by location and context
+            return 'CACHED_DATA'
+        elif filename.endswith('.pickle'):
+            return 'CACHED_DATA'
         else:
             return 'UNKNOWN'
 
@@ -189,7 +203,7 @@ class FileManagementService:
         
         # Check for misplaced files and move them
         base_path = self.config.base_path
-        fitrs_path = base_path / "fitrs"
+        fitrs_path = esmaConfig.fitrs_path
         
         for file_path in base_path.iterdir():
             if file_path.is_file():
