@@ -4,38 +4,12 @@ A comprehensive market data management system that integrates FIRDS, OpenFIGI, a
 
 ## Features
 
-- **Database Support**
-  - SQLite for local development
-  - Azure SQL Database for cloud deployment
-  - Seamless switching between database types via environment variables
-
-- **Instrument Management**
-  - ISIN-based instrument lookup and creation
-  - Support for equity, debt and futures instruments
-  - Automatic data enrichment from multiple sources
-  - Relationship handling between instruments and legal entities
-  - CFI code decoding and classification
-
-- **Data Integration**
-  - FIRDS (Financial Instruments Reference Data System) integration
-  - OpenFIGI mapping for global instrument identification
-  - GLEIF (Global Legal Entity Identifier) data integration
-  - Automatic data enrichment pipeline
-
-- **API Features**
-  - RESTful API endpoints with modular organization
-  - Separate route modules for instruments, entities, and reference data
-  - Batch processing support
-  - Search and filtering capabilities
-  - Schema-based data mapping
-
-- **User Interface**
-  - Web-based interface for data operations
-  - Real-time data display
-  - Interactive data exploration
-  - Toast notifications for operation feedback
-  - Instrument type-specific views
-  - Status indicators for futures and debt instruments
+- **🔧 Database**: SQLite (development) / Azure SQL (production)
+- **📊 Data Sources**: FIRDS, OpenFIGI, GLEIF integration with automated enrichment
+- **🎯 Instruments**: ISIN-based lookup, equity/debt/futures support, CFI decoding
+- **📁 File Management**: Advanced ESMA data operations, automated downloads, intelligent organization
+- **🌐 RESTful API**: Comprehensive endpoints for instruments, entities, files, and batch operations
+- **🖥️ Web Interface**: Interactive data exploration with real-time updates and filtering
   - Raw JSON data display for debugging
 
 ## Installation
@@ -96,12 +70,24 @@ python scripts/cli.py batch batch-source equity SE
 
 ### API Endpoints
 
-- `GET /api/search/<isin>` - Search for instrument by ISIN
-- `POST /api/fetch` - Fetch and create new instrument
-- `GET /api/instruments` - List all instruments
-- `POST /api/batch_search` - Batch search instruments
-- `GET /firds` - Search for FIRDS files
-- `POST /api/gleif` - Fetch data from GLEIF API
+#### Core Operations
+- `GET/POST /api/v1/instruments` - Instrument management and enrichment
+- `GET/POST /api/v1/entities` - Legal entity operations  
+- `GET /api/v1/transparency` - MiFID II transparency calculations
+- `GET /api/v1/cfi/{cfi_code}` - CFI code decoding
+
+#### File Management
+- `POST /api/v1/files/download-by-criteria` - **Main endpoint** for downloading by date/type/dataset
+- `GET /api/v1/files` - List files with advanced filtering
+- `GET /api/v1/esma-files` - Browse ESMA registry
+- `GET /api/v1/files/stats` - Storage statistics and monitoring
+- `POST /api/v1/files/cleanup` - Automated file cleanup
+
+#### Batch Operations
+- `POST /api/v1/batch/instruments` - Bulk instrument processing
+- `POST /api/v1/batch/entities` - Bulk entity processing
+
+**📖 Complete API Documentation**: Available at `/api/v1/swagger` (interactive) and `docs/api/`
 
 ## Project Structure
 
@@ -114,15 +100,38 @@ MarketDataAPI/
 │   │   ├── figi.py       # FIGI mapping models
 │   │   └── utils/        # Utilities for models
 │   ├── services/         # Business logic & external APIs
+│   │   ├── file_management_service.py # Advanced file management
+│   │   ├── esma_data_loader.py # ESMA data loading and processing
+│   │   ├── esma_utils.py # ESMA utility functions
+│   │   ├── instrument_service.py # Instrument operations
+│   │   └── transparency_service.py # Transparency calculations
 │   ├── routes/          # API endpoints
+│   │   ├── file_management.py # File management endpoints
+│   │   ├── instrument_routes.py # Instrument endpoints
+│   │   ├── entity_routes.py # Legal entity endpoints
+│   │   └── transparency_routes.py # Transparency endpoints
 │   ├── database/        # Database configuration
-│   └── config/          # Configuration management
+│   ├── config/          # Configuration management
+│   └── tests/           # Test suite
+├── downloads/           # Downloaded ESMA files
+│   ├── firds/          # FIRDS files (organized by type)
+│   └── fitrs/          # FITRS files (organized by type)
 ├── frontend/
 │   ├── static/          # JavaScript & CSS
+│   │   ├── admin_files.js # File management interface
+│   │   └── config.js    # Frontend configuration
 │   └── templates/       # HTML templates
-├── scripts/             # CLI tools
-├── tests/              # Test suite
-└── docs/               # Documentation
+├── scripts/             # CLI tools and example scripts
+│   ├── cli.py          # Command line interface
+│   ├── esma_example.py # FIRDS data usage example
+│   └── esma_fitrs_example.py # FITRS data usage example
+├── docs/               # Documentation
+│   ├── api/            # API documentation
+│   │   ├── file_management_endpoints.md # File management API docs
+│   │   ├── instruments.md # Instrument API docs
+│   │   └── transparency.md # Transparency API docs
+│   └── development/    # Development documentation
+└── alembic/            # Database migrations
 ```
 
 ## Technologies

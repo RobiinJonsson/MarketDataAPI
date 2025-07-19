@@ -7,6 +7,8 @@ This directory contains the route definitions for the MarketData API. The routes
 - **common_routes.py**: Common API routes and utilities, including API info and error handlers
 - **instrument_routes.py**: Endpoints for instrument-related operations (create, read, update, delete, enrich)
 - **entity_routes.py**: Endpoints for legal entity operations (create, read, update, delete)
+- **file_management.py**: Advanced file management endpoints for ESMA data operations
+- **transparency_routes.py**: Endpoints for transparency calculations and MiFID II data
 - **cfi_routes.py**: Endpoints for CFI code decoding
 - **market.py**: Market data related endpoints
 - **schema.py**: Schema-related endpoints
@@ -37,8 +39,23 @@ The API follows RESTful principles with the following main endpoint groups:
 
 - `/api/v1/instruments` - Financial instrument operations
 - `/api/v1/entities` - Legal entity operations
+- `/api/v1/files` - File management operations for ESMA data
+- `/api/v1/esma-files` - ESMA registry file operations
+- `/api/v1/transparency` - Transparency calculations and MiFID II data
 - `/api/v1/cfi` - CFI code decoding
 - `/api/v1/batch` - Batch operations for instruments and entities
+
+### File Management Operations
+
+The file management system provides comprehensive operations for ESMA data:
+
+- **File Listing**: List downloaded files with advanced filtering
+- **ESMA Integration**: Access ESMA registry and download files
+- **Download by Criteria**: Download files based on date, type, and dataset
+- **Batch Operations**: Download and parse multiple files
+- **Statistics**: File storage and usage statistics
+- **Cleanup**: Automated file retention and cleanup
+- **Organization**: Intelligent file naming and folder structure
 
 ### Required Fields for Instrument Creation
 

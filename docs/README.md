@@ -22,11 +22,14 @@ docs/
 │   ├── legal-entities.md       # Legal entities API  
 │   ├── relationships.md        # Relationships API
 │   ├── schemas.md              # Schema management API
-│   └── transparency.md         # Transparency calculations API
+│   ├── transparency.md         # Transparency calculations API
+│   └── file_management_endpoints.md # **File management API** (comprehensive guide)
 ├── openapi/                    # Generated OpenAPI specifications
 │   └── openapi.yaml           # Auto-generated from swagger.py
-└── postman/                   # Generated Postman collections
-    └── MarketDataAPI.postman_collection.json
+├── postman/                   # Generated Postman collections
+│   └── MarketDataAPI.postman_collection.json
+└── development/               # Development guides and examples
+    └── README.md             # Development documentation index
 ```
 
 ## API Overview
@@ -38,6 +41,7 @@ The MarketDataAPI provides access to:
 - **Entity Relationships**: Parent-child relationships between entities  
 - **Schema Management**: Custom data transformation schemas
 - **Transparency Calculations**: MiFID II transparency data from FITRS
+- **File Management**: Advanced file operations for ESMA data
 - **CFI Code Decoding**: Classification of Financial Instruments decoding
 
 ### Core Endpoints
@@ -48,8 +52,14 @@ The MarketDataAPI provides access to:
 - `GET /legal-entities/{lei}` - Get entity details
 - `GET /transparency` - List transparency calculations
 - `GET /transparency/isin/{isin}` - Get transparency data for instrument
-- `GET /schemas` - List available schemas
-- `POST /schema/search` - Transform data using schemas
+
+### File Management Endpoints
+
+- `POST /files/download-by-criteria` - **Primary endpoint** for downloading by date, type, and dataset
+- `GET /files` - List files with advanced filtering capabilities
+- `GET /esma-files` - Browse available ESMA registry files
+- `GET /files/stats` - Storage statistics and monitoring
+- `POST /files/cleanup` - Automated file cleanup and retention
 
 ### Response Format
 
