@@ -4,6 +4,11 @@ A comprehensive market data management system that integrates FIRDS, OpenFIGI, a
 
 ## Features
 
+- **Database Support**
+  - SQLite for local development
+  - Azure SQL Database for cloud deployment
+  - Seamless switching between database types via environment variables
+
 - **Instrument Management**
   - ISIN-based instrument lookup and creation
   - Support for equity, debt and futures instruments

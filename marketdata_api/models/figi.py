@@ -7,15 +7,15 @@ from datetime import datetime, UTC
 class FigiMapping(Base):
     __tablename__ = "figi_mappings"
     
-    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    isin = Column(String, ForeignKey('instruments.isin', ondelete='CASCADE'), unique=True, nullable=False)
-    figi = Column(String)
-    composite_figi = Column(String)
-    share_class_figi = Column(String)
-    ticker = Column(String)
-    security_type = Column(String)
-    market_sector = Column(String)
-    security_description = Column(String)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    isin = Column(String(12), ForeignKey('instruments.isin', ondelete='CASCADE'), unique=True, nullable=False)
+    figi = Column(String(12))  # FIGI is always 12 characters
+    composite_figi = Column(String(12))
+    share_class_figi = Column(String(12))
+    ticker = Column(String(20))
+    security_type = Column(String(50))
+    market_sector = Column(String(50))
+    security_description = Column(String(255))
     last_updated = Column(DateTime, default=lambda: datetime.now(UTC))
     
     instrument = relationship(

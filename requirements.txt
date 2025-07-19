@@ -10,3 +10,4 @@ alembic>=1.12.0
 tenacity>=8.2.0
 dicttoxml==1.7.16
 flask-restx>=1.1.0
+pyodbc>=4.0.35
