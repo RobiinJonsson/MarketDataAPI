@@ -7,7 +7,7 @@ Tests downloading FIRDS FULINS_F file for 2025-07-12.
 import requests
 import json
 
-def test_firds_fulins_d():
+def test_firds_fulins():
     """Test downloading FIRDS FULINS_D file for specific date."""
     
     url = "http://localhost:5000/api/v1/files/download-by-criteria"
@@ -71,4 +71,4 @@ def test_firds_fulins_d():
         print(f"❌ Unexpected Error: {e}")
 
 if __name__ == "__main__":
-    test_firds_fulins_d()
+    test_firds_fulins()

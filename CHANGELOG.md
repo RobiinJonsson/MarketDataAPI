@@ -2,6 +2,29 @@
 
 All notable changes to the MarketDataAPI project will be documented in this file.
 
+## [2025-07-25] - Frontend File Management Fixes
+
+### Fixed
+- **Frontend file management display** - resolved issues with file listing not showing correctly
+- **jQuery dependency** - added jQuery CDN to admin template for proper JavaScript functionality
+- **API response handling** - updated frontend to handle both original and filtered file response formats
+- **Function call patterns** - standardized all utility function calls to use `AdminUtils` namespace
+
+### Improved
+- **Error handling** - enhanced error feedback and user notifications in file management
+- **CSS styling** - added comprehensive styles for file management UI elements:
+  - File type and dataset badges with color coding
+  - Statistics cards with proper grid layout
+  - Cleanup configuration section styling
+  - Small button variants for table actions
+- **User experience** - file management tab now displays files correctly with proper formatting
+
+### Technical Details
+- Updated `admin_files.js` to use proper `AdminUtils.showSpinner()` and `AdminUtils.showToast()` calls
+- Added support for both `{firds: [], fitrs: []}` and `{filtered_files: []}` API response formats
+- Enhanced file table rendering with truncated filenames and proper badge styling
+- Improved date formatting and file size display (MB with decimal precision)
+
 ## [2025-07-19] - Final Documentation Updates and Cleanup
 
 ### Added

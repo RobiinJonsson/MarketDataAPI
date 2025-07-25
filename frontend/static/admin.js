@@ -27,6 +27,7 @@ document.addEventListener('DOMContentLoaded', function() {
     AdminLegalEntities.init();
     AdminBatch.init();
     AdminCFI.init();
+    // Note: FileManager is initialized separately in admin_files.js
 });
 
 // Shared utility functions across modules

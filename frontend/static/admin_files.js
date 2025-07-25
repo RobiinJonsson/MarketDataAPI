@@ -1,7 +1,7 @@
 class FileManager {
     constructor() {
         this.files = {};
-        this.filteredFiles = {};
+        this.filteredFiles = [];
         this.init();
     }
 
@@ -23,7 +23,7 @@ class FileManager {
 
     async loadFiles() {
         try {
-            showSpinner();
+            AdminUtils.showSpinner();
             const response = await fetch('/api/v1/files');
             
             if (!response.ok) {
@@ -31,24 +31,32 @@ class FileManager {
             }
             
             const data = await response.json();
-            this.files = data;
-            this.applyFilters();
             
-            // Show success message if files were found
-            const totalFiles = Object.values(data).reduce((sum, files) => sum + files.length, 0);
-            if (totalFiles > 0) {
-                showToast(`Loaded ${totalFiles} files successfully`, 'success');
+            // Handle both filtered and unfiltered response formats
+            if (data.filtered_files) {
+                // Filtered response format
+                this.files = { all: data.filtered_files };
+                AdminUtils.showToast(`Loaded ${data.total_count} files successfully`, 'success');
             } else {
-                showToast('No files found in downloads directory', 'info');
+                // Original format: { firds: [], fitrs: [] }
+                this.files = data;
+                const totalFiles = Object.values(data).reduce((sum, files) => sum + files.length, 0);
+                if (totalFiles > 0) {
+                    AdminUtils.showToast(`Loaded ${totalFiles} files successfully`, 'success');
+                } else {
+                    AdminUtils.showToast('No files found in downloads directory', 'info');
+                }
             }
+            
+            this.applyFilters();
         } catch (error) {
             console.error('Error loading files:', error);
-            showToast('Error loading files: ' + error.message, 'error');
+            AdminUtils.showToast('Error loading files: ' + error.message, 'error');
             // Initialize with empty data to prevent errors
             this.files = { firds: [], fitrs: [] };
             this.applyFilters();
         } finally {
-            hideSpinner();
+            AdminUtils.hideSpinner();
         }
     }
 
@@ -74,9 +82,9 @@ class FileManager {
 
     updateStatsDisplay(stats) {
         $('#firds-count').text(stats.firds?.count || 0);
-        $('#firds-size').text(stats.firds?.total_size_mb || 0);
+        $('#firds-size').text((stats.firds?.total_size_mb || 0).toFixed(1));
         $('#fitrs-count').text(stats.fitrs?.count || 0);
-        $('#fitrs-size').text(stats.fitrs?.total_size_mb || 0);
+        $('#fitrs-size').text((stats.fitrs?.total_size_mb || 0).toFixed(1));
     }
 
     applyFilters() {
@@ -85,9 +93,15 @@ class FileManager {
         
         let allFiles = [];
         
-        // Flatten all files
-        for (const [fileType, files] of Object.entries(this.files)) {
-            allFiles = allFiles.concat(files);
+        // Handle both response formats
+        if (this.files.all) {
+            // Filtered response format
+            allFiles = this.files.all;
+        } else {
+            // Original format: flatten all files
+            for (const [fileType, files] of Object.entries(this.files)) {
+                allFiles = allFiles.concat(files);
+            }
         }
         
         // Apply filters
@@ -135,12 +149,12 @@ class FileManager {
     async refreshFiles() {
         await this.loadFiles();
         await this.loadStats();
-        showToast('Files refreshed successfully', 'success');
+        AdminUtils.showToast('Files refreshed successfully', 'success');
     }
 
     async organizeFiles() {
         try {
-            showSpinner();
+            AdminUtils.showSpinner();
             const response = await fetch('/api/v1/files/organize', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
@@ -149,15 +163,15 @@ class FileManager {
             
             if (response.ok) {
                 const totalMoved = data.organized_count.firds + data.organized_count.fitrs;
-                showToast(`Organized ${totalMoved} files successfully`, 'success');
+                AdminUtils.showToast(`Organized ${totalMoved} files successfully`, 'success');
                 this.refreshFiles();
             } else {
                 throw new Error(data.error || 'Failed to organize files');
             }
         } catch (error) {
-            showToast('Error organizing files: ' + error.message, 'error');
+            AdminUtils.showToast('Error organizing files: ' + error.message, 'error');
         } finally {
-            hideSpinner();
+            AdminUtils.hideSpinner();
         }
     }
 
@@ -166,7 +180,7 @@ class FileManager {
         const fileType = $('#file-type-filter').val() || null;
         
         try {
-            showSpinner();
+            AdminUtils.showSpinner();
             const response = await fetch('/api/v1/files/cleanup', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -182,7 +196,7 @@ class FileManager {
                 const message = dryRun ? 
                     `Would remove ${totalRemoved} files (dry run)` : 
                     `Removed ${totalRemoved} files successfully`;
-                showToast(message, 'success');
+                AdminUtils.showToast(message, 'success');
                 
                 if (!dryRun) {
                     this.refreshFiles();
@@ -191,9 +205,9 @@ class FileManager {
                 throw new Error(data.error || 'Failed to cleanup files');
             }
         } catch (error) {
-            showToast('Error cleaning up files: ' + error.message, 'error');
+            AdminUtils.showToast('Error cleaning up files: ' + error.message, 'error');
         } finally {
-            hideSpinner();
+            AdminUtils.hideSpinner();
         }
     }
 
@@ -203,7 +217,7 @@ class FileManager {
         }
         
         try {
-            showSpinner();
+            AdminUtils.showSpinner();
             const response = await fetch('/api/v1/files/delete', {
                 method: 'DELETE',
                 headers: { 'Content-Type': 'application/json' },
@@ -212,15 +226,15 @@ class FileManager {
             const data = await response.json();
             
             if (response.ok && data.success) {
-                showToast('File deleted successfully', 'success');
+                AdminUtils.showToast('File deleted successfully', 'success');
                 this.refreshFiles();
             } else {
                 throw new Error(data.error || 'Failed to delete file');
             }
         } catch (error) {
-            showToast('Error deleting file: ' + error.message, 'error');
+            AdminUtils.showToast('Error deleting file: ' + error.message, 'error');
         } finally {
-            hideSpinner();
+            AdminUtils.hideSpinner();
         }
     }
 
@@ -229,8 +243,13 @@ class FileManager {
     }
 
     formatDate(dateString) {
-        return new Date(dateString).toLocaleDateString() + ' ' + 
-               new Date(dateString).toLocaleTimeString();
+        if (!dateString) return '-';
+        try {
+            return new Date(dateString).toLocaleDateString() + ' ' + 
+                   new Date(dateString).toLocaleTimeString();
+        } catch (error) {
+            return dateString;
+        }
     }
 }
 
