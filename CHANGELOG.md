@@ -2,6 +2,35 @@
 
 All notable changes to the MarketDataAPI project will be documented in this file.
 
+## [2025-07-26] - Database Schema Upgrade and Script Cleanup
+
+### Completed
+- **Production database schema upgrade** - Successfully upgraded production Azure SQL database to match development schema
+- **Alembic version tracking initialization** - Initialized version tracking for production database migrations
+- **Full transparency features enabled** - All transparency calculation tables and routes now available in production
+- **Schema unification** - Development and production environments now use identical schemas
+
+### Removed
+- **Temporary test scripts cleanup** - Removed development-only test scripts that are no longer needed:
+  - `test_batching.py` - GLEIF API batch processing tests
+  - `test_error_handling.py` - API error handling tests  
+  - `test_pruning.py` - Entity relationship pruning tests
+  - `test_runner.py` - General service testing runner
+  - `print_table_columns.py` - Outdated SQLite table inspection
+- **Compatibility layer removal** - Removed temporary compatibility code and conditional imports
+- **Cache cleanup** - Removed `__pycache__` directories from scripts
+
+### Improved
+- **Script organization** - Created comprehensive documentation for remaining operational scripts
+- **Schema monitoring** - Enhanced `analyze_production_schema.py` for ongoing database health monitoring
+- **Upgrade tooling** - Finalized `upgrade_production_db.py` as the standard database upgrade utility
+
+### Operational Scripts Maintained
+- **Core utilities**: CLI, backup, migration tools, documentation generators
+- **Analysis tools**: Schema analyzer, validation scripts
+- **Infrastructure**: Azure firewall helper, database initialization
+- **Business logic**: Entity relationship synchronization, GLEIF integration
+
 ## [2025-07-25] - Frontend File Management Fixes
 
 ### Fixed

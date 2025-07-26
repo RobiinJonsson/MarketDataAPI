@@ -85,13 +85,28 @@ def init_db():
     from ..config import DATABASE_TYPE
     
     if DATABASE_TYPE.lower() == "azure_sql":
-        # For Azure SQL, use a simpler approach to avoid reflection issues
+        # For Azure SQL, use careful table checking to avoid errors
         try:
-            Base.metadata.create_all(bind=engine, checkfirst=False)
-            logger.info("✅ Database tables created successfully")
+            # First, check if tables exist
+            from sqlalchemy import text, inspect
+            
+            with engine.connect() as conn:
+                result = conn.execute(text("""
+                    SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES 
+                    WHERE TABLE_TYPE = 'BASE TABLE'
+                """))
+                table_count = result.fetchone()[0]
+                
+                if table_count > 0:
+                    logger.info(f"✅ Database already has {table_count} tables - skipping creation")
+                else:
+                    logger.info("Creating database tables...")
+                    Base.metadata.create_all(bind=engine, checkfirst=True)
+                    logger.info("✅ Database tables created successfully")
+                    
         except Exception as e:
-            logger.warning(f"Table creation had issues but may have succeeded: {e}")
-            # Try to verify by running a simple test
+            logger.warning(f"Table verification had issues: {e}")
+            # Try to verify database works anyway
             try:
                 from sqlalchemy import text
                 with engine.connect() as conn:

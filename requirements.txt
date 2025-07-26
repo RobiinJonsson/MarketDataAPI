@@ -14,3 +14,4 @@ pyodbc>=4.0.35
 beautifulsoup4>=4.12.0
 lxml>=4.9.0
 tqdm>=4.66.0
+pyodbc>=5.2.0
