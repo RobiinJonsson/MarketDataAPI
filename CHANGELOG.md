@@ -2,6 +2,93 @@
 
 All notable changes to the MarketDataAPI project will be documented in this file.
 
+## [2025-08-05] - Database Factory Pattern Cleanup and Architecture Simplification
+
+### Simplified
+- **Factory pattern optimization** - Removed complex `DatabaseFactory` in favor of direct model imports and cleaner session management
+- **Session management refactoring** - Updated `database/session.py` to use direct database configuration instead of factory pattern
+- **Import cleanup** - Migrated all routes and services from `DatabaseFactory.get_models()` to direct imports from `models.sqlite.*`
+- **API route simplification** - Updated Swagger routes to use direct model imports, improving readability and performance
+
+### Fixed  
+- **SQLAlchemy mapper conflicts** - Resolved "mappers failed to initialize properly" errors by eliminating duplicate model definitions
+- **Abstract class metaclass issues** - Fixed "abstract class error" by removing conflicting ABC patterns in model factory
+- **Route functionality restoration** - All instrument search, admin pages, and API endpoints now work correctly
+
+### Removed
+- **Redundant files cleanup**:
+  - `database/factory/database_factory.py` - No longer needed with direct imports
+  - `*.bak` model files - Backup models from migration period
+  - Python cache directories (`__pycache__`) - Project-wide cleanup
+- **Complex factory calls** - Replaced `DatabaseFactory.get_models()` with simple direct imports
+
+### Maintained
+- **ServicesFactory pattern** - Kept `ServicesFactory` for clean database type switching via environment configuration
+- **Database interface** - Preserved `DatabaseInterface` for individual database implementations  
+- **Configuration flexibility** - Environment-based database selection remains unchanged
+
+### Technical Details
+- **Session management**: Direct database configuration in `session.py` using `DatabaseConfig.get_database_type()`
+- **Model imports**: All services now use `from ..models.sqlite import ModelName` pattern
+- **Route updates**: Swagger documentation endpoints updated to use direct imports
+- **Error resolution**: Eliminated SQLAlchemy metaclass conflicts and mapper initialization issues
+
+### Testing Status
+- ✅ **Flask server startup**: Successful with simplified architecture
+- ✅ **Instrument search**: Working correctly via direct model access
+- ✅ **Admin functionality**: All admin pages accessible
+- ✅ **API endpoints**: Swagger documentation and routes functional
+- ✅ **Database queries**: SQLite operations working with existing data
+
+## [2025-08-03] - Dual Database Architecture Implementation (Phase 1 - SQLite)
+
+### Added
+- **Dual database architecture foundation** - Implemented factory pattern for supporting both SQLite and SQL Server databases
+- **Database configuration system** - Added `DatabaseConfig` class with environment-based database type selection
+- **Service factory pattern** - Created `ServicesFactory` for database-agnostic service instantiation
+- **SQLite model preservation** - Copied and adapted all models to `models/sqlite/` with polymorphic inheritance intact:
+  - `base_model.py` - Base SQLAlchemy model with metadata
+  - `instrument.py` - Instrument models with Equity, Bond, Derivative inheritance
+  - `figi.py` - FIGI mapping models
+  - `legal_entity.py` - Legal entity and relationship models
+  - `transparency.py` - Transparency calculation models with inheritance
+- **SQLite service layer** - Created corresponding services in `services/sqlite/`:
+  - `instrument_service.py` - Delegates to existing polymorphic service
+  - `legal_entity_service.py` - Full legal entity management
+  - `transparency_service.py` - Transparency calculation handling
+- **Interface definitions** - Established service interfaces for consistent API contracts
+- **Factory integration** - Updated API routes to use factory pattern for service selection
+
+### Fixed
+- **Circular import resolution** - Resolved complex circular dependency issues between models, services, and factories
+- **Import path updates** - Updated all references to use new directory structure
+- **Table redefinition conflicts** - Handled SQLAlchemy table naming conflicts between original and SQLite models
+- **Service instantiation** - Fixed service class naming and import paths in factory
+
+### Improved
+- **Code organization** - Clear separation between SQLite and future SQL Server implementations
+- **Maintainability** - No conditional database logic in business code
+- **API compatibility** - Routes now work with factory pattern while preserving existing functionality
+- **Error handling** - Better error messages for unsupported database operations
+
+### Technical Details
+- **Directory structure**: New `interfaces/factory/`, `models/sqlite/`, `services/sqlite/` directories
+- **Configuration**: Environment variable `DATABASE_TYPE` controls database selection (defaults to 'sqlite')
+- **Flask integration**: Server starts successfully with new architecture
+- **Backward compatibility**: Existing SQLite functionality preserved and working
+
+### Next Phase
+- **SQL Server implementation** - Single-table model design for SQL Server performance
+- **SQL Server services** - Raw SQL-based services for optimized queries
+- **Testing and validation** - Comprehensive testing of both database paths
+- **Production deployment** - Migration strategy for dual database support
+
+### Status
+- ✅ SQLite path: **Fully implemented and tested**
+- ⏳ SQL Server path: **Architecture designed, implementation pending**
+- ✅ Factory pattern: **Working and integrated**
+- ✅ Flask server: **Running successfully with new architecture**
+
 ## [2025-07-26] - Database Schema Upgrade and Script Cleanup
 
 ### Completed

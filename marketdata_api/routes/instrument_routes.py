@@ -1,9 +1,7 @@
 import logging
 import traceback
 from flask import Blueprint, jsonify, request
-from ..services.instrument_service import InstrumentService
 from ..database.session import get_session
-from ..models.instrument import Instrument
 from ..models.utils.cfi import CFI
 from ..constants import (
     HTTPStatus, Pagination, API, InstrumentTypes, BatchOperations, 
@@ -29,6 +27,9 @@ def list_instruments():
         offset = request.args.get(QueryParams.OFFSET, Pagination.DEFAULT_OFFSET, type=int)
         page = request.args.get(QueryParams.PAGE, Pagination.DEFAULT_PAGE, type=int)
         per_page = min(request.args.get(QueryParams.PER_PAGE, Pagination.DEFAULT_PER_PAGE, type=int), Pagination.MAX_PER_PAGE)
+        
+        # Get the correct Instrument model - using package import to ensure relationships
+        from ..models.sqlite import Instrument
         
         with get_session() as session:
             query = session.query(Instrument)
@@ -80,7 +81,9 @@ def list_instruments():
 def get_instrument(identifier):
     """Get instrument details by ID or ISIN, create from FIRDS if not found"""
     try:
-        service = InstrumentService()
+        # Use factory pattern for service access
+        from ..interfaces.factory.services_factory import ServicesFactory
+        service = ServicesFactory.get_instrument_service()
         
         # First try to get existing instrument
         session, instrument = service.get_instrument(identifier)
@@ -121,7 +124,9 @@ def create_instrument():
         if instrument_type not in InstrumentTypes.VALID_TYPES:
             return jsonify({ResponseFields.ERROR: ErrorMessages.INVALID_INSTRUMENT_TYPE}), HTTPStatus.BAD_REQUEST
             
-        service = InstrumentService()
+        # Use factory pattern for service access
+        from ..interfaces.factory.services_factory import ServicesFactory
+        service = ServicesFactory.get_instrument_service()
         instrument = service.get_or_create_instrument(data["Id"], instrument_type)
         
         return jsonify({
@@ -143,7 +148,9 @@ def update_instrument(identifier):
         if not data:
             return jsonify({ResponseFields.ERROR: ErrorMessages.NO_DATA_PROVIDED}), HTTPStatus.BAD_REQUEST
             
-        service = InstrumentService()
+        # Use factory pattern for service access
+        from ..interfaces.factory.services_factory import ServicesFactory
+        service = ServicesFactory.get_instrument_service()
         instrument = service.update_instrument(identifier, data)
         
         if not instrument:
@@ -164,7 +171,9 @@ def update_instrument(identifier):
 def delete_instrument(identifier):
     """Delete an instrument"""
     try:
-        service = InstrumentService()
+        # Use factory pattern for service access
+        from ..interfaces.factory.services_factory import ServicesFactory
+        service = ServicesFactory.get_instrument_service()
         result = service.delete_instrument(identifier)
         
         if not result:
@@ -183,7 +192,9 @@ def delete_instrument(identifier):
 def enrich_instrument(identifier):
     """Enrich an instrument with FIGI and LEI data"""
     try:
-        service = InstrumentService()
+        # Use factory pattern for service access
+        from ..interfaces.factory.services_factory import ServicesFactory
+        service = ServicesFactory.get_instrument_service()
         session, instrument = service.get_instrument(identifier)
         
         if not instrument:
@@ -245,7 +256,9 @@ def batch_process_instruments():
         if instrument_type not in InstrumentTypes.VALID_TYPES:
             return jsonify({ResponseFields.ERROR: ErrorMessages.INVALID_INSTRUMENT_TYPE}), HTTPStatus.BAD_REQUEST
             
-        service = InstrumentService()
+        # Use factory pattern for service access
+        from ..interfaces.factory.services_factory import ServicesFactory
+        service = ServicesFactory.get_instrument_service()
         results = {ResponseFields.SUCCESSFUL: [], ResponseFields.FAILED: []}
         
         for isin in identifiers:
@@ -388,8 +401,9 @@ def build_instrument_response(instrument):
     if instrument_type == "equity":
         from ..database.session import get_session
         with get_session() as session:
-            # Import Future model locally to avoid circular imports
-            from ..models.instrument import Future
+            # Import Future model from package to ensure relationships
+            from ..models.sqlite import Future
+            
             future_rows = session.query(Future.isin, Future.symbol).filter(
                 (Future.underlying_single_isin == instrument.isin) |
                 (Future.basket_isin == instrument.isin) |
@@ -411,6 +425,8 @@ def build_instrument_response(instrument):
         underlying_full_name = None
         if underlying_isin:
             from ..database.session import get_session
+            from ..models.sqlite import Instrument
+            
             with get_session() as session:
                 underlying_inst = session.query(Instrument).filter_by(isin=underlying_isin).first()
                 if underlying_inst:

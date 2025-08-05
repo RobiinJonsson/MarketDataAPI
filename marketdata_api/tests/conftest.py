@@ -4,9 +4,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from ..database.base import Base
-from ..models import *  # This ensures all models are loaded
 from datetime import datetime
-from ..models.instrument import Equity, Debt
 from ..schema.schema_mapper import SchemaMapper
 
 # Add the project root to Python path
@@ -49,6 +47,12 @@ def schema_mapper():
 
 @pytest.fixture
 def sample_equity():
+    # Lazy import to avoid model conflicts during regular app startup
+    from ..database.factory.database_factory import DatabaseFactory
+    db = DatabaseFactory.create_database()
+    models = db.get_models()
+    Equity = models.get('Equity')
+    
     return Equity(
         isin="SE0000108656",
         full_name="Test Equity",
@@ -62,6 +66,12 @@ def sample_equity():
 
 @pytest.fixture
 def sample_debt():
+    # Lazy import to avoid model conflicts during regular app startup
+    from ..database.factory.database_factory import DatabaseFactory
+    db = DatabaseFactory.create_database()
+    models = db.get_models()
+    Debt = models.get('Debt')
+    
     return Debt(
         isin="XS2332219612",
         full_name="Test Bond",

@@ -1,11 +1,16 @@
 from sqlalchemy import Column, String, DateTime, Integer, ForeignKey, CheckConstraint, Index, Table, Boolean
 from sqlalchemy.orm import relationship
-from ..database.base import Base
+from .base_model import Base
 from datetime import datetime, UTC
 import uuid
 
 class LegalEntity(Base):
     __tablename__ = "legal_entities"
+    __table_args__ = (
+        Index('idx_lei_status', 'lei', 'status'),
+        CheckConstraint('status IN ("ACTIVE", "INACTIVE", "PENDING")', name='ck_status_values'),
+        {'extend_existing': True}  # Allow table redefinition
+    )
     
     lei = Column(String(20), primary_key=True, nullable=False)  # LEI is always 20 characters
     name = Column(String(255), nullable=False)
@@ -18,25 +23,20 @@ class LegalEntity(Base):
     registration_status = Column(String(20), nullable=False)
     managing_lou = Column(String(20), nullable=False)
     creation_date = Column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
-
-    __table_args__ = (
-        Index('idx_lei_status', 'lei', 'status'),
-        CheckConstraint(status.in_(['ACTIVE', 'INACTIVE', 'PENDING']), name='ck_status_values')
-    )
     
-    # Relationships
-    addresses = relationship("EntityAddress", back_populates="entity", cascade="all, delete-orphan")
-    registration = relationship("EntityRegistration", back_populates="entity", uselist=False, cascade="all, delete-orphan")
+    # Relationships - using lambda for forward references
+    addresses = relationship(lambda: EntityAddress, back_populates="entity", cascade="all, delete-orphan")
+    registration = relationship(lambda: EntityRegistration, back_populates="entity", uselist=False, cascade="all, delete-orphan")
     instruments = relationship(
-        "Instrument",
+        "marketdata_api.models.sqlite.instrument.Instrument",
         back_populates="legal_entity",
         cascade="all, delete-orphan",
         passive_deletes=True,
         lazy='select'
     )
-      # Parent-Child relationships
+      # Parent-Child relationships - using lambda for forward references
     direct_parent_relation = relationship(
-        "EntityRelationship",
+        lambda: EntityRelationship,
         foreign_keys="EntityRelationship.child_lei",
         primaryjoin="and_(LegalEntity.lei==EntityRelationship.child_lei, EntityRelationship.relationship_type=='DIRECT')",
         back_populates="child",
@@ -44,7 +44,7 @@ class LegalEntity(Base):
     )
     
     ultimate_parent_relation = relationship(
-        "EntityRelationship",
+        lambda: EntityRelationship,
         foreign_keys="EntityRelationship.child_lei",
         primaryjoin="and_(LegalEntity.lei==EntityRelationship.child_lei, EntityRelationship.relationship_type=='ULTIMATE')",
         back_populates="child",
@@ -53,14 +53,14 @@ class LegalEntity(Base):
     )
     
     direct_children_relations = relationship(
-        "EntityRelationship",
+        lambda: EntityRelationship,
         foreign_keys="EntityRelationship.parent_lei",
         primaryjoin="and_(LegalEntity.lei==EntityRelationship.parent_lei, EntityRelationship.relationship_type=='DIRECT')",
         back_populates="parent"
     )
     
     ultimate_children_relations = relationship(
-        "EntityRelationship",
+        lambda: EntityRelationship,
         foreign_keys="EntityRelationship.parent_lei",
         primaryjoin="and_(LegalEntity.lei==EntityRelationship.parent_lei, EntityRelationship.relationship_type=='ULTIMATE')",
         back_populates="parent",
@@ -68,10 +68,11 @@ class LegalEntity(Base):
     )
     
     # Parent exception reporting
-    parent_exceptions = relationship("EntityRelationshipException", back_populates="entity", cascade="all, delete-orphan")
+    parent_exceptions = relationship(lambda: EntityRelationshipException, back_populates="entity", cascade="all, delete-orphan")
 
 class EntityAddress(Base):
     __tablename__ = "entity_addresses"
+    __table_args__ = {'extend_existing': True}  # Allow table redefinition
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))  # UUID length
     lei = Column(String(20), ForeignKey('legal_entities.lei', ondelete='CASCADE'), nullable=False)
@@ -82,10 +83,11 @@ class EntityAddress(Base):
     region = Column(String(100))
     postal_code = Column(String(20), nullable=False)
     
-    entity = relationship("LegalEntity", back_populates="addresses")
+    entity = relationship(lambda: LegalEntity, back_populates="addresses")
 
 class EntityRegistration(Base):
     __tablename__ = "entity_registrations"
+    __table_args__ = {'extend_existing': True}  # Allow table redefinition
     
     lei = Column(String(20), ForeignKey('legal_entities.lei', ondelete='CASCADE'), primary_key=True)
     initial_date = Column(DateTime)  # Changed from registration_date
@@ -95,7 +97,7 @@ class EntityRegistration(Base):
     managing_lou = Column(String(20))
     validation_sources = Column(String(255))  # Added
     
-    entity = relationship("LegalEntity", back_populates="registration")
+    entity = relationship(lambda: LegalEntity, back_populates="registration")
 
 class EntityRelationship(Base):
     """Represents parent-child relationships between legal entities."""
@@ -114,14 +116,14 @@ class EntityRelationship(Base):
     
     # Relationships
     parent = relationship(
-        "LegalEntity", 
+        lambda: LegalEntity, 
         foreign_keys=[parent_lei],
         primaryjoin="EntityRelationship.parent_lei==LegalEntity.lei",
         back_populates="direct_children_relations"  # This will be overridden by specific relationship types
     )
     
     child = relationship(
-        "LegalEntity", 
+        lambda: LegalEntity, 
         foreign_keys=[child_lei],
         primaryjoin="EntityRelationship.child_lei==LegalEntity.lei",
         back_populates="direct_parent_relation"  # This will be overridden by specific relationship types
@@ -129,7 +131,8 @@ class EntityRelationship(Base):
     
     __table_args__ = (
         Index('idx_parent_child', 'parent_lei', 'child_lei', 'relationship_type', unique=True),
-        CheckConstraint(relationship_type.in_(['DIRECT', 'ULTIMATE']), name='ck_relationship_type_values')
+        CheckConstraint('relationship_type IN ("DIRECT", "ULTIMATE")', name='ck_relationship_type_values'),
+        {'extend_existing': True}  # Allow table redefinition
     )
 
 class EntityRelationshipException(Base):
@@ -146,9 +149,10 @@ class EntityRelationshipException(Base):
     last_updated = Column(DateTime, nullable=False, default=lambda: datetime.now(UTC))
     
     # Relationship
-    entity = relationship("LegalEntity", back_populates="parent_exceptions")
+    entity = relationship(lambda: LegalEntity, back_populates="parent_exceptions")
     
     __table_args__ = (
         Index('idx_lei_exception_type', 'lei', 'exception_type', unique=True),
-        CheckConstraint(exception_type.in_(['DIRECT_PARENT', 'ULTIMATE_PARENT']), name='ck_exception_type_values')
+        CheckConstraint(exception_type.in_(['DIRECT_PARENT', 'ULTIMATE_PARENT']), name='ck_exception_type_values'),
+        {'extend_existing': True}  # Allow table redefinition
     )

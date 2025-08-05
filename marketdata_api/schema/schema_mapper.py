@@ -6,7 +6,6 @@ from pathlib import Path
 from dataclasses import dataclass
 from datetime import datetime, date
 from functools import lru_cache
-from ..models.instrument import Instrument, Equity, Debt, Future
 
 logger = logging.getLogger(__name__)
 
@@ -32,16 +31,27 @@ class SchemaMapping:
 class SchemaMapper:
     def __init__(self):
         self.mappings: Dict[str, SchemaMapping] = {}
-        self.type_mapping = {
-            "equity": Equity,
-            "debt": Debt,
-            "future": Future,  # Fix: Use the proper Future import
-            "base": Instrument
-        }
+        self.type_mapping = {}  # Will be populated lazily
         self._schema_cache = {}
         self._version_history = {}  # Store version history
         self._dependents = {}  # Track schema dependencies
         self.load_mappings()
+        
+    def _get_type_mapping(self):
+        """Lazy load type mapping using factory pattern"""
+        if not self.type_mapping:
+            from ..database.factory.database_factory import DatabaseFactory
+            db = DatabaseFactory.create_database()
+            models = db.get_models()
+            
+            # Create type mapping based on available models
+            self.type_mapping = {
+                "equity": models.get('Equity'),
+                "debt": models.get('Debt'), 
+                "future": models.get('Future'),
+                "base": models.get('Instrument')
+            }
+        return self.type_mapping
     
     @lru_cache(maxsize=32)
     def get_schema_version(self, schema_name: str) -> Tuple[str, SchemaMapping]:
@@ -116,7 +126,7 @@ class SchemaMapper:
                 logger.error(f"Error loading schema from {path}: {e}")
                 raise ValueError(f"Invalid schema file: {path}")
 
-    def map_to_schema(self, instrument: Union[Instrument, Dict[str, Any]], schema_name: str) -> Dict[str, Any]:
+    def map_to_schema(self, instrument: Union[Any, Dict[str, Any]], schema_name: str) -> Dict[str, Any]:
         """Map instrument data to requested schema format"""
         if schema_name not in self.mappings:
             raise ValueError(f"Unknown schema: {schema_name}")
@@ -156,9 +166,9 @@ class SchemaMapper:
 
         return result
 
-    def _map_model_to_schema(self, instrument: Instrument, schema_name: str) -> Dict[str, Any]:
+    def _map_model_to_schema(self, instrument: Any, schema_name: str) -> Dict[str, Any]:
         """Map model instance to schema format"""
-        expected_type = self.type_mapping.get(schema_name)
+        expected_type = self._get_type_mapping().get(schema_name)
         
         # Create a dictionary from the instrument data
         data = {}
@@ -211,7 +221,7 @@ class SchemaMapper:
             
         return fields
 
-    def _get_field_value(self, instrument: Instrument, field: SchemaField) -> Any:
+    def _get_field_value(self, instrument: Any, field: SchemaField) -> Any:
         """Get field value using source mapping"""
         try:
             value = getattr(instrument, field.source, None)

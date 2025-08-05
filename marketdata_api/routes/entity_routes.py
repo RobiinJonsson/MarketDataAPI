@@ -1,6 +1,6 @@
 import logging
 from flask import Blueprint, jsonify, request
-from ..services.legal_entity_service import LegalEntityService
+from ..interfaces.factory.services_factory import ServicesFactory
 from ..constants import (
     HTTPStatus, Pagination, API, ErrorMessages, SuccessMessages,
     ResponseFields, Endpoints, QueryParams, FormFields, DbFields
@@ -32,7 +32,7 @@ def list_entities():
         if jurisdiction:
             filters[QueryParams.JURISDICTION] = jurisdiction
         
-        service = LegalEntityService()
+        service = ServicesFactory.get_legal_entity_service()
         session, entities = service.get_all_entities(
             limit=limit,
             offset=offset,
@@ -70,7 +70,7 @@ def list_entities():
 def get_entity(lei):
     """Get legal entity by LEI code"""
     try:
-        service = LegalEntityService()
+        service = ServicesFactory.get_legal_entity_service()
         session, entity = service.get_entity(lei)
         
         if not entity:
@@ -121,7 +121,7 @@ def get_entity(lei):
 def create_or_update_entity(lei):
     """Create or update a legal entity"""
     try:
-        service = LegalEntityService()
+        service = ServicesFactory.get_legal_entity_service()
         session, entity = service.create_or_update_entity(lei)
         
         if not entity:
@@ -142,7 +142,7 @@ def create_or_update_entity(lei):
 def delete_entity(lei):
     """Delete a legal entity"""
     try:
-        service = LegalEntityService()
+        service = ServicesFactory.get_legal_entity_service()
         result = service.delete_entity(lei)
         
         if not result:

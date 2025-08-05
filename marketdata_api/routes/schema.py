@@ -4,7 +4,6 @@ from flask import Blueprint, jsonify, request, Response
 from typing import Dict, Any
 from ..schema.schema_mapper import SchemaMapper
 from ..database.session import get_session
-from ..models.instrument import Instrument
 from ..constants import (
     HTTPStatus, ErrorMessages, SuccessMessages, ResponseFields,
     QueryParams, FormFields
@@ -25,6 +24,12 @@ def schema_search():
         schema_name = data.get('schema_type', 'base')
         output_format = data.get('format', 'json').lower()
         mapper = SchemaMapper()
+
+        # Get the correct Instrument model from factory
+        from ..database.factory.database_factory import DatabaseFactory
+        db = DatabaseFactory.create_database()
+        models = db.get_models()
+        Instrument = models.get('Instrument')
 
         with get_session() as session:
             # Get instrument

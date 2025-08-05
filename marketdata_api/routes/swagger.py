@@ -284,7 +284,6 @@ class InstrumentList(Resource):
         '''Retrieves a paginated list of instruments'''
         from flask import request
         from ..database.session import get_session
-        from ..models.instrument import Instrument
         import logging
         
         logger = logging.getLogger(__name__)
@@ -296,6 +295,9 @@ class InstrumentList(Resource):
             offset = request.args.get('offset', Pagination.DEFAULT_OFFSET, type=int)
             page = request.args.get('page', Pagination.DEFAULT_PAGE, type=int)
             per_page = min(request.args.get('per_page', Pagination.DEFAULT_PER_PAGE, type=int), Pagination.MAX_PER_PAGE)
+            
+            # Get models directly instead of using factory
+            from ..models.sqlite import Instrument
             
             with get_session() as session:
                 query = session.query(Instrument)
@@ -355,13 +357,13 @@ class InstrumentDetail(Resource):
     #@instruments_ns.marshal_with(instrument_detail_response)
     def get(self, isin):
         '''Retrieves detailed information about a specific instrument by its ISIN'''
-        from ..services.instrument_service import InstrumentService
+        from ..interfaces.factory.services_factory import ServicesFactory
         import logging
         
         logger = logging.getLogger(__name__)
         
         try:
-            service = InstrumentService()
+            service = ServicesFactory.get_instrument_service()
             session, instrument = service.get_instrument(isin)
             
             if not instrument:
@@ -406,7 +408,7 @@ class LegalEntityList(Resource):
     def get(self):
         '''Retrieves a paginated list of legal entities'''
         from flask import request
-        from ..services.legal_entity_service import LegalEntityService
+        from ..interfaces.factory.services_factory import ServicesFactory
         import logging
         
         logger = logging.getLogger(__name__)        
@@ -426,7 +428,7 @@ class LegalEntityList(Resource):
             if jurisdiction:
                 filters['jurisdiction'] = jurisdiction
             
-            service = LegalEntityService()
+            service = ServicesFactory.get_legal_entity_service()
             session, entities = service.get_all_entities(
                 limit=limit,
                 offset=offset,
@@ -472,13 +474,13 @@ class LegalEntityDetail(Resource):
     # Remove the marshal_with decorator to prevent field filtering
     def get(self, lei):
         '''Retrieves detailed information about a specific legal entity by its LEI'''
-        from ..services.legal_entity_service import LegalEntityService
+        from ..interfaces.factory.services_factory import ServicesFactory
         import logging
         
         logger = logging.getLogger(__name__)
         
         try:
-            service = LegalEntityService()
+            service = ServicesFactory.get_legal_entity_service()
             session, entity = service.get_entity(lei)
             
             if not entity:
@@ -556,16 +558,15 @@ class EntityRelationships(Resource):
     def get(self, lei):
         '''Retrieves all relationships for a specific legal entity'''
         from flask import request
-        from ..services.legal_entity_service import LegalEntityService
+        from ..interfaces.factory.services_factory import ServicesFactory
         from ..database.session import get_session
-        from ..models.legal_entity import EntityRelationship
         import logging
         
         logger = logging.getLogger(__name__)
         
         try:
             # First check if the entity exists
-            service = LegalEntityService()
+            service = ServicesFactory.get_legal_entity_service()
             session, entity = service.get_entity(lei)
             
             if not entity:
@@ -577,6 +578,9 @@ class EntityRelationships(Resource):
             direction = request.args.get('direction')
             page = request.args.get('page', Pagination.DEFAULT_PAGE, type=int)
             per_page = min(request.args.get('per_page', Pagination.DEFAULT_PER_PAGE, type=int), Pagination.MAX_PER_PAGE)
+            
+            # Get models directly instead of using factory
+            from ..models.sqlite.legal_entity import EntityRelationship
             
             # Query relationships where this entity is either parent or child
             with get_session() as rel_session:
@@ -682,8 +686,6 @@ class TransparencyList(Resource):
         # Don't try to call the blueprint function directly - this causes issues
         # with how Flask handles the request context
         from flask import request
-        from ..database.session import SessionLocal
-        from ..models.transparency import TransparencyCalculation
         from sqlalchemy.orm import joinedload
         import logging
         
@@ -697,7 +699,12 @@ class TransparencyList(Resource):
             page = request.args.get('page', 1, type=int)
             per_page = min(request.args.get('per_page', 20, type=int), 100)
             
+            # Use factory pattern for models
+            # Get models directly instead of using factory
+            from ..models.sqlite.transparency import TransparencyCalculation
+            
             # Create a new session
+            from ..database.session import SessionLocal
             session = SessionLocal()
             try:
                 # Build query with eager loading
@@ -757,8 +764,7 @@ class TransparencyList(Resource):
         """Create transparency calculations from FITRS data for a given ISIN"""
         # Import here to avoid circular imports
         from flask import request, jsonify
-        from ..services.transparency_service import TransparencyService
-        from ..services.instrument_service import InstrumentService
+        from ..interfaces.factory.services_factory import ServicesFactory
         import logging
         
         logger = logging.getLogger(__name__)
@@ -781,7 +787,7 @@ class TransparencyList(Resource):
             logger.info(f"Creating transparency calculations for ISIN={isin}, instrument_type={instrument_type}")
             
             # 1. Check if instrument exists, if not create it
-            instrument_service = InstrumentService()
+            instrument_service = ServicesFactory.get_instrument_service()
             
             # First check if instrument exists
             session, instrument = instrument_service.get_instrument(isin)
@@ -808,7 +814,7 @@ class TransparencyList(Resource):
             logger.info(f"Derived calculation_type={calculation_type} from instrument_type={instrument_type}")
             
             # 3. Use TransparencyService to get transparency data
-            service = TransparencyService()
+            service = ServicesFactory.get_transparency_service()
             
             # Get or create transparency calculations
             created_calculations = service.get_or_create_transparency_calculation(
@@ -867,14 +873,14 @@ class TransparencyItem(Resource):
     def get(self, transparency_id):
         """Get transparency calculation by ID"""
         # Implement the endpoint directly rather than calling the blueprint function
-        from ..services.transparency_service import TransparencyService
+        from ..interfaces.factory.services_factory import ServicesFactory
         from flask import jsonify
         import logging
         
         logger = logging.getLogger(__name__)
         
         try:
-            service = TransparencyService()
+            service = ServicesFactory.get_transparency_service()
             session, calculation = service.get_transparency_by_id(transparency_id)
             
             if not calculation:
@@ -921,9 +927,8 @@ class TransparencyByIsin(Resource):
         # Implement directly instead of calling blueprint function
         from flask import request
         from ..database.session import SessionLocal
-        from ..models.transparency import TransparencyCalculation
         from sqlalchemy.orm import joinedload
-        from ..services.transparency_service import TransparencyService
+        from ..interfaces.factory.services_factory import ServicesFactory
         import logging
         
         logger = logging.getLogger(__name__)
@@ -934,6 +939,9 @@ class TransparencyByIsin(Resource):
             ensure_instrument = request.args.get('ensure_instrument', 'false').lower() == 'true'
             page = request.args.get('page', 1, type=int)
             per_page = min(request.args.get('per_page', 20, type=int), 100)
+            
+            # Get models directly instead of using factory
+            from ..models.sqlite.transparency import TransparencyCalculation
             
             # Create a new session
             session = SessionLocal()
@@ -959,7 +967,7 @@ class TransparencyByIsin(Resource):
                 # If no results and ensure_instrument is true, try to create
                 if not calculations and ensure_instrument:
                     session.close()
-                    service = TransparencyService()
+                    service = ServicesFactory.get_transparency_service()
                     
                     created_calcs = service.get_or_create_transparency_calculation(
                         isin=isin,

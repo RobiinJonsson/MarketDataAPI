@@ -1,0 +1,98 @@
+{
+  "timestamp": "2025-08-02T16:02:31.151402",
+  "working_patterns": {
+    "firds_data_mapping": {
+      "file": "marketdata_api/database/model_mapper.py",
+      "functions": [
+        "map_firds_to_instrument",
+        "map_equity_data",
+        "validate_isin"
+      ],
+      "notes": "FIRDS XML to database field mapping works correctly"
+    },
+    "external_api_integration": {
+      "files": [
+        "marketdata_api/services/openfigi.py",
+        "marketdata_api/services/legal_entity_service.py"
+      ],
+      "functions": [
+        "get_figi_data",
+        "get_lei_data",
+        "enrich_instrument_data"
+      ],
+      "notes": "FIGI and LEI API integration working perfectly"
+    },
+    "api_validation": {
+      "file": "marketdata_api/routes/instrument_routes.py",
+      "patterns": [
+        "Request validation using schemas",
+        "Error response formatting",
+        "Success response structure"
+      ],
+      "notes": "POST endpoints work well, GET endpoints need fixing"
+    },
+    "database_schema_insights": {
+      "discoveries": [
+        "Symbol column needs 50+ characters",
+        "Use DECIMAL/NUMERIC instead of FLOAT for SQL Server",
+        "UUID4 strings work well for IDs",
+        "Polymorphic inheritance causes SQL Server timeouts"
+      ]
+    }
+  },
+  "problem_areas": {
+    "polymorphic_inheritance": {
+      "issue": "SQLAlchemy inheritance queries timeout on SQL Server",
+      "affected_files": [
+        "marketdata_api/models/instrument.py",
+        "marketdata_api/services/instrument_service.py"
+      ],
+      "solution": "Replace with single-table design for SQL Server"
+    },
+    "session_management": {
+      "issue": "Different behavior between SQLite and SQL Server",
+      "affected_files": [
+        "marketdata_api/routes/instrument_routes.py"
+      ],
+      "solution": "Database-specific session handling"
+    }
+  },
+  "test_data": {
+    "sample_instruments": [
+      {
+        "isin": "US0378331005",
+        "type": "equity",
+        "description": "Apple Inc. - Works for creation, fails for retrieval"
+      },
+      {
+        "isin": "US5949181045",
+        "type": "equity",
+        "description": "Microsoft Corp - Good test case"
+      }
+    ],
+    "working_test_scripts": [
+      "get_test_samples.py",
+      "test_server_health.py",
+      "simple_instrument_test.py"
+    ]
+  },
+  "new_architecture_requirements": {
+    "sql_server_model": {
+      "approach": "Single table with instrument_type discrimination",
+      "benefits": [
+        "No complex JOINs",
+        "Fast queries",
+        "Easy debugging",
+        "SQL Server friendly"
+      ]
+    },
+    "sqlite_model": {
+      "approach": "Keep current polymorphic inheritance",
+      "benefits": [
+        "Already working",
+        "Good for development",
+        "Rich ORM features"
+      ]
+    }
+  }
+}

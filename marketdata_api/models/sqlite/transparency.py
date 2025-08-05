@@ -1,7 +1,7 @@
 import uuid
 from sqlalchemy import Column, String, DateTime, Float, Date, ForeignKey, Boolean, Integer, Index
 from sqlalchemy.orm import relationship
-from ..database.base import Base
+from .base_model import Base
 from datetime import datetime, UTC
 
 class TransparencyCalculation(Base):
@@ -27,7 +27,7 @@ class TransparencyCalculation(Base):
     
     # Relationship to instrument
     instrument = relationship(
-        "Instrument",
+        "marketdata_api.models.sqlite.instrument.Instrument",
         back_populates="transparency_calculations",
         passive_deletes=True
     )
@@ -73,11 +73,13 @@ class TransparencyCalculation(Base):
         Index('idx_transparency_isin', 'isin'),
         Index('idx_transparency_type', 'calculation_type'),
         Index('idx_transparency_dates', 'from_date', 'to_date'),
+        {'extend_existing': True}  # Allow table redefinition
     )
 
 class EquityTransparency(Base):
     """Equity instrument transparency data from FULECR files"""
     __tablename__ = "equity_transparency"
+    __table_args__ = {'extend_existing': True}  # Allow table redefinition
     
     id = Column(String, ForeignKey('transparency_calculations.id', ondelete='CASCADE'), primary_key=True)
     
@@ -106,6 +108,7 @@ class EquityTransparency(Base):
 class NonEquityTransparency(Base):
     """Non-equity instrument transparency data from FULNCR files"""
     __tablename__ = "non_equity_transparency"
+    __table_args__ = {"extend_existing": True}  # Allow table redefinition
     
     id = Column(String, ForeignKey('transparency_calculations.id', ondelete='CASCADE'), primary_key=True)
     
@@ -144,6 +147,7 @@ class NonEquityTransparency(Base):
 class DebtTransparency(NonEquityTransparency):
     """Debt-specific transparency data - extends NonEquityTransparency for debt instruments"""
     __tablename__ = "debt_transparency"
+    __table_args__ = {'extend_existing': True}  # Allow table redefinition
     
     id = Column(String, ForeignKey('non_equity_transparency.id', ondelete='CASCADE'), primary_key=True)
     
@@ -186,6 +190,7 @@ class DebtTransparency(NonEquityTransparency):
 class FuturesTransparency(NonEquityTransparency):
     """Futures-specific transparency data - extends NonEquityTransparency for futures instruments"""
     __tablename__ = "futures_transparency"
+    __table_args__ = {'extend_existing': True}  # Allow table redefinition
     
     id = Column(String, ForeignKey('non_equity_transparency.id', ondelete='CASCADE'), primary_key=True)
     

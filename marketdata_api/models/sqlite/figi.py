@@ -1,11 +1,12 @@
 import uuid
 from sqlalchemy import Column, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
-from ..database.base import Base
+from .base_model import Base
 from datetime import datetime, UTC
 
 class FigiMapping(Base):
     __tablename__ = "figi_mappings"
+    __table_args__ = {'extend_existing': True}  # Allow table redefinition
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     isin = Column(String(12), ForeignKey('instruments.isin', ondelete='CASCADE'), unique=True, nullable=False)
@@ -19,7 +20,7 @@ class FigiMapping(Base):
     last_updated = Column(DateTime, default=lambda: datetime.now(UTC))
     
     instrument = relationship(
-        "Instrument",
+        "marketdata_api.models.sqlite.instrument.Instrument",
         back_populates="figi_mapping",
         passive_deletes=True
     )

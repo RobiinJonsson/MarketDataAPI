@@ -114,3 +114,49 @@ SCHEMA_TO_DB_MAPPING = {
     "trading_venue": "trading_venue",
     # ...existing mappings...
 }
+
+# Database factory configuration for dual database support
+class DatabaseConfig:
+    """Configuration for database selection and factory pattern."""
+    
+    @staticmethod
+    def get_database_type() -> str:
+        """Get the current database type from environment."""
+        return DATABASE_TYPE.lower()
+    
+    @staticmethod
+    def is_sql_server() -> bool:
+        """Check if we're using SQL Server/Azure SQL."""
+        db_type = DatabaseConfig.get_database_type()
+        return db_type in ["azure_sql", "sqlserver", "mssql"]
+    
+    @staticmethod
+    def is_sqlite() -> bool:
+        """Check if we're using SQLite."""
+        return DatabaseConfig.get_database_type() == "sqlite"
+    
+    @staticmethod
+    def get_appropriate_service():
+        """Get the appropriate service based on database type."""
+        from .database.factory import DatabaseFactory
+        return DatabaseFactory.get_instrument_service()
+    
+    @staticmethod
+    def get_appropriate_database():
+        """Get the appropriate database implementation."""
+        from .database.factory import DatabaseFactory
+        return DatabaseFactory.create_database()
+
+# Backward compatibility - keep existing database configuration
+def get_database_config():
+    """Get database configuration for backward compatibility."""
+    return {
+        'type': DATABASE_TYPE,
+        'sqlite_path': SQLITE_DB_PATH,
+        'azure_sql': {
+            'server': AZURE_SQL_SERVER,
+            'database': AZURE_SQL_DATABASE,
+            'username': AZURE_SQL_USERNAME,
+            'port': AZURE_SQL_PORT
+        }
+    }

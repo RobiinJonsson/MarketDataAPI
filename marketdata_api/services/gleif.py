@@ -1,7 +1,7 @@
 import requests
 import logging
 from datetime import datetime, UTC
-from ..models.legal_entity import EntityRelationship, EntityRelationshipException
+from ..models.sqlite.legal_entity import EntityRelationship, EntityRelationshipException
 from .api_utils import retry_with_backoff, log_api_call, ApiError, RetryExhaustedError
 
 # Set up logger

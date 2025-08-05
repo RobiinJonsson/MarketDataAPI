@@ -1,14 +1,13 @@
 import logging
 from flask import Blueprint, jsonify, request
 from sqlalchemy.orm import joinedload
-from ..services.transparency_service import TransparencyService
+from ..interfaces.factory.services_factory import ServicesFactory
 from ..constants import (
     HTTPStatus, Pagination, API, ErrorMessages, SuccessMessages,
     ResponseFields, Endpoints, QueryParams, FormFields, DbFields
 )
 from typing import Dict, Any
 from ..database.session import SessionLocal
-from ..models.transparency import TransparencyCalculation
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)  # Standard logging level
@@ -31,6 +30,12 @@ def list_transparency_calculations():
         per_page = min(request.args.get(QueryParams.PER_PAGE, Pagination.DEFAULT_PER_PAGE, type=int), Pagination.MAX_PER_PAGE)
         
         logger.info(f"GET /transparency with params: calculation_type={calculation_type}, instrument_type={instrument_type}, isin={isin}, page={page}, per_page={per_page}")
+        
+        # Get the correct TransparencyCalculation model from factory
+        from ..database.factory.database_factory import DatabaseFactory
+        db = DatabaseFactory.create_database()
+        models = db.get_models()
+        TransparencyCalculation = models.get('TransparencyCalculation')
         
         # Create a new session for this query
         session = SessionLocal()
@@ -104,7 +109,7 @@ def list_transparency_calculations():
 def get_transparency_calculation(transparency_id):
     """Get transparency calculation by ID"""
     try:
-        service = TransparencyService()
+        service = ServicesFactory.get_transparency_service()
         session, calculation = service.get_transparency_by_id(transparency_id)
         
         if not calculation:
@@ -212,8 +217,8 @@ def create_transparency_calculation():
         logger.info(f"Creating transparency calculations for ISIN={isin}, instrument_type={instrument_type}")
         
         # 1. Check if instrument exists, if not create it
-        from ..services.instrument_service import InstrumentService
-        instrument_service = InstrumentService()
+        from ..interfaces.factory.services_factory import ServicesFactory
+        instrument_service = ServicesFactory.get_instrument_service()
         
         # First check if instrument exists
         session, instrument = instrument_service.get_instrument(isin)
@@ -239,7 +244,7 @@ def create_transparency_calculation():
         logger.info(f"Derived calculation_type={calculation_type} from instrument_type={instrument_type}")
         
         # 3. Use TransparencyService to get transparency data from FITRS
-        service = TransparencyService()
+        service = ServicesFactory.get_transparency_service()
         
         # Get or create transparency calculations - remove the unsupported fetch_from_fitrs parameter
         created_calculations = service.get_or_create_transparency_calculation(
@@ -297,7 +302,7 @@ def update_transparency_calculation(transparency_id):
         if not data:
             return jsonify({ResponseFields.ERROR: "No data provided"}), HTTPStatus.BAD_REQUEST
         
-        service = TransparencyService()
+        service = ServicesFactory.get_transparency_service()
         calculation = service.update_transparency_calculation(transparency_id, data)
         
         if not calculation:
@@ -318,7 +323,7 @@ def update_transparency_calculation(transparency_id):
 def delete_transparency_calculation(transparency_id):
     """Delete a transparency calculation"""
     try:
-        service = TransparencyService()
+        service = ServicesFactory.get_transparency_service()
         result = service.delete_transparency_calculation(transparency_id)
         
         if not result:
@@ -343,6 +348,12 @@ def get_transparency_by_isin(isin):
         per_page = min(request.args.get(QueryParams.PER_PAGE, Pagination.DEFAULT_PER_PAGE, type=int), Pagination.MAX_PER_PAGE)
         
         logger.info(f"GET transparency for ISIN={isin}, calculation_type={calculation_type}, ensure_instrument={ensure_instrument}")
+        
+        # Get the correct TransparencyCalculation model from factory
+        from ..database.factory.database_factory import DatabaseFactory
+        db = DatabaseFactory.create_database()
+        models = db.get_models()
+        TransparencyCalculation = models.get('TransparencyCalculation')
         
         # Direct database query approach that we know works from direct_test.py
         session = SessionLocal()
@@ -372,7 +383,7 @@ def get_transparency_by_isin(isin):
                 session.close()
                 session = None
                 
-                service = TransparencyService()
+                service = ServicesFactory.get_transparency_service()
                 logger.info(f"No calculations found, creating new ones with ensure_instrument=True")
                 
                 created_calcs = service.get_or_create_transparency_calculation(
@@ -390,6 +401,12 @@ def get_transparency_by_isin(isin):
                 if created_calcs:
                     # Open a new session to query the newly created calculations
                     session = SessionLocal()
+                    # Get the correct TransparencyCalculation model from factory
+                    from ..database.factory.database_factory import DatabaseFactory
+                    db = DatabaseFactory.create_database()
+                    models = db.get_models()
+                    TransparencyCalculation = models.get('TransparencyCalculation')
+                    
                     ids = [calc.id for calc in created_calcs if calc and hasattr(calc, 'id')]
                     
                     if ids:

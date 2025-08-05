@@ -1,6 +1,6 @@
 from flask import Flask
 from marketdata_api.config import FLASK_ENV, Config
-from marketdata_api.database.base import init_db
+from marketdata_api.database import init_database
 import logging
 from logging.handlers import RotatingFileHandler
 import os
@@ -48,7 +48,7 @@ def create_app():
     
     # Initialize database and create tables
     app.logger.info("Initializing database...")
-    init_db()
+    init_database()
     app.logger.info("Database initialization complete")
     
     from marketdata_api.routes.schema import schema_bp
