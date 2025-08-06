@@ -31,11 +31,8 @@ def list_transparency_calculations():
         
         logger.info(f"GET /transparency with params: calculation_type={calculation_type}, instrument_type={instrument_type}, isin={isin}, page={page}, per_page={per_page}")
         
-        # Get the correct TransparencyCalculation model from factory
-        from ..database.factory.database_factory import DatabaseFactory
-        db = DatabaseFactory.create_database()
-        models = db.get_models()
-        TransparencyCalculation = models.get('TransparencyCalculation')
+        # Get the correct TransparencyCalculation model with direct import
+        from ..models.sqlite.transparency import TransparencyCalculation
         
         # Create a new session for this query
         session = SessionLocal()
@@ -349,11 +346,8 @@ def get_transparency_by_isin(isin):
         
         logger.info(f"GET transparency for ISIN={isin}, calculation_type={calculation_type}, ensure_instrument={ensure_instrument}")
         
-        # Get the correct TransparencyCalculation model from factory
-        from ..database.factory.database_factory import DatabaseFactory
-        db = DatabaseFactory.create_database()
-        models = db.get_models()
-        TransparencyCalculation = models.get('TransparencyCalculation')
+        # Get the correct TransparencyCalculation model with direct import
+        from ..models.sqlite.transparency import TransparencyCalculation
         
         # Direct database query approach that we know works from direct_test.py
         session = SessionLocal()
@@ -401,11 +395,8 @@ def get_transparency_by_isin(isin):
                 if created_calcs:
                     # Open a new session to query the newly created calculations
                     session = SessionLocal()
-                    # Get the correct TransparencyCalculation model from factory
-                    from ..database.factory.database_factory import DatabaseFactory
-                    db = DatabaseFactory.create_database()
-                    models = db.get_models()
-                    TransparencyCalculation = models.get('TransparencyCalculation')
+                    # Get the correct TransparencyCalculation model with direct import
+                    from ..models.sqlite.transparency import TransparencyCalculation
                     
                     ids = [calc.id for calc in created_calcs if calc and hasattr(calc, 'id')]
                     

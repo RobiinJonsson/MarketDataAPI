@@ -38,18 +38,16 @@ class SchemaMapper:
         self.load_mappings()
         
     def _get_type_mapping(self):
-        """Lazy load type mapping using factory pattern"""
+        """Lazy load type mapping using direct imports"""
         if not self.type_mapping:
-            from ..database.factory.database_factory import DatabaseFactory
-            db = DatabaseFactory.create_database()
-            models = db.get_models()
+            from ..models.sqlite.instrument import Instrument, Equity, Debt, Future
             
             # Create type mapping based on available models
             self.type_mapping = {
-                "equity": models.get('Equity'),
-                "debt": models.get('Debt'), 
-                "future": models.get('Future'),
-                "base": models.get('Instrument')
+                "equity": Equity,
+                "debt": Debt, 
+                "future": Future,
+                "base": Instrument
             }
         return self.type_mapping
     

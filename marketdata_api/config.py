@@ -138,14 +138,22 @@ class DatabaseConfig:
     @staticmethod
     def get_appropriate_service():
         """Get the appropriate service based on database type."""
-        from .database.factory import DatabaseFactory
-        return DatabaseFactory.get_instrument_service()
+        from .interfaces.factory.services_factory import ServicesFactory
+        return ServicesFactory.get_instrument_service()
     
     @staticmethod
     def get_appropriate_database():
         """Get the appropriate database implementation."""
-        from .database.factory import DatabaseFactory
-        return DatabaseFactory.create_database()
+        db_type = DatabaseConfig.get_database_type()
+        
+        if db_type == 'sqlite':
+            from .database.sqlite.sqlite_database import SqliteDatabase
+            return SqliteDatabase()
+        elif db_type in ['sqlserver', 'azure_sql', 'mssql']:
+            from .database.sqlserver.sql_server_database import SqlServerDatabase
+            return SqlServerDatabase()
+        else:
+            raise ValueError(f"Unsupported database type: {db_type}")
 
 # Backward compatibility - keep existing database configuration
 def get_database_config():

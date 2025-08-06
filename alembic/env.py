@@ -12,11 +12,14 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 # Import your models here
 from marketdata_api.database.base import Base
-# Use factory to get appropriate models instead of direct imports
-from marketdata_api.database.factory.database_factory import DatabaseFactory
-
-# Get models through factory to avoid conflicts
-models = DatabaseFactory.get_models()
+# Import models directly - Alembic needs all models loaded for metadata
+from marketdata_api.models.sqlite.instrument import Instrument, Equity, Debt, Future
+from marketdata_api.models.sqlite.legal_entity import LegalEntity
+from marketdata_api.models.sqlite.figi import FigiMapping
+from marketdata_api.models.sqlite.transparency import (
+    TransparencyCalculation, EquityTransparency, NonEquityTransparency, 
+    DebtTransparency, FuturesTransparency
+)
 
 # this is the Alembic Config object
 config = context.config

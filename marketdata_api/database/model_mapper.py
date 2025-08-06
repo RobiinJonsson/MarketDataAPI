@@ -219,19 +219,12 @@ def parse_float(value: Any) -> float:
 
 
 def map_figi_data(data: list, isin: str):
-    """Maps OpenFIGI API response to FigiMapping model using factory pattern"""
+    """Maps OpenFIGI API response to FigiMapping model using direct import"""
     if not data or len(data) == 0:
         return None
         
-    # Get the appropriate FigiMapping model from factory
-    from .factory.database_factory import DatabaseFactory
-    db = DatabaseFactory.create_database()
-    models = db.get_models()
-    FigiMapping = models.get('FigiMapping')
-    
-    if not FigiMapping:
-        logger.error("FigiMapping model not found in factory")
-        return None
+    # Get the FigiMapping model directly
+    from ..models.sqlite.figi import FigiMapping
         
     # Handle nested data structure from OpenFIGI
     try:

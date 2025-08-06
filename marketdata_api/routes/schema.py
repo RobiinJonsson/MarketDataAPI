@@ -25,11 +25,8 @@ def schema_search():
         output_format = data.get('format', 'json').lower()
         mapper = SchemaMapper()
 
-        # Get the correct Instrument model from factory
-        from ..database.factory.database_factory import DatabaseFactory
-        db = DatabaseFactory.create_database()
-        models = db.get_models()
-        Instrument = models.get('Instrument')
+        # Get the correct Instrument model with direct import
+        from ..models.sqlite.instrument import Instrument
 
         with get_session() as session:
             # Get instrument

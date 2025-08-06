@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text, and_, or_
 from ...services.interfaces.instrument_service_interface import InstrumentServiceInterface
 from ...models.interfaces.instrument_interface import InstrumentInterface
-from ...database.factory.database_factory import DatabaseFactory
+from ...config import DatabaseConfig
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,14 @@ class SqlServerInstrumentService(InstrumentServiceInterface):
     """SQL Server optimized instrument service using single table design."""
     
     def __init__(self):
-        self.db = DatabaseFactory.create_database()
+        # Get database instance directly based on configuration
+        db_type = DatabaseConfig.get_database_type()
+        if db_type in ['sqlserver', 'azure_sql', 'mssql']:
+            from ...database.sqlserver.sql_server_database import SqlServerDatabase
+            self.db = SqlServerDatabase()
+        else:
+            raise ValueError(f"SqlServerInstrumentService requires SQL Server database, got: {db_type}")
+        
         self.session_maker = self.db.get_session_maker()
         self.logger = logging.getLogger(__name__)
     
@@ -315,12 +322,28 @@ class SqlServerInstrumentService(InstrumentServiceInterface):
     def _row_to_instrument(self, row) -> InstrumentInterface:
         """Convert a database row to an instrument interface."""
         # Create a simple instrument object that implements the interface
-        from ...models.sqlserver.instrument import SqlServerInstrument
+        # For SQL Server, we'll create a dynamic object that implements the interface
         
-        instrument = SqlServerInstrument(self.db.get_base_model())
+        class SqlServerInstrumentProxy:
+            """Dynamic proxy object for SQL Server instrument data."""
+            
+            def __init__(self, row_data):
+                # Set all row data as attributes
+                for key, value in row_data._mapping.items():
+                    setattr(self, key, value)
+                
+                # Ensure we have the required interface properties
+                if not hasattr(self, 'id'):
+                    self.id = getattr(self, 'instrument_id', None)
+                if not hasattr(self, 'isin'):
+                    self.isin = None
+                if not hasattr(self, 'full_name'):
+                    self.full_name = None
+                if not hasattr(self, 'symbol'):
+                    self.symbol = None
+                if not hasattr(self, 'currency'):
+                    self.currency = None
+                if not hasattr(self, 'instrument_type'):
+                    self.instrument_type = 'unknown'
         
-        # Set attributes from the row
-        for key, value in row._mapping.items():
-            setattr(instrument, f'_{key}', value)
-        
-        return instrument
+        return SqlServerInstrumentProxy(row)
