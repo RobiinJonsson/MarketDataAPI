@@ -1,7 +1,7 @@
 import pytest
 import logging
-from ..services.instrument_service import InstrumentService
-from ..models.instrument import Instrument, Equity, Debt
+from ..services.sqlite.instrument_service import SqliteInstrumentService
+from ..models.sqlite.instrument import Instrument, Equity, Debt
 from ..database.base import engine
 from ..models.base_model import Base
 
@@ -17,7 +17,7 @@ def setup_database():
 
 @pytest.fixture
 def test_service():
-    return InstrumentService()
+    return SqliteInstrumentService()
 
 def test_get_or_create_equity(setup_database, test_service):
     """Test getting or creating an equity instrument"""
@@ -87,7 +87,7 @@ def test_get_or_create_debt(setup_database, test_service):
 
 if __name__ == "__main__":
     # Manual test execution
-    service = InstrumentService()
+    service = SqliteInstrumentService()
     
     print("\nTesting Equity Instrument...")
     test_get_or_create_equity(None, service)

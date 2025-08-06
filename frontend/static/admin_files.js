@@ -2,23 +2,45 @@ class FileManager {
     constructor() {
         this.files = {};
         this.filteredFiles = [];
-        this.init();
+        this.initialized = false;
     }
 
     init() {
+        if (this.initialized) return;
+        
         this.bindEvents();
         this.loadFiles();
         this.loadStats();
+        this.initialized = true;
     }
 
     bindEvents() {
         $('#refresh-files-btn').on('click', () => this.refreshFiles());
-        $('#organize-files-btn').on('click', () => this.organizeFiles());
-        $('#cleanup-files-btn').on('click', () => this.cleanupFiles());
+        $('#auto-cleanup-btn').on('click', () => this.autoCleanupFiles());
+        $('#download-files-btn').on('click', () => this.showDownloadDialog());
         $('#apply-file-filters').on('click', () => this.applyFilters());
         
         // Filter change events
         $('#file-type-filter, #dataset-filter').on('change', () => this.applyFilters());
+        
+        // Download dialog events
+        $('#download-dialog-close, #download-dialog-cancel').on('click', () => this.hideDownloadDialog());
+        $('#execute-download-btn').on('click', () => this.executeDownload());
+        $('#load-available-files').on('click', () => this.loadAvailableESMAFiles());
+        $('#download-file-type, #download-asset-type, #download-date-from, #download-date-to').on('change', () => this.loadAvailableESMAFiles());
+        
+        // Select all files checkbox functionality
+        $('#select-all-files').on('change', function() {
+            $('.file-checkbox').prop('checked', this.checked);
+        });
+        
+        // File delete button event delegation
+        $(document).on('click', '.file-delete-btn', (e) => {
+            const button = $(e.target);
+            const filePath = button.data('file-path');
+            const fileName = button.data('file-name');
+            this.deleteFile(filePath, fileName);
+        });
     }
 
     async loadFiles() {
@@ -136,7 +158,9 @@ class FileManager {
                     <td>${file.size_mb} MB</td>
                     <td>${this.formatDate(file.modified)}</td>
                     <td>
-                        <button class="btn btn-small btn-danger" onclick="fileManager.deleteFile('${file.path}', '${file.name}')">
+                        <button class="btn btn-small btn-danger file-delete-btn" 
+                                data-file-path="${file.path}" 
+                                data-file-name="${file.name}">
                             Delete
                         </button>
                     </td>
@@ -152,63 +176,197 @@ class FileManager {
         AdminUtils.showToast('Files refreshed successfully', 'success');
     }
 
-    async organizeFiles() {
+    async autoCleanupFiles() {
+        console.log('autoCleanupFiles called');
+        if (!confirm('Auto-cleanup will remove outdated files and keep only the latest files per pattern within your configured date range. Continue?')) {
+            console.log('User cancelled auto-cleanup');
+            return;
+        }
+        
         try {
             AdminUtils.showSpinner();
-            const response = await fetch('/api/v1/files/organize', {
+            const response = await fetch('/api/v1/files/auto-cleanup', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
             });
             const data = await response.json();
             
             if (response.ok) {
-                const totalMoved = data.organized_count.firds + data.organized_count.fitrs;
-                AdminUtils.showToast(`Organized ${totalMoved} files successfully`, 'success');
+                const totalRemoved = data.total_removed;
+                AdminUtils.showToast(`Auto-cleanup completed: removed ${totalRemoved} outdated files`, 'success');
                 this.refreshFiles();
             } else {
-                throw new Error(data.error || 'Failed to organize files');
+                throw new Error(data.error || 'Failed to perform auto-cleanup');
             }
         } catch (error) {
-            AdminUtils.showToast('Error organizing files: ' + error.message, 'error');
+            AdminUtils.showToast('Error during auto-cleanup: ' + error.message, 'error');
         } finally {
             AdminUtils.hideSpinner();
         }
     }
 
-    async cleanupFiles() {
-        const dryRun = $('#dry-run').is(':checked');
-        const fileType = $('#file-type-filter').val() || null;
-        
+    showDownloadDialog() {
+        $('#download-dialog').show();
+        this.loadAvailableESMAFiles();
+    }
+
+    hideDownloadDialog() {
+        $('#download-dialog').hide();
+    }
+
+    async loadAvailableESMAFiles() {
         try {
-            AdminUtils.showSpinner();
-            const response = await fetch('/api/v1/files/cleanup', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    file_type: fileType,
-                    dry_run: dryRun
-                })
+            const fileType = $('#download-file-type').val() || 'firds';
+            const assetType = $('#download-asset-type').val();
+            const dateFrom = $('#download-date-from').val();
+            const dateTo = $('#download-date-to').val();
+            
+            const params = new URLSearchParams({
+                datasets: fileType,
+                ...(assetType && { asset_type: assetType }),
+                ...(dateFrom && { date_from: dateFrom }),
+                ...(dateTo && { date_to: dateTo })
             });
+            
+            const response = await fetch(`/api/v1/esma-files?${params}`);
             const data = await response.json();
             
             if (response.ok) {
-                const totalRemoved = data.removed_count.firds + data.removed_count.fitrs;
-                const message = dryRun ? 
-                    `Would remove ${totalRemoved} files (dry run)` : 
-                    `Removed ${totalRemoved} files successfully`;
-                AdminUtils.showToast(message, 'success');
-                
-                if (!dryRun) {
-                    this.refreshFiles();
-                }
+                this.renderAvailableFiles(data.files);
+                $('#available-files-count').text(`${data.total_count} files available`);
             } else {
-                throw new Error(data.error || 'Failed to cleanup files');
+                throw new Error(data.error || 'Failed to load available files');
             }
         } catch (error) {
-            AdminUtils.showToast('Error cleaning up files: ' + error.message, 'error');
+            console.error('Error loading ESMA files:', error);
+            AdminUtils.showToast('Error loading available files: ' + error.message, 'error');
+        }
+    }
+
+    renderAvailableFiles(files) {
+        const tbody = $('#available-files-tbody');
+        tbody.empty();
+        
+        if (files.length === 0) {
+            tbody.append('<tr><td colspan="4" class="text-center">No files found</td></tr>');
+            return;
+        }
+        
+        files.slice(0, 20).forEach(file => {  // Show only first 20 for performance
+            const row = $(`
+                <tr>
+                    <td>
+                        <input type="checkbox" class="file-checkbox" value="${file.download_link}" 
+                               data-filename="${file.file_name}">
+                    </td>
+                    <td title="${file.file_name}">${this.truncateText(file.file_name, 40)}</td>
+                    <td>${file.publication_date || file.creation_date}</td>
+                    <td>${file.instrument_type || file.file_type}</td>
+                </tr>
+            `);
+            tbody.append(row);
+        });
+        
+        if (files.length > 20) {
+            tbody.append(`<tr><td colspan="4" class="text-center"><em>... and ${files.length - 20} more files</em></td></tr>`);
+        }
+    }
+
+    async executeDownload() {
+        const selectedFiles = $('.file-checkbox:checked');
+        if (selectedFiles.length === 0) {
+            AdminUtils.showToast('Please select at least one file to download', 'warning');
+            return;
+        }
+        
+        const urls = selectedFiles.map((_, el) => $(el).val()).get();
+        const forceUpdate = $('#force-update-download').is(':checked');
+        
+        // Show progress bar
+        this.showDownloadProgress();
+        this.updateProgress(0, `Starting download of ${urls.length} files...`);
+        
+        try {
+            AdminUtils.showSpinner();
+            
+            // Simulate progress updates (since we don't have streaming progress from backend)
+            let progress = 10;
+            this.updateProgress(progress, 'Sending request to server...');
+            
+            const progressInterval = setInterval(() => {
+                if (progress < 90) {
+                    progress += Math.random() * 20;
+                    this.updateProgress(Math.min(progress, 90), 'Downloading files...');
+                }
+            }, 500);
+            
+            const response = await fetch('/api/v1/files/download', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    urls: urls,
+                    force_update: forceUpdate
+                })
+            });
+            
+            clearInterval(progressInterval);
+            this.updateProgress(95, 'Processing results...');
+            
+            const data = await response.json();
+            
+            if (response.ok) {
+                this.updateProgress(100, 'Download completed!');
+                
+                const summary = data.summary;
+                const message = `Download completed: ${summary.successful} successful, ${summary.failed} failed, ${summary.skipped} skipped`;
+                AdminUtils.showToast(message, 'success');
+                
+                // Show cleanup info if available
+                if (data.results.cleanup_performed) {
+                    const cleanup = data.results.cleanup_performed;
+                    const cleanupTotal = cleanup.firds + cleanup.fitrs;
+                    if (cleanupTotal > 0) {
+                        AdminUtils.showToast(`Auto-cleanup: removed ${cleanupTotal} outdated files`, 'info');
+                    }
+                }
+                
+                // Hide progress after a delay
+                setTimeout(() => {
+                    this.hideDownloadProgress();
+                    this.hideDownloadDialog();
+                }, 1500);
+                
+                this.refreshFiles();
+            } else {
+                clearInterval(progressInterval);
+                this.hideDownloadProgress();
+                throw new Error(data.error || 'Failed to download files');
+            }
+        } catch (error) {
+            this.hideDownloadProgress();
+            AdminUtils.showToast('Error downloading files: ' + error.message, 'error');
         } finally {
             AdminUtils.hideSpinner();
         }
+    }
+
+    showDownloadProgress() {
+        $('#download-progress').show();
+    }
+
+    hideDownloadProgress() {
+        $('#download-progress').hide();
+        this.updateProgress(0, 'Preparing download...');
+    }
+
+    updateProgress(percentage, message) {
+        const progressFill = $('#progress-fill');
+        const progressText = $('#progress-text');
+        const currentFile = $('#current-file');
+        
+        progressFill.css('width', percentage + '%');
+        progressText.text(Math.round(percentage) + '%');
+        currentFile.text(message);
     }
 
     async deleteFile(filePath, fileName) {
@@ -253,7 +411,9 @@ class FileManager {
     }
 }
 
-// Initialize when DOM is ready
+// Initialize when DOM is ready but don't call init() until needed
 $(document).ready(function() {
+    console.log('Creating FileManager instance...');
     window.fileManager = new FileManager();
+    console.log('FileManager instance created, not initialized yet');
 });

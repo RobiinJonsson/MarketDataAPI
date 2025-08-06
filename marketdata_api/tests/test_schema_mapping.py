@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime
 from ..schema.schema_mapper import SchemaMapper
-from ..models.instrument import Equity, Debt
+from ..models.sqlite.instrument import Equity, Debt
 from ..database.model_mapper import map_to_model
 
 @pytest.fixture

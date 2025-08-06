@@ -314,8 +314,8 @@
                     <h3>File Management</h3>
                     <div class="action-buttons">
                         <button id="refresh-files-btn" class="btn btn-primary">Refresh</button>
-                        <button id="organize-files-btn" class="btn btn-tertiary">Organize Files</button>
-                        <button id="cleanup-files-btn" class="btn btn-secondary">Cleanup Old Files</button>
+                        <button id="download-files-btn" class="btn btn-tertiary">Download Files</button>
+                        <button id="auto-cleanup-btn" class="btn btn-secondary">Auto-Cleanup</button>
                     </div>
                 </div>
 
@@ -383,23 +383,95 @@
                     </table>
                 </div>
 
-                <!-- Cleanup Configuration -->
-                <div class="cleanup-config">
-                    <h4>Cleanup Configuration</h4>
-                    <div class="config-form">
-                        <div class="form-group">
-                            <label for="retention-days">Retention Days:</label>
-                            <input type="number" id="retention-days" value="30" min="1" max="365">
+                <!-- Download Files Dialog -->
+                <div id="download-dialog" class="modal" style="display: none;">
+                    <div class="modal-content" style="width: 800px; max-width: 90vw;">
+                        <div class="modal-header">
+                            <h3>Download ESMA Files</h3>
+                            <button id="download-dialog-close" class="modal-close">&times;</button>
                         </div>
-                        <div class="form-group">
-                            <label for="max-files">Max Files per Type:</label>
-                            <input type="number" id="max-files" value="100" min="1" max="1000">
+                        <div class="modal-body">
+                            <!-- Download Criteria -->
+                            <div class="download-criteria">
+                                <h4>Search Criteria</h4>
+                                <div class="filter-row">
+                                    <div class="filter-group">
+                                        <label for="download-file-type">File Type:</label>
+                                        <select id="download-file-type">
+                                            <option value="firds">FIRDS</option>
+                                            <option value="fitrs">FITRS</option>
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="download-asset-type">Asset Type:</label>
+                                        <select id="download-asset-type">
+                                            <option value="">All</option>
+                                            <option value="C">Convertibles (C)</option>
+                                            <option value="D">Debt (D)</option>
+                                            <option value="E">Equity (E)</option>
+                                            <option value="F">Futures (F)</option>
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="download-date-from">Date From:</label>
+                                        <input type="date" id="download-date-from">
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="download-date-to">Date To:</label>
+                                        <input type="date" id="download-date-to">
+                                    </div>
+                                    <button id="load-available-files" class="btn btn-secondary">Search</button>
+                                </div>
+                            </div>
+
+                            <!-- Available Files -->
+                            <div class="available-files">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin: 15px 0;">
+                                    <h4>Available Files</h4>
+                                    <span id="available-files-count">0 files available</span>
+                                </div>
+                                <table class="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th width="50px">
+                                                <input type="checkbox" id="select-all-files">
+                                            </th>
+                                            <th>File Name</th>
+                                            <th>Date</th>
+                                            <th>Type</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="available-files-tbody">
+                                        <tr><td colspan="4" class="text-center">Use search criteria above to find files</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Download Options -->
+                            <div class="download-options" style="margin-top: 15px;">
+                                <label>
+                                    <input type="checkbox" id="force-update-download">
+                                    Force re-download (overwrite existing files)
+                                </label>
+                            </div>
+
+                            <!-- Download Progress -->
+                            <div id="download-progress" class="download-progress" style="display: none; margin-top: 15px;">
+                                <h5>Download Progress</h5>
+                                <div class="progress-bar-container">
+                                    <div class="progress-bar" id="progress-bar">
+                                        <div class="progress-fill" id="progress-fill"></div>
+                                    </div>
+                                    <span id="progress-text">0%</span>
+                                </div>
+                                <div id="progress-details" class="progress-details">
+                                    <span id="current-file">Preparing download...</span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="form-group">
-                            <label>
-                                <input type="checkbox" id="dry-run" checked>
-                                Dry Run (preview only)
-                            </label>
+                        <div class="modal-footer">
+                            <button id="execute-download-btn" class="btn btn-primary">Download Selected</button>
+                            <button id="download-dialog-cancel" class="btn btn-secondary">Cancel</button>
                         </div>
                     </div>
                 </div>

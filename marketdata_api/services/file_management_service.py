@@ -113,9 +113,11 @@ class FileManagementService:
         elif 'DELVINS' in filename_upper or 'DELTA' in filename_upper:
             return 'DELVINS'
         elif 'FITRS' in filename_upper or 'TRANSPARENCY' in filename_upper:
-            return 'FITRS'
+            # For FITRS files, extract asset type from filename
+            # Format: FITRS_YYYYMMDD_X where X is asset type (C, D, E, F)
+            return self._extract_fitrs_dataset_type(filename_upper)
         elif 'FULNCR' in filename_upper or 'FULECR' in filename_upper:
-            return 'FITRS'
+            return self._extract_fitrs_dataset_type(filename_upper)
         elif 'DVCAP' in filename_upper or 'VOLUME' in filename_upper or 'DVCRES' in filename_upper:
             return 'DVCAP'
         # Check for hash-based cached files by looking at file extension and length
@@ -126,6 +128,43 @@ class FileManagementService:
             return 'CACHED_DATA'
         else:
             return 'UNKNOWN'
+
+    def _extract_fitrs_dataset_type(self, filename_upper: str) -> str:
+        """Extract dataset type for FITRS files based on asset type suffix."""
+        import re
+        
+        # Look for FITRS files with pattern: FITRS_YYYYMMDD_X or similar
+        # where X is the asset type (C, D, E, F)
+        match = re.search(r'FITRS_\d{8}_([CDEF])', filename_upper)
+        if match:
+            asset_type = match.group(1)
+            return f'FITRS_{asset_type}'
+        
+        # Also check for other FITRS patterns like FULNCR, FULECR
+        if 'FULNCR' in filename_upper:
+            # Try to extract asset type from FULNCR files
+            # Pattern: FULNCR_YYYYMMDD_X where X is asset type
+            match = re.search(r'FULNCR_\d{8}_([CDEF])', filename_upper)
+            if match:
+                return f'FITRS_{match.group(1)}'
+            # Also try pattern with longer format: FULNCR_YYYYMMDD_XXX_X
+            match = re.search(r'FULNCR_\d{8}_\w+_([CDEF])', filename_upper)
+            if match:
+                return f'FITRS_{match.group(1)}'
+        
+        if 'FULECR' in filename_upper:
+            # Try to extract asset type from FULECR files  
+            # Pattern: FULECR_YYYYMMDD_X where X is asset type
+            match = re.search(r'FULECR_\d{8}_([CDEF])', filename_upper)
+            if match:
+                return f'FITRS_{match.group(1)}'
+            # Also try pattern with longer format: FULECR_YYYYMMDD_XXX_X
+            match = re.search(r'FULECR_\d{8}_\w+_([CDEF])', filename_upper)
+            if match:
+                return f'FITRS_{match.group(1)}'
+        
+        # Fallback to generic FITRS if we can't determine asset type
+        return 'FITRS'
 
     def get_all_files(self) -> Dict[str, List[FileInfo]]:
         """Get all files organized by type."""
@@ -152,52 +191,18 @@ class FileManagementService:
         
         return stats
 
-    def cleanup_old_files(self, file_type: Optional[str] = None, dry_run: bool = False) -> Dict[str, int]:
-        """Remove old files based on retention policy."""
-        cutoff_date = datetime.now() - timedelta(days=self.config.retention_days)
-        removed_count = {'firds': 0, 'fitrs': 0}
-        
-        file_types = [file_type] if file_type else ['firds', 'fitrs']
-        
-        for ftype in file_types:
-            files = self.get_files_by_type(ftype)
-            
-            # Remove files older than retention period
-            for file_info in files:
-                if file_info.modified < cutoff_date:
-                    if not dry_run:
-                        try:
-                            os.remove(file_info.path)
-                            removed_count[ftype] += 1
-                            self.logger.info(f"Removed old file: {file_info.name}")
-                        except Exception as e:
-                            self.logger.error(f"Error removing file {file_info.name}: {e}")
-                    else:
-                        removed_count[ftype] += 1
-            
-            # Remove excess files if over limit
-            if len(files) > self.config.max_files_per_type:
-                excess_files = files[self.config.max_files_per_type:]
-                for file_info in excess_files:
-                    if not dry_run:
-                        try:
-                            os.remove(file_info.path)
-                            removed_count[ftype] += 1
-                            self.logger.info(f"Removed excess file: {file_info.name}")
-                        except Exception as e:
-                            self.logger.error(f"Error removing excess file {file_info.name}: {e}")
-                    else:
-                        removed_count[ftype] += 1
-        
-        return removed_count
-
     def delete_file(self, file_path: str) -> bool:
         """Delete a specific file."""
         try:
             if os.path.exists(file_path):
                 os.remove(file_path)
-                self.logger.info(f"Deleted file: {file_path}")
+                self.logger.info(f"Successfully deleted file: {file_path}")
                 return True
+            else:
+                self.logger.warning(f"File not found for deletion: {file_path}")
+                return False
+        except PermissionError as e:
+            self.logger.error(f"Permission denied when deleting file {file_path}: {e}")
             return False
         except Exception as e:
             self.logger.error(f"Error deleting file {file_path}: {e}")
@@ -217,29 +222,131 @@ class FileManagementService:
         
         return deleted_count
 
-    def organize_files(self) -> Dict[str, int]:
-        """Organize files into proper subdirectories."""
-        organized_count = {'firds': 0, 'fitrs': 0}
+    def auto_cleanup_outdated_patterns(self) -> Dict[str, int]:
+        """
+        Automatically clean up files that are outside the configured date range
+        or older versions of the same pattern type.
+        """
+        from datetime import datetime
+        import re
         
-        # Check for misplaced files and move them
-        base_path = self.config.base_path
-        fitrs_path = esmaConfig.fitrs_path
-        
-        for file_path in base_path.iterdir():
-            if file_path.is_file():
-                filename = file_path.name.lower()
+        def extract_date_from_filename(filename: str) -> str:
+            """Extract date from ESMA filename."""
+            patterns = [
+                r'FULINS_[CDEFHIJORS]_(\d{8})_',  # FULINS with CFI
+                r'FULINS_(\d{8})_',               # FULINS without CFI  
+                r'DLTINS_(\d{8})_',               # DLTINS
+                r'DVCRES_(\d{8})_',               # DVCRES
+                r'FULNCR_(\d{8})_',               # FULNCR (FITRS)
+                r'FULECR_(\d{8})_',               # FULECR (FITRS)
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, filename)
+                if match:
+                    return match.group(1)
+            return None
+
+        def get_file_pattern_key(filename: str) -> str:
+            """Get the pattern key for grouping files (e.g., FULINS_E, FULINS_D)."""
+            filename_upper = filename.upper()
+            
+            # Extract the base pattern
+            if match := re.search(r'(FULINS_[CDEFHIJORS])_\d{8}', filename_upper):
+                return match.group(1)
+            elif match := re.search(r'(DVCRES)_\d{8}', filename_upper):
+                return match.group(1)
+            elif match := re.search(r'(FULNCR)_\d{8}', filename_upper):
+                return match.group(1)
+            elif match := re.search(r'(FULECR)_\d{8}', filename_upper):
+                return match.group(1)
+            elif match := re.search(r'(DLTINS)_\d{8}', filename_upper):
+                return match.group(1)
+            else:
+                # Fallback to dataset type
+                return self._extract_dataset_type(filename)
+
+        def is_date_in_config_range(date_str: str) -> bool:
+            """Check if date is within configured range."""
+            if not date_str:
+                return True  # Keep files we can't parse
+            
+            try:
+                file_date = datetime.strptime(date_str, '%Y%m%d')
+                config_start = datetime.strptime(esmaConfig.start_date, '%Y-%m-%d')
+                config_end = datetime.strptime(esmaConfig.end_date, '%Y-%m-%d')
                 
-                # Move FITRS files to fitrs subdirectory
-                if 'fitrs' in filename or 'transparency' in filename:
-                    target_path = fitrs_path / file_path.name
-                    try:
-                        shutil.move(str(file_path), str(target_path))
-                        organized_count['fitrs'] += 1
-                        self.logger.info(f"Moved {file_path.name} to fitrs directory")
-                    except Exception as e:
-                        self.logger.error(f"Error moving file {file_path.name}: {e}")
+                return config_start <= file_date <= config_end
+            except ValueError:
+                return True  # Keep files we can't parse
+
+        removed_count = {'firds': 0, 'fitrs': 0}
         
-        return organized_count
+        # Process both FIRDS and FITRS folders
+        for folder_name, folder_path in [('firds', esmaConfig.firds_path), ('fitrs', esmaConfig.fitrs_path)]:
+            if not folder_path.exists():
+                continue
+                
+            # Group files by pattern
+            file_groups = {}
+            
+            for file_path in folder_path.iterdir():
+                if file_path.is_file() and file_path.suffix in ['.csv', '.pickle']:
+                    pattern_key = get_file_pattern_key(file_path.name)
+                    file_date = extract_date_from_filename(file_path.name)
+                    
+                    if pattern_key not in file_groups:
+                        file_groups[pattern_key] = []
+                    
+                    file_groups[pattern_key].append({
+                        'path': file_path,
+                        'name': file_path.name,
+                        'date': file_date,
+                        'date_parsed': datetime.strptime(file_date, '%Y%m%d') if file_date else None,
+                        'in_range': is_date_in_config_range(file_date),
+                        'size': file_path.stat().st_size
+                    })
+            
+            # For each pattern group, keep only the latest files in range and remove outdated ones
+            for pattern_key, files in file_groups.items():
+                if len(files) <= 1:
+                    continue  # Nothing to clean up
+                
+                # Separate files: in-range vs out-of-range
+                in_range_files = [f for f in files if f['in_range'] and f['date_parsed']]
+                out_of_range_files = [f for f in files if not f['in_range'] and f['date_parsed']]
+                unparseable_files = [f for f in files if not f['date_parsed']]
+                
+                files_to_remove = []
+                
+                # Always remove out-of-range files
+                files_to_remove.extend(out_of_range_files)
+                
+                # For in-range files, keep only the latest date
+                if len(in_range_files) > 1:
+                    # Group by date and keep all files from the latest date
+                    latest_date = max(f['date_parsed'] for f in in_range_files)
+                    older_files = [f for f in in_range_files if f['date_parsed'] < latest_date]
+                    files_to_remove.extend(older_files)
+                
+                # Remove identified files
+                for file_info in files_to_remove:
+                    try:
+                        size_mb = file_info['size'] / (1024 * 1024)
+                        self.logger.info(f"Auto-cleaning outdated file: {file_info['name']} "
+                                       f"(pattern: {pattern_key}, date: {file_info['date']}, "
+                                       f"size: {size_mb:.1f} MB)")
+                        file_info['path'].unlink()
+                        removed_count[folder_name] += 1
+                    except Exception as e:
+                        self.logger.error(f"Error removing file {file_info['name']}: {e}")
+        
+        total_removed = sum(removed_count.values())
+        if total_removed > 0:
+            self.logger.info(f"Auto-cleanup completed: removed {total_removed} outdated files "
+                           f"(FIRDS: {removed_count['firds']}, FITRS: {removed_count['fitrs']})")
+        
+        return removed_count
 
     def get_file_management_summary(self) -> Dict[str, any]:
         """Get a comprehensive summary of file management status."""
@@ -422,6 +529,12 @@ class FileManagementService:
                     'error': str(e)
                 })
                 self.logger.error(f"Error processing {url}: {e}")
+        
+        # Auto-cleanup outdated files after successful downloads
+        if results['success']:
+            self.logger.info("Triggering auto-cleanup of outdated files after successful downloads")
+            cleanup_results = self.auto_cleanup_outdated_patterns()
+            results['cleanup_performed'] = cleanup_results
         
         return results
     

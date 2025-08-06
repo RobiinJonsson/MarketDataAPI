@@ -1,8 +1,8 @@
 import pytest
-from ..services.instrument_service import InstrumentService
-from ..models.instrument import Instrument, Equity  # Fix import path
-from ..models.figi import FigiMapping
-from ..models.legal_entity import LegalEntity
+from ..services.sqlite.instrument_service import SqliteInstrumentService
+from ..models.sqlite.instrument import Instrument, Equity  # Fix import path
+from ..models.sqlite.figi import FigiMapping
+from ..models.sqlite.legal_entity import LegalEntity
 from ..database.session import get_session
 from ..database.base import Base, engine
 from datetime import datetime, UTC
@@ -15,7 +15,7 @@ def setup_database():
 
 @pytest.fixture(scope="module")
 def test_service():
-    return InstrumentService()
+    return SqliteInstrumentService()
 
 def test_figi_relationship(setup_database):
     with get_session() as session:

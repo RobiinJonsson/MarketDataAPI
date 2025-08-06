@@ -35,7 +35,7 @@ TEST_INSTRUMENTS = [
 def test_transparency_service():
     """Test the transparency service with predefined ISINs"""
     try:
-        from marketdata_api.services.transparency_service import TransparencyService
+        from marketdata_api.services.sqlite.transparency_service import TransparencyService
         
         # Initialize the service
         service = TransparencyService()
@@ -198,7 +198,7 @@ def test_database_content():
     """Test what transparency data already exists in the database"""
     try:
         from marketdata_api.database.session import SessionLocal  # Use SessionLocal instead
-        from marketdata_api.models.transparency import TransparencyCalculation
+        from marketdata_api.models.sqlite.transparency import TransparencyCalculation
         
         logger.info(f"\n{'='*80}")
         logger.info("CHECKING EXISTING DATABASE CONTENT")

@@ -18,29 +18,44 @@ document.addEventListener('DOMContentLoaded', function() {
                     pane.classList.add('active');
                 }
             });
+            
+            // Initialize FileManager only when Files tab is clicked
+            if (tabName === 'files' && window.fileManager) {
+                window.fileManager.init();
+            }
         });
     });
     
-    // Initialize all modules
+    // Initialize all modules (temporarily disabled for debugging)
     AdminUtils.init();
-    AdminInstruments.init();
-    AdminLegalEntities.init();
-    AdminBatch.init();
-    AdminCFI.init();
+    
+    // Comment out other modules to debug the popup issue
+    // AdminInstruments.init();
+    // AdminLegalEntities.init();
+    // AdminBatch.init();
+    // AdminCFI.init();
+    
+    console.log('Admin modules initialized');
     // Note: FileManager is initialized separately in admin_files.js
 });
 
 // Shared utility functions across modules
 const AdminUtils = {
     init() {
-        // Set up confirmation modal
-        document.querySelector('.modal-close').addEventListener('click', () => {
-            this.hideConfirmationModal();
-        });
+        // Set up confirmation modal only if elements exist
+        const modalClose = document.querySelector('.modal-close');
+        if (modalClose) {
+            modalClose.addEventListener('click', () => {
+                this.hideConfirmationModal();
+            });
+        }
 
-        document.getElementById('modal-cancel').addEventListener('click', () => {
-            this.hideConfirmationModal();
-        });
+        const modalCancel = document.getElementById('modal-cancel');
+        if (modalCancel) {
+            modalCancel.addEventListener('click', () => {
+                this.hideConfirmationModal();
+            });
+        }
     },
     
     showSpinner() {
@@ -53,12 +68,19 @@ const AdminUtils = {
 
     showToast(message, type = 'info') {
         const toast = document.getElementById('admin-toast');
+        if (!toast) {
+            console.log(`Toast: ${message}`);
+            return;
+        }
+        
         toast.textContent = message;
         toast.className = `toast ${type} show`;
-          // Auto hide after configured duration
+        
+        // Auto hide after configured duration
+        const duration = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.TOAST_DURATION) ? APP_CONFIG.TOAST_DURATION : 3000;
         setTimeout(() => {
             toast.className = 'toast';
-        }, APP_CONFIG.TOAST_DURATION);
+        }, duration);
     },
 
     showConfirmationModal(title, message, confirmCallback) {

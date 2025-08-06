@@ -196,25 +196,6 @@ def get_file_stats():
         logger.error(f"Error getting file stats: {e}")
         return jsonify({'error': str(e)}), 500
 
-@file_management_bp.route('/api/v1/files/cleanup', methods=['POST'])
-def cleanup_files():
-    """Clean up old files."""
-    try:
-        data = request.get_json() or {}
-        file_type = data.get('file_type')
-        dry_run = data.get('dry_run', False)
-        
-        service = FileManagementService()
-        removed_count = service.cleanup_old_files(file_type, dry_run)
-        
-        return jsonify({
-            'removed_count': removed_count,
-            'dry_run': dry_run
-        })
-    except Exception as e:
-        logger.error(f"Error cleaning up files: {e}")
-        return jsonify({'error': str(e)}), 500
-
 @file_management_bp.route('/api/v1/files/delete', methods=['DELETE'])
 def delete_file():
     """Delete a specific file."""
@@ -228,21 +209,13 @@ def delete_file():
         service = FileManagementService()
         success = service.delete_file(file_path)
         
-        return jsonify({'success': success})
+        if success:
+            return jsonify({'success': True, 'message': 'File deleted successfully'})
+        else:
+            return jsonify({'error': 'File not found or could not be deleted'}), 404
+            
     except Exception as e:
         logger.error(f"Error deleting file: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@file_management_bp.route('/api/v1/files/organize', methods=['POST'])
-def organize_files():
-    """Organize files into proper directories."""
-    try:
-        service = FileManagementService()
-        organized_count = service.organize_files()
-        
-        return jsonify({'organized_count': organized_count})
-    except Exception as e:
-        logger.error(f"Error organizing files: {e}")
         return jsonify({'error': str(e)}), 500
 
 @file_management_bp.route('/api/v1/files/summary', methods=['GET'])
@@ -310,4 +283,21 @@ def download_by_criteria():
         
     except Exception as e:
         logger.error(f"Error in download_by_criteria: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@file_management_bp.route('/api/v1/files/auto-cleanup', methods=['POST'])
+def auto_cleanup_patterns():
+    """Automatically clean up outdated files by pattern and date range."""
+    try:
+        service = FileManagementService()
+        removed_count = service.auto_cleanup_outdated_patterns()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Auto-cleanup completed',
+            'files_removed': removed_count,
+            'total_removed': sum(removed_count.values())
+        })
+    except Exception as e:
+        logger.error(f"Error in auto_cleanup_patterns: {e}")
         return jsonify({'error': str(e)}), 500

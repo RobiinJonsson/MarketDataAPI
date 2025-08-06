@@ -1,6 +1,6 @@
 import pytest
 from datetime import date
-from marketdata_api.services.instrument_service import InstrumentService
+from marketdata_api.services.sqlite.instrument_service import SqliteInstrumentService
 from marketdata_api.database.session import get_session
 from marketdata_api.database.base import Base, engine
 from marketdata_api.models import *  # This imports all models
@@ -13,7 +13,7 @@ def setup_database():
 
 @pytest.fixture
 def test_service():
-    return InstrumentService()
+    return SqliteInstrumentService()
 
 def test_create_equity(setup_database, test_service):
     data = {
