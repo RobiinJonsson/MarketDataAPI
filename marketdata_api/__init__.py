@@ -2,9 +2,7 @@ from flask import Flask
 from marketdata_api.config import FLASK_ENV, Config
 from marketdata_api.database import init_database
 import logging
-from logging.handlers import RotatingFileHandler
 import os
-import glob
 
 def create_app():
     app = Flask(__name__,
@@ -21,12 +19,10 @@ def create_app():
         '[%(asctime)s] %(levelname)s in %(module)s: %(message)s'
     )
 
-    # Improved file handler with larger buffer and delay
-    debug_handler = RotatingFileHandler(
+    # Simple file handler without rotation to avoid numbered backups
+    debug_handler = logging.FileHandler(
         'logs/debug.log',
-        maxBytes=1024*1024,  # 1MB
-        backupCount=5,
-        delay=True,  # Don't create file until first write
+        mode='a',  # Append mode
         encoding='utf-8'
     )
     debug_handler.setLevel(logging.DEBUG)

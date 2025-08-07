@@ -158,7 +158,7 @@ const AdminInstruments = {
         AdminUtils.showSpinner();
         try {
             const payload = {
-                Id: isin,
+                isin: isin,  // Changed from 'Id' to 'isin' to match API requirements
                 type: category  // Changed from 'Category' to 'type' to match API requirements
             };
 

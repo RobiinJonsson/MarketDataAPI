@@ -48,6 +48,7 @@ class FileManagementService:
         self.logger = logging.getLogger(__name__)
         self._ensure_directories()
         self._esma_loader = None
+        self._backup_manager = None
         
     def _get_esma_loader(self):
         """Lazy initialization of ESMA data loader."""
@@ -55,6 +56,34 @@ class FileManagementService:
             from .esma_data_loader import EsmaDataLoader
             self._esma_loader = EsmaDataLoader()
         return self._esma_loader
+
+    def _get_backup_manager(self):
+        """Lazy initialization of database backup manager."""
+        if self._backup_manager is None:
+            try:
+                from ..database.database_backup import DatabaseBackupManager
+                from ..config import Config
+                
+                self._backup_manager = DatabaseBackupManager(
+                    db_path=Config.DATABASE_PATH,
+                    backup_dir="database_backups"
+                )
+            except Exception as e:
+                self.logger.warning(f"Could not initialize backup manager: {e}")
+                self._backup_manager = None
+        return self._backup_manager
+
+    def _create_safety_backup(self, operation_name: str) -> Optional[Path]:
+        """Create a safety backup before performing risky operations."""
+        backup_manager = self._get_backup_manager()
+        if backup_manager:
+            try:
+                backup_path = backup_manager.create_pre_operation_backup(operation_name)
+                self.logger.info(f"Safety backup created before {operation_name}: {backup_path}")
+                return backup_path
+            except Exception as e:
+                self.logger.error(f"Failed to create safety backup for {operation_name}: {e}")
+        return None
 
     def _ensure_directories(self):
         """Ensure the required directory structure exists."""
@@ -227,6 +256,9 @@ class FileManagementService:
         Automatically clean up files that are outside the configured date range
         or older versions of the same pattern type.
         """
+        # Create safety backup before auto-cleanup
+        self._create_safety_backup("auto_cleanup_outdated_patterns")
+        
         from datetime import datetime
         import re
         
@@ -470,6 +502,10 @@ class FileManagementService:
     
     def download_and_parse_files(self, urls: List[str], force_update: bool = False) -> Dict[str, any]:
         """Download and parse multiple ESMA files."""
+        
+        # Create safety backup before downloading new data
+        if urls:
+            self._create_safety_backup(f"download_and_parse_{len(urls)}_files")
         
         results = {
             'success': [],

@@ -18,6 +18,7 @@ from ...config import esmaConfig
 # Direct model imports at module level - importing only what this service needs
 from ...models.sqlite.instrument import Instrument, Equity, Debt, Future
 from ...models.sqlite.legal_entity import LegalEntity  # Only what's needed
+from ...models.sqlite.figi import FigiMapping  # Ensure FIGI relationships work
 from ...models.sqlite.figi import FigiMapping
 from ...models.sqlite.transparency import TransparencyCalculation
 
@@ -51,44 +52,60 @@ class SqliteInstrumentService(InstrumentServiceInterface):
         """Get the appropriate instrument model."""
         return Instrument
     
-    def validate_instrument_data(self, data: Dict[str, Any]) -> None:
-        """Validate required instrument data fields"""
-        required_fields = ['Id']  # Changed from 'FinInstrmGnlAttrbts_Id' to match model_mapper
-        missing = [f for f in required_fields if f not in data]
-        if missing:
-            raise InstrumentValidationError(f"Missing required fields: {', '.join(missing)}")
+    def validate_instrument_identifier(self, identifier: str) -> None:
+        """Validate instrument identifier (ISIN)"""
+        if not identifier or not isinstance(identifier, str):
+            raise InstrumentValidationError("Instrument identifier must be a non-empty string")
+        if len(identifier) != 12:
+            raise InstrumentValidationError("ISIN must be 12 characters long")
     
-    def create_instrument(self, data: Dict[str, Any], instrument_type: str = "equity") -> InstrumentInterface:
+    def create_instrument(self, identifier: str, instrument_type: str = "equity") -> InstrumentInterface:
         """
-        Create a new instrument in the database.
+        Create a new instrument from FIRDS data stored locally.
+        
+        Behavior:
+        1. Always create from FIRDS files in storage (never download new files)
+        2. No manual inputs - always use FIRDS data
+        3. If instrument exists, override current data
+        4. Try to enrich with OpenFIGI and GLEIF information
         
         Args:
-            data: Dictionary containing instrument data
-            instrument_type: Type of instrument to create ('equity' or 'debt')
+            identifier: ISIN identifier for the instrument
+            instrument_type: Type of instrument to create ('equity', 'debt', or 'future')
             
         Returns:
             Created Instrument instance
             
         Raises:
-            InstrumentValidationError: If required data is missing
+            InstrumentNotFoundError: If instrument not found in FIRDS data
             InstrumentServiceError: If creation fails
         """
-        self.validate_instrument_data(data)
         session = SessionLocal()
         
         try:
-            model_data = map_to_model(data, instrument_type)
+            # Get FIRDS data from local storage only
+            instrument_records = self._get_firds_data_from_storage(identifier, instrument_type)
+            if not instrument_records:
+                raise InstrumentNotFoundError(f"Instrument {identifier} not found in local FIRDS data for type {instrument_type}")
+
+            # For basic instrument creation, use the first record but log all available venues
+            primary_record = instrument_records[0]
+            venues = [record.get('TradgVnRltdAttrbts_Id', 'Unknown') for record in instrument_records]
+            logger.info(f"Creating instrument {identifier} from {len(instrument_records)} records across venues: {venues}")
+
+            model_data = map_to_model(primary_record, instrument_type)
             model_data['id'] = str(uuid.uuid4())
             model_data['type'] = instrument_type
 
-            # Only check for duplicate ISIN (symbol is no longer unique)
+            # Check for existing instrument and delete if exists (override behavior)
             isin = model_data.get('isin') or model_data.get('Id')
             existing = session.query(Instrument).filter(
                 Instrument.isin == isin
             ).first()
             if existing:
-                logger.info(f"Instrument with ISIN {isin} already exists. Skipping creation.")
-                return existing
+                logger.info(f"Instrument with ISIN {isin} exists. Overriding as requested.")
+                session.delete(existing)
+                session.flush()
 
             # Get the appropriate model class
             if instrument_type == "equity":
@@ -129,7 +146,20 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             session.commit()
 
             logger.info(f"Created new {instrument_type} instrument with ID: {instrument.id}")
-            return session.get(Instrument, instrument.id)
+            
+            # Try to enrich with external data
+            try:
+                enriched_session, enriched_instrument = self.enrich_instrument(instrument)
+                enriched_session.close()
+                
+                # Get a fresh copy of the instrument from the original session
+                # to avoid session binding issues
+                fresh_instrument = session.get(type(instrument), instrument.id)
+                return fresh_instrument
+            except Exception as e:
+                logger.warning(f"Failed to enrich instrument {identifier}: {str(e)}")
+                # Return the basic instrument even if enrichment fails
+                return session.get(type(instrument), instrument.id)
 
         except Exception as e:
             session.rollback()
@@ -212,6 +242,54 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                 return True
             return False
     
+    def get_instrument_venues(self, identifier: str, instrument_type: str = "equity") -> Optional[List[Dict[str, Any]]]:
+        """
+        Get all venue records for a specific ISIN.
+        
+        Args:
+            identifier: ISIN identifier for the instrument
+            instrument_type: Type of instrument ('equity', 'debt', or 'future')
+            
+        Returns:
+            List of venue records with trading information, dates, etc.
+        """
+        try:
+            records = self._get_firds_data_from_storage(identifier, instrument_type)
+            if not records:
+                self.logger.warning(f"No venue records found for {identifier}")
+                return None
+                
+            # Format the records for API consumption
+            formatted_records = []
+            for record in records:
+                venue_info = {
+                    'isin': record.get('Id'),
+                    'venue_id': record.get('TradgVnRltdAttrbts_Id'),
+                    'issuer_requested': record.get('TradgVnRltdAttrbts_IssrReq'),
+                    'first_trade_date': record.get('TradgVnRltdAttrbts_FrstTradDt'),
+                    'admission_approval_date': record.get('TradgVnRltdAttrbts_AdmssnApprvlDtByIssr'),
+                    'termination_date': record.get('TradgVnRltdAttrbts_TermntnDt'),
+                    'request_for_admission_date': record.get('TradgVnRltdAttrbts_ReqForAdmssnDt'),
+                    'competent_authority': record.get('TechAttrbts_RlvntCmptntAuthrty'),
+                    'publication_from_date': record.get('TechAttrbts_PblctnPrd_FrDt'),
+                    'relevant_trading_venue': record.get('TechAttrbts_RlvntTradgVn'),
+                    'full_name': record.get('FinInstrmGnlAttrbts_FullNm'),
+                    'short_name': record.get('FinInstrmGnlAttrbts_ShrtNm'),
+                    'classification_type': record.get('FinInstrmGnlAttrbts_ClssfctnTp'),
+                    'currency': record.get('FinInstrmGnlAttrbts_NtnlCcy'),
+                    'lei': record.get('Issr'),
+                    # Include raw record for advanced use cases
+                    'raw_record': record
+                }
+                formatted_records.append(venue_info)
+                
+            self.logger.info(f"Retrieved {len(formatted_records)} venue records for {identifier}")
+            return formatted_records
+            
+        except Exception as e:
+            self.logger.error(f"Error retrieving venue records for {identifier}: {str(e)}")
+            return None
+
     def search_instruments(self, query: str, limit: int = 100) -> List[InstrumentInterface]:
         """Search instruments by name, symbol, or ISIN."""
         Instrument = self._get_instrument_model()
@@ -224,7 +302,10 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             ).limit(limit).all()
     
     def validate_instrument_data(self, data: Dict[str, Any]) -> None:
-        """Validate instrument data."""
+        """
+        Legacy method for backward compatibility. 
+        New create_instrument method uses validate_instrument_identifier instead.
+        """
         # Basic validation
         if not data.get('isin') and not data.get('symbol'):
             raise ValueError("Instrument must have either ISIN or symbol")
@@ -243,7 +324,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
     
     def get_instrument(self, identifier: str) -> Tuple[Session, Optional[InstrumentInterface]]:
         """
-        Retrieve an instrument by its identifier.
+        Retrieve an instrument by its identifier with relationships loaded.
         
         Args:
             identifier: The unique identifier of the instrument
@@ -251,11 +332,17 @@ class SqliteInstrumentService(InstrumentServiceInterface):
         Returns:
             Tuple of (Session, Instrument): Active session and instrument if found
         """
+        from sqlalchemy.orm import joinedload
+        
         Instrument = self._get_instrument_model()
         session = SessionLocal()
         try:
             instrument = (
                 session.query(Instrument)
+                .options(
+                    joinedload(Instrument.figi_mapping),
+                    joinedload(Instrument.legal_entity)
+                )
                 .filter(
                     (Instrument.id == identifier) |
                     (Instrument.isin == identifier) |
@@ -269,38 +356,76 @@ class SqliteInstrumentService(InstrumentServiceInterface):
         except:
             session.close()
             raise
+            raise
     
-    def get_or_create_instrument(self, identifier: str, instrument_type: str) -> Optional[InstrumentInterface]:
-        """Get existing instrument or create from FIRDS data."""
+    def _get_firds_data_from_storage(self, identifier: str, instrument_type: str) -> Optional[List[Dict[str, Any]]]:
+        """
+        Fetch ALL FIRDS data records from local storage for a given ISIN.
+        
+        Args:
+            identifier: ISIN identifier for the instrument
+            instrument_type: Type of instrument ('equity', 'debt', or 'future')
+            
+        Returns:
+            List of dictionaries containing all instrument records if found, None otherwise
+        """
         try:
-            # Check if instrument exists first
-            Instrument = self._get_instrument_model()
-            session = SessionLocal()
-            try:
-                instrument = (
-                    session.query(Instrument)
-                    .filter(Instrument.isin == identifier)
-                    .first()
-                )
-                if instrument:
-                    # Refresh to ensure it's bound to session
-                    session.refresh(instrument)
-                    return instrument
-            finally:
-                session.close()
-
-            # If not found, get FIRDS data and create
-            instrument_data = self._get_firds_data(identifier, instrument_type)
-            if not instrument_data:
+            from pathlib import Path
+            from ...config import esmaConfig
+            
+            # Determine file type pattern for different instrument types
+            file_type = ('FULINS_E' if instrument_type == 'equity' else
+                        'FULINS_D' if instrument_type == 'debt' else
+                        'FULINS_F' if instrument_type == 'future' else None)
+            
+            if not file_type:
+                self.logger.error(f"Unsupported instrument type: {instrument_type}")
                 return None
-
-            # create_instrument handles its own session management
-            instrument = self.create_instrument(instrument_data, instrument_type)
-            return instrument
+            
+            # Look for files in local storage
+            firds_path = Path(esmaConfig.firds_path)
+            if not firds_path.exists():
+                self.logger.error(f"FIRDS storage path does not exist: {firds_path}")
+                return None
+            
+            # Find files matching the pattern for this instrument type
+            matching_files = list(firds_path.glob(f"*{file_type}*_firds_data.csv"))
+            
+            if not matching_files:
+                self.logger.warning(f"No {file_type} files found in local storage: {firds_path}")
+                return None
+            
+            # Search through local files for the identifier
+            for file_path in matching_files:
+                try:
+                    self.logger.debug(f"Searching for {identifier} in {file_path.name}")
+                    
+                    # Load the file - these are CSV files with specific dtype handling
+                    import pandas as pd
+                    df = pd.read_csv(str(file_path), dtype=str, low_memory=False)
+                    
+                    if df is not None and not df.empty:
+                        # Check for the identifier in the data
+                        isin_data = df[df['Id'] == identifier]
+                        if not isin_data.empty:
+                            self.logger.info(f"Found {len(isin_data)} records for {identifier} in {file_path.name}")
+                            
+                            # Return all records for this ISIN, not just one
+                            # This allows API layer to handle venue selection, date filtering, etc.
+                            all_records = isin_data.to_dict('records')  # Convert to list of dicts
+                            self.logger.info(f"Returning all {len(all_records)} records for {identifier}")
+                            return all_records
+                
+                except Exception as e:
+                    self.logger.warning(f"Error reading file {file_path}: {str(e)}")
+                    continue
+            
+            self.logger.warning(f"Identifier {identifier} not found in any local {file_type} files")
+            return None
 
         except Exception as e:
-            self.logger.error(f"Failed to get/create instrument {identifier}: {str(e)}")
-            raise InstrumentServiceError(f"Failed to get/create instrument: {str(e)}")
+            self.logger.error(f"Error fetching FIRDS data from storage: {str(e)}")
+            return None
 
     def _get_firds_data(self, identifier: str, instrument_type: str) -> Optional[Dict[str, Any]]:
         """Helper method to fetch FIRDS data."""
@@ -388,9 +513,34 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             raise InstrumentServiceError(f"Enrichment failed: {str(e)}")
 
     def _enrich_figi(self, session: Session, instrument: InstrumentInterface) -> None:
-        """Helper method to handle FIGI enrichment"""
+        """
+        Helper method to handle FIGI enrichment with venue-aware optimization.
+        
+        Uses intelligent venue selection from FIRDS data for better OpenFIGI results.
+        """
         self.logger.debug(f"Starting FIGI enrichment for {instrument.isin}")
-        figi_data = search_openfigi(instrument.isin, instrument.type)
+        
+        # Import the enhanced search function
+        from ...services.openfigi import search_openfigi_with_fallback
+        
+        # Get venue records for this ISIN to optimize OpenFIGI search
+        try:
+            venue_records = self._get_firds_data_from_storage(instrument.isin, instrument.type)
+            if venue_records:
+                self.logger.info(f"Using {len(venue_records)} venue records for optimized FIGI search")
+            else:
+                self.logger.warning(f"No venue records found for {instrument.isin}, using basic search")
+        except Exception as e:
+            self.logger.warning(f"Failed to get venue data for FIGI optimization: {e}")
+            venue_records = None
+        
+        # Use venue-aware search with fallback
+        figi_data = search_openfigi_with_fallback(
+            instrument.isin, 
+            instrument.type, 
+            venue_records
+        )
+        
         if figi_data:
             self.logger.debug(f"Received FIGI data: {figi_data}")
             figi_mapping = map_figi_data(figi_data, instrument.isin)
@@ -399,6 +549,10 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                 instrument.figi_mapping = figi_mapping
                 session.add(figi_mapping)
                 self.logger.debug(f"FIGI mapping added to session")
+            else:
+                self.logger.warning(f"Failed to create FIGI mapping from data: {figi_data}")
+        else:
+            self.logger.warning(f"No FIGI data returned for {instrument.isin}")
 
     def _enrich_legal_entity(self, session: Session, instrument: InstrumentInterface) -> None:
         """Helper method to handle legal entity enrichment"""

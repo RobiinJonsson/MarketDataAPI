@@ -26,14 +26,12 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
     
-    // Initialize all modules (temporarily disabled for debugging)
+    // Initialize all modules
     AdminUtils.init();
-    
-    // Comment out other modules to debug the popup issue
-    // AdminInstruments.init();
-    // AdminLegalEntities.init();
-    // AdminBatch.init();
-    // AdminCFI.init();
+    AdminInstruments.init();
+    AdminLegalEntities.init();
+    AdminBatch.init();
+    AdminCFI.init();
     
     console.log('Admin modules initialized');
     // Note: FileManager is initialized separately in admin_files.js

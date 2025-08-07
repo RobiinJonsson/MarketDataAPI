@@ -2,6 +2,94 @@
 
 All notable changes to the MarketDataAPI project will be documented in this file.
 
+## [2025-08-07] - Enrichment Service Optimization and API Relationship Loading Fixes
+
+### Added
+- **Venue-Aware OpenFIGI Integration** - Enhanced OpenFIGI API calls with intelligent venue selection
+  - Exchange code mapping for major European venues (XSTO→SS, XHEL→HE, XCSE→CO, etc.)
+  - Fallback strategy prioritizing primary venue, country-based, then global search
+  - Multi-venue FIRDS data analysis showing 39 venues for single instruments like Swedbank
+  - Improved success rates by targeting specific exchange codes rather than generic country codes
+
+- **Enhanced API Response Building** - Complete relationship data now included in instrument endpoints
+  - SQLAlchemy eager loading with `joinedload()` for FIGI and LEI relationships
+  - Session management improvements preventing "Instance not bound to a Session" errors
+  - Fresh instance returns from enrichment service to maintain proper session context
+  - Comprehensive FIGI data: `figi`, `composite_figi`, `share_class_figi`, `security_type`, `market_sector`
+  - Complete LEI data: `lei`, `name`, `jurisdiction`, `legal_form`, `status`, `creation_date`
+
+- **Venues API Endpoint** - New endpoint for analyzing instrument venue coverage
+  - `GET /api/v1/instruments/{isin}/venues` - Returns all venue records for specific instruments
+  - Real-time venue count and detailed venue information for trading optimization
+  - Integration with FIRDS multi-venue data for comprehensive venue analysis
+
+### Improved
+- **LEI Enrichment Efficiency** - Confirmed optimal 1:1 ISIN-to-LEI relationship approach
+  - Analysis validated that single API call to GLEIF per ISIN is most efficient
+  - No uncaught LEI relationships due to 1:N scenarios (confirmed not applicable)
+  - Existing GLEIF integration already optimal for production use
+
+- **OpenFIGI API Optimization** - Strategic venue targeting for better enrichment success
+  - Venue-specific exchange code selection over generic country-based calls
+  - Intelligent prioritization: primary venue → fallback venues → country-based → global
+  - Enhanced `search_openfigi_with_fallback()` function with configurable venue strategies
+  - Better handling of MIC code variations and exchange code mapping
+
+- **Session Management** - Robust SQLAlchemy session handling across enrichment operations
+  - Fixed circular session binding issues in instrument creation workflows
+  - Proper session closure and fresh instance retrieval patterns
+  - Enhanced error handling for session-related database operations
+
+### Fixed
+- **API Relationship Loading** - FIGI and LEI data now properly appears in all API responses
+  - Resolved lazy loading issues causing missing relationship data in API endpoints
+  - Added explicit `joinedload(Instrument.figi_mapping, Instrument.legal_entity)` in service queries
+  - Fixed model imports to ensure FigiMapping and LegalEntity relationships work correctly
+  - Updated `get_instrument()` method with eager loading for consistent API responses
+
+- **Pandas Deprecation Warnings** - Resolved CSV reading warnings in FIRDS data processing
+  - Added `dtype=str` to `pd.read_csv()` calls to handle mixed column types
+  - Eliminated DtypeWarning messages during ESMA data file processing
+  - Improved data consistency in CSV parsing operations
+
+- **Frontend Integration** - Session binding errors resolved for admin interface operations
+  - Fixed "Instance not bound to a Session" errors during instrument creation via frontend
+  - Enhanced error handling and user feedback for creation operations
+  - Proper session management for enrichment workflows triggered from web interface
+
+### Validated
+- **Production Data Verification** - Confirmed enrichment data exists and is accessible
+  - Swedbank (SE0000242455): FIGI `BBG000BQXJJ1`, LEI `M312WZV08Y7LYUC71685`
+  - API responses now include complete relationship data as designed
+  - Database queries confirm proper data storage and relationship integrity
+  - Frontend and API endpoints show consistent enrichment data availability
+
+### Removed
+- **Temporary Development Scripts** - Cleaned up diagnostic and test files
+  - Removed `scripts/test_figi_lei_api.py` - API testing script
+  - Removed `scripts/test_enhanced_enrichment.py` - Enrichment testing script  
+  - Removed `scripts/quick_diagnostic.py` - API diagnostic script
+  - Removed `scripts/simple_test.py` - Simple testing utilities
+
+### Technical Architecture
+- **Enrichment Optimization Strategy**:
+  - ✅ LEI: Confirmed 1:1 relationship, single GLEIF API call per ISIN optimal
+  - ✅ OpenFIGI: Venue-aware strategy with exchange code mapping and intelligent fallbacks
+  - ✅ Session Management: Robust SQLAlchemy session handling with proper cleanup
+  - ✅ API Response: Complete relationship data with eager loading throughout
+
+- **Performance Improvements**:
+  - Better OpenFIGI success rates through venue-specific targeting
+  - Reduced API calls through optimized LEI enrichment strategy
+  - Enhanced data consistency with proper session management
+  - Faster API responses with eager loading of relationships
+
+- **Production Readiness**:
+  - ✅ All enrichment services validated with real production data
+  - ✅ API endpoints return complete instrument data including FIGI and LEI
+  - ✅ Session management handles concurrent operations properly
+  - ✅ Frontend integration works seamlessly with enhanced backend services
+
 ## [2025-08-06] - Production-Ready File Management System and Application Cleanup
 
 ### Added

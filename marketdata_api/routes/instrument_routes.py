@@ -89,11 +89,16 @@ def get_instrument(identifier):
         session, instrument = service.get_instrument(identifier)
         
         if not instrument:
-            # If not found, try to get or create from FIRDS (assume equity type for now)
-            instrument = service.get_or_create_instrument(identifier, "equity")
-            if instrument:
-                # Get fresh session for the new instrument
-                session, instrument = service.get_instrument(instrument.id)
+            # If not found, try to create from FIRDS (assume equity type for now)
+            try:
+                instrument = service.create_instrument(identifier, "equity")
+                if instrument:
+                    # Get fresh session for the new instrument
+                    session, instrument = service.get_instrument(instrument.id)
+            except Exception as e:
+                # If creation fails, log and continue to return not found
+                logger.warning(f"Failed to create instrument from FIRDS: {str(e)}")
+                instrument = None
         
         if not instrument:
             return jsonify({ResponseFields.ERROR: ErrorMessages.INSTRUMENT_NOT_FOUND}), HTTPStatus.NOT_FOUND
@@ -110,15 +115,15 @@ def get_instrument(identifier):
 
 @instrument_bp.route(Endpoints.INSTRUMENTS, methods=["POST"])
 def create_instrument():
-    """Create a new instrument or get from FIRDS if not found"""
+    """Create a new instrument from FIRDS data"""
     try:
         data = request.json
         if not data:
             return jsonify({ResponseFields.ERROR: ErrorMessages.NO_DATA_PROVIDED}), HTTPStatus.BAD_REQUEST
             
-        # Required fields - use Id instead of isin to match service expectations
-        if "Id" not in data or DbFields.TYPE not in data:
-            return jsonify({ResponseFields.ERROR: "Id and type are required"}), HTTPStatus.BAD_REQUEST
+        # Required fields - ISIN and type
+        if "isin" not in data or DbFields.TYPE not in data:
+            return jsonify({ResponseFields.ERROR: "isin and type are required"}), HTTPStatus.BAD_REQUEST
             
         instrument_type = data[DbFields.TYPE]
         if instrument_type not in InstrumentTypes.VALID_TYPES:
@@ -127,7 +132,9 @@ def create_instrument():
         # Use factory pattern for service access
         from ..interfaces.factory.services_factory import ServicesFactory
         service = ServicesFactory.get_instrument_service()
-        instrument = service.get_or_create_instrument(data["Id"], instrument_type)
+        
+        # Use the new create_instrument method that gets data from FIRDS
+        instrument = service.create_instrument(data["isin"], instrument_type)
         
         return jsonify({
             ResponseFields.MESSAGE: SuccessMessages.INSTRUMENT_CREATED,
@@ -137,6 +144,11 @@ def create_instrument():
         }), HTTPStatus.CREATED
         
     except Exception as e:
+        # Check if it's an InstrumentNotFoundError
+        if "not found in local FIRDS data" in str(e):
+            logger.warning(f"Instrument not found in FIRDS data: {str(e)}")
+            return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.NOT_FOUND
+        
         logger.error(f"Error in create_instrument: {str(e)}")
         return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
@@ -186,6 +198,36 @@ def delete_instrument(identifier):
         
     except Exception as e:
         logger.error(f"Error in delete_instrument: {str(e)}")
+        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+
+@instrument_bp.route(f"{Endpoints.INSTRUMENTS}/<string:identifier>/venues", methods=["GET"])
+def get_instrument_venues(identifier):
+    """Get all venue records for a specific ISIN"""
+    try:
+        # Get instrument type from query parameter (default to equity)
+        instrument_type = request.args.get('type', 'equity')
+        
+        # Use factory pattern for service access
+        from ..interfaces.factory.services_factory import ServicesFactory
+        service = ServicesFactory.get_instrument_service()
+        
+        venues = service.get_instrument_venues(identifier, instrument_type)
+        
+        if not venues:
+            return jsonify({ResponseFields.ERROR: f"No venue records found for {identifier}"}), HTTPStatus.NOT_FOUND
+        
+        return jsonify({
+            ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+            ResponseFields.DATA: {
+                "isin": identifier,
+                "instrument_type": instrument_type,
+                "venue_count": len(venues),
+                "venues": venues
+            }
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in get_instrument_venues: {str(e)}")
         return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 @instrument_bp.route(f"{Endpoints.INSTRUMENTS}/<string:identifier>/enrich", methods=["POST"])
@@ -264,7 +306,7 @@ def batch_process_instruments():
         for isin in identifiers:
             try:
                 if operation == BatchOperations.CREATE:
-                    instrument = service.get_or_create_instrument(isin, instrument_type)
+                    instrument = service.create_instrument(isin, instrument_type)
                     if instrument:
                         results[ResponseFields.SUCCESSFUL].append({
                             DbFields.ISIN: isin,
