@@ -1,4 +1,4 @@
-"""SQLite services with polymorphic inheritance support."""
+"""SQLite services with unified document-based approach."""
 
 from .instrument_service import SqliteInstrumentService
 from .legal_entity_service import LegalEntityService

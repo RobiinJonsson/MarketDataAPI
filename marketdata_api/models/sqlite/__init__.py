@@ -5,7 +5,7 @@ from .base_model import Base
 from .legal_entity import LegalEntity, EntityAddress, EntityRegistration, EntityRelationship, EntityRelationshipException
 from .figi import FigiMapping
 from .transparency import TransparencyCalculation
-from .instrument import Instrument, Equity, Debt, Future
+from .instrument import Instrument, TradingVenue
 
 # Export all models
 __all__ = [
@@ -18,7 +18,5 @@ __all__ = [
     'FigiMapping',
     'TransparencyCalculation',
     'Instrument',
-    'Equity',
-    'Debt', 
-    'Future'
+    'TradingVenue'
 ]

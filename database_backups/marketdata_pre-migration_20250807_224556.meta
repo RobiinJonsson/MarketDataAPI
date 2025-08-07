@@ -1,0 +1,5 @@
+timestamp: 20250807_224556
+backup_type: pre-migration
+description: Before switching to unified schema
+original_db_path: marketdata_api\database\marketdata.db
+backup_size: 278528
