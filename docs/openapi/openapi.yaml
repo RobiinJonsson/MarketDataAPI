@@ -70,6 +70,46 @@ paths:
           description: Invalid request
         '401':
           description: Unauthorized
+  /instruments/{identifier}/enrich:
+    post:
+      summary: Enrich an instrument with FIGI and LEI data
+      description: Enrich an existing instrument by fetching FIGI data from OpenFIGI
+        API and LEI data from GLEIF API. Uses venue-aware strategy for optimal OpenFIGI
+        results and validates LEI relationships.
+      operationId: post_instrument_enrich
+      tags:
+      - instruments
+      parameters: []
+      responses:
+        '200':
+          description: Successfully enriched instrument
+        '404':
+          description: Instrument not found
+        '500':
+          description: Enrichment failed due to external API errors or internal issues
+  /instruments/{identifier}/venues:
+    get:
+      summary: Get all venue records for a specific instrument
+      description: Get all venue records where this instrument trades. Shows venue
+        count and detailed venue information for trading optimization and venue-aware
+        enrichment strategies.
+      operationId: get_instrument_venues
+      tags:
+      - instruments
+      parameters:
+      - name: type
+        in: query
+        description: 'Instrument type for venue lookup (default: equity)'
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Successfully retrieved venue information
+        '404':
+          description: No venue records found for the specified instrument
+        '500':
+          description: Internal server error
   /instruments/{isin}:
     get:
       summary: Retrieves detailed information about a specific instrument by its ISIN
@@ -261,6 +301,34 @@ paths:
         '401':
           description: Unauthorized
   /transparency:
+    post:
+      summary: Create transparency calculations from FITRS data for a given ISIN
+      description: ''
+      operationId: create_transparency_calculation
+      tags:
+      - transparency
+      parameters:
+      - name: payload
+        in: body
+        description: ''
+        required: true
+        schema:
+          type: string
+      responses:
+        '404':
+          description: No transparency data found in FITRS for the given ISIN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Bad request - missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '201':
+          description: Transparency calculations created from FITRS data
     get:
       summary: Get all transparency calculations with optional filtering
       description: ''
@@ -312,74 +380,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TransparencyListResponse'
-    post:
-      summary: Create a new transparency calculation
-      description: ''
-      operationId: create_transparency_calculation
-      tags:
-      - transparency
-      parameters:
-      - name: payload
-        in: body
-        description: ''
-        required: true
-        schema:
-          type: string
-      responses:
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '201':
-          description: Transparency calculation created
-  /transparency/batch:
-    post:
-      summary: Batch source transparency calculations from FITRS data
-      description: ''
-      operationId: batch_source_transparency
-      tags:
-      - transparency
-      parameters:
-      - name: payload
-        in: body
-        description: ''
-        required: true
-        schema:
-          type: string
-      responses:
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '201':
-          description: Transparency calculations sourced from FITRS
-  /transparency/batch-create:
-    post:
-      summary: Batch create transparency calculations from provided data
-      description: ''
-      operationId: batch_create_transparency
-      tags:
-      - transparency
-      parameters:
-      - name: payload
-        in: body
-        description: ''
-        required: true
-        schema:
-          type: string
-      responses:
-        '400':
-          description: Bad request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '201':
-          description: Transparency calculations created
   /transparency/isin/{isin}:
     get:
       summary: Get transparency calculations for a specific ISIN
@@ -400,64 +400,10 @@ paths:
         required: false
         schema:
           type: string
-      - name: X-Fields
-        in: header
-        description: An optional fields mask
-        required: false
-        schema:
-          type: string
-          format: mask
       responses:
         '200':
           description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TransparencyListResponse'
   /transparency/{transparency_id}:
-    get:
-      summary: Get transparency calculation by ID
-      description: ''
-      operationId: get_transparency_calculation
-      tags:
-      - transparency
-      parameters:
-      - name: X-Fields
-        in: header
-        description: An optional fields mask
-        required: false
-        schema:
-          type: string
-          format: mask
-      responses:
-        '404':
-          description: Transparency calculation not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/TransparencyDetailed'
-    delete:
-      summary: Delete a transparency calculation
-      description: ''
-      operationId: delete_transparency_calculation
-      tags:
-      - transparency
-      parameters: []
-      responses:
-        '404':
-          description: Transparency calculation not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '200':
-          description: Transparency calculation deleted
     put:
       summary: Update an existing transparency calculation
       description: ''
@@ -480,6 +426,36 @@ paths:
                 $ref: '#/components/schemas/Error'
         '200':
           description: Transparency calculation updated
+    get:
+      summary: Get transparency calculation by ID
+      description: ''
+      operationId: get_transparency_calculation
+      tags:
+      - transparency
+      parameters: []
+      responses:
+        '404':
+          description: Transparency calculation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete a transparency calculation
+      description: ''
+      operationId: delete_transparency_calculation
+      tags:
+      - transparency
+      parameters: []
+      responses:
+        '404':
+          description: Transparency calculation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: Transparency calculation deleted
 components:
   schemas:
     InstrumentListResponse:
@@ -630,46 +606,47 @@ components:
     TransparencyCreateRequest:
       type: object
       properties:
-        ISIN:
+        isin:
           type: string
           description: International Securities Identification Number
-        TechRcrdId:
+        instrument_type:
           type: string
-          description: Technical record identifier
-        calculation_type:
-          type: string
-          description: Type of calculation
-          example: EQUITY
+          description: Type of instrument
+          example: equity
           enum:
-          - EQUITY
-          - NON_EQUITY
-        FrDt:
-          type: string
-          description: From date (YYYY-MM-DD)
-        ToDt:
-          type: string
-          description: To date (YYYY-MM-DD)
-        Lqdty:
-          type: string
-          description: Liquidity (true/false)
-        TtlNbOfTxsExctd:
-          type: integer
-          description: Total number of transactions executed
-        TtlVolOfTxsExctd:
-          type: number
-          description: Total volume of transactions executed
-        Desc:
-          type: string
-          description: Description
-        CritNm:
-          type: string
-          description: Criterion name
-        CritVal:
-          type: string
-          description: Criterion value
+          - equity
+          - debt
+          - futures
+          - fund
+          - derivative
       required:
-      - ISIN
-      - TechRcrdId
+      - instrument_type
+      - isin
+    Error:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Error status
+          example: error
+          enum:
+          - error
+        error:
+          $ref: '#/components/schemas/ErrorDetails'
+      required:
+      - status
+    ErrorDetails:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Error message description
+      required:
+      - code
+      - message
     TransparencyListResponse:
       type: object
       properties:
@@ -736,139 +713,69 @@ components:
       - calculation_type
       - id
       - isin
-    EquityTransparencyDetails:
+    TransparencyDetails:
       type: object
       properties:
+        type:
+          type: string
+          description: Type of transparency details
+          example: equity
+          enum:
+          - equity
+          - debt
+          - futures
+          - non_equity
+          - unknown
         financial_instrument_classification:
           type: string
-          description: Financial instrument classification
+          description: Financial instrument classification (equity only)
         methodology:
           type: string
-          description: Methodology used
+          description: Methodology used (equity only)
         average_daily_turnover:
           type: number
-          description: Average daily turnover
+          description: Average daily turnover (equity only)
         large_in_scale:
           type: number
-          description: Large in scale threshold
+          description: Large in scale threshold (equity only)
         average_daily_number_of_transactions:
           type: number
-          description: Average daily number of transactions
+          description: Average daily number of transactions (equity only)
         average_transaction_value:
           type: number
-          description: Average transaction value
+          description: Average transaction value (equity only)
         standard_market_size:
           type: number
-          description: Standard market size
-    DebtTransparencyDetails:
-      type: object
-      properties:
+          description: Standard market size (equity only)
         description:
           type: string
-          description: Description
+          description: Description (non-equity only)
         bond_type:
           type: string
-          description: Bond type
+          description: Bond type (debt only)
         is_liquid:
           type: boolean
-          description: Liquidity indicator
-        pre_trade_large_in_scale_threshold:
-          type: number
-          description: Pre-trade large in scale threshold
-        post_trade_large_in_scale_threshold:
-          type: number
-          description: Post-trade large in scale threshold
-        criterion_name:
-          type: string
-          description: Criterion name
-        criterion_value:
-          type: string
-          description: Criterion value
-    FuturesTransparencyDetails:
-      type: object
-      properties:
-        description:
-          type: string
-          description: Description
+          description: Liquidity indicator (debt only)
         underlying_isin:
           type: string
-          description: Underlying instrument ISIN
+          description: Underlying instrument ISIN (futures only)
         is_stock_dividend_future:
           type: boolean
-          description: Stock dividend future indicator
+          description: Stock dividend future indicator (futures only)
         pre_trade_large_in_scale_threshold:
           type: number
-          description: Pre-trade large in scale threshold
+          description: Pre-trade large in scale threshold (non-equity)
         post_trade_large_in_scale_threshold:
           type: number
-          description: Post-trade large in scale threshold
+          description: Post-trade large in scale threshold (non-equity)
         criterion_name:
           type: string
-          description: Criterion name
+          description: Criterion name (non-equity)
         criterion_value:
           type: string
-          description: Criterion value
-    Error:
-      type: object
-      properties:
-        status:
-          type: string
-          description: Error status
-          example: error
-          enum:
-          - error
-        error:
-          $ref: '#/components/schemas/ErrorDetails'
+          description: Criterion value (non-equity)
       required:
-      - status
-    ErrorDetails:
-      type: object
-      properties:
-        code:
-          type: string
-          description: Error code
-        message:
-          type: string
-          description: Error message description
-      required:
-      - code
-      - message
-    BatchTransparencyRequest:
-      type: object
-      properties:
-        calculation_type:
-          type: string
-          description: Type of calculation
-          example: EQUITY
-          enum:
-          - EQUITY
-          - NON_EQUITY
-        isin_prefix:
-          type: string
-          description: ISIN prefix filter (e.g., 'NL' for Netherlands)
-        limit:
-          type: integer
-          description: Maximum number of calculations to create
-        cfi_type:
-          type: string
-          description: CFI type filter (D, F, E)
-          example: D
-          enum:
-          - D
-          - F
-          - E
-      required:
-      - calculation_type
-    BatchCreateTransparencyRequest:
-      type: object
-      properties:
-        records:
-          type: array
-          description: List of transparency records to create
-          items:
-            $ref: '#/components/schemas/TransparencyCreateRequest'
-      required:
-      - records
+      - type
   securitySchemes:
     ApiKeyAuth:
       type: apiKey

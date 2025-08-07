@@ -383,6 +383,137 @@ class InstrumentDetail(Resource):
             logger.error(f"Error in swagger get_instrument: {str(e)}")
             return {ResponseFields.STATUS: "error", ResponseFields.ERROR: {"code": str(HTTPStatus.INTERNAL_SERVER_ERROR), ResponseFields.MESSAGE: str(e)}}, HTTPStatus.INTERNAL_SERVER_ERROR
 
+@instruments_ns.route('/<string:identifier>/venues')
+@instruments_ns.param('identifier', 'Instrument identifier (ISIN, ID, or symbol)')
+class InstrumentVenues(Resource):
+    @instruments_ns.doc(
+        description='Get all venue records where this instrument trades. Shows venue count and detailed venue information for trading optimization and venue-aware enrichment strategies.',
+        params={
+            'type': 'Instrument type for venue lookup (default: equity)',
+        },
+        responses={
+            HTTPStatus.OK: 'Successfully retrieved venue information',
+            HTTPStatus.NOT_FOUND: 'No venue records found for the specified instrument',
+            HTTPStatus.INTERNAL_SERVER_ERROR: 'Internal server error'
+        }
+    )
+    def get(self, identifier):
+        '''Get all venue records for a specific instrument'''
+        from flask import request
+        from ..interfaces.factory.services_factory import ServicesFactory
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            # Get instrument type from query parameter (default to equity)
+            instrument_type = request.args.get('type', 'equity')
+            
+            service = ServicesFactory.get_instrument_service()
+            venues = service.get_instrument_venues(identifier, instrument_type)
+            
+            if not venues:
+                return {
+                    ResponseFields.STATUS: "error", 
+                    ResponseFields.ERROR: {
+                        "code": str(HTTPStatus.NOT_FOUND), 
+                        ResponseFields.MESSAGE: f"No venue records found for {identifier}"
+                    }
+                }, HTTPStatus.NOT_FOUND
+            
+            return {
+                ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                ResponseFields.DATA: {
+                    "isin": identifier,
+                    "instrument_type": instrument_type,
+                    "venue_count": len(venues),
+                    "venues": venues
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in get_instrument_venues: {str(e)}")
+            return {
+                ResponseFields.STATUS: "error", 
+                ResponseFields.ERROR: {
+                    "code": str(HTTPStatus.INTERNAL_SERVER_ERROR), 
+                    ResponseFields.MESSAGE: str(e)
+                }
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@instruments_ns.route('/<string:identifier>/enrich')
+@instruments_ns.param('identifier', 'Instrument identifier (ISIN, ID, or symbol)')
+class InstrumentEnrich(Resource):
+    @instruments_ns.doc(
+        description='Enrich an existing instrument by fetching FIGI data from OpenFIGI API and LEI data from GLEIF API. Uses venue-aware strategy for optimal OpenFIGI results and validates LEI relationships.',
+        responses={
+            HTTPStatus.OK: 'Successfully enriched instrument',
+            HTTPStatus.NOT_FOUND: 'Instrument not found',
+            HTTPStatus.INTERNAL_SERVER_ERROR: 'Enrichment failed due to external API errors or internal issues'
+        }
+    )
+    def post(self, identifier):
+        '''Enrich an instrument with FIGI and LEI data'''
+        from ..interfaces.factory.services_factory import ServicesFactory
+        import logging
+        
+        logger = logging.getLogger(__name__)
+        
+        try:
+            service = ServicesFactory.get_instrument_service()
+            session, instrument = service.get_instrument(identifier)
+            
+            if not instrument:
+                return {
+                    ResponseFields.STATUS: "error", 
+                    ResponseFields.ERROR: {
+                        "code": str(HTTPStatus.NOT_FOUND), 
+                        ResponseFields.MESSAGE: ErrorMessages.INSTRUMENT_NOT_FOUND
+                    }
+                }, HTTPStatus.NOT_FOUND
+                
+            # Track current enrichment state
+            pre_figi = True if instrument.figi_mapping else False
+            pre_lei = True if instrument.legal_entity else False
+            
+            # Perform enrichment
+            session, enriched = service.enrich_instrument(instrument)
+            
+            # Track post-enrichment state
+            post_figi = True if enriched.figi_mapping else False
+            post_lei = True if enriched.legal_entity else False
+            
+            session.close()
+            
+            return {
+                ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                ResponseFields.MESSAGE: "Instrument enriched successfully",
+                "id": enriched.id,
+                "isin": enriched.isin,
+                "enrichment_results": {
+                    "figi": {
+                        "before": pre_figi,
+                        "after": post_figi,
+                        "changed": post_figi != pre_figi
+                    },
+                    "lei": {
+                        "before": pre_lei,
+                        "after": post_lei,
+                        "changed": post_lei != pre_lei
+                    }
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in enrich_instrument: {str(e)}")
+            return {
+                ResponseFields.STATUS: "error", 
+                ResponseFields.ERROR: {
+                    "code": str(HTTPStatus.INTERNAL_SERVER_ERROR), 
+                    ResponseFields.MESSAGE: f"Failed to enrich instrument: {str(e)}"
+                }
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
 # Similarly add swagger documentation for other endpoints...
 
 # Legal entities endpoints

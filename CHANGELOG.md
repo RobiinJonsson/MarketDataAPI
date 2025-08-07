@@ -22,6 +22,13 @@ All notable changes to the MarketDataAPI project will be documented in this file
   - `GET /api/v1/instruments/{isin}/venues` - Returns all venue records for specific instruments
   - Real-time venue count and detailed venue information for trading optimization
   - Integration with FIRDS multi-venue data for comprehensive venue analysis
+  - Complete Swagger/OpenAPI documentation with examples and response schemas
+
+- **Enhanced Swagger Documentation** - Comprehensive API documentation for new enrichment features
+  - Added `/instruments/{identifier}/venues` endpoint documentation with detailed examples
+  - Added `/instruments/{identifier}/enrich` endpoint documentation with enrichment result tracking
+  - Response schemas include venue analysis, FIGI data, LEI data, and enrichment status tracking
+  - Interactive testing available through frontend Swagger UI interface
 
 ### Improved
 - **LEI Enrichment Efficiency** - Confirmed optimal 1:1 ISIN-to-LEI relationship approach

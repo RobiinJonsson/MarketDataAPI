@@ -53,6 +53,12 @@ class Instrument(Base, InstrumentInterface):
         cascade="all, delete-orphan",
         passive_deletes=True
     )
+    trading_venues = relationship(
+        "marketdata_api.models.sqlite.venue.TradingVenue",
+        back_populates="instrument",
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
 
     # Methods required by InstrumentInterface
     def get_id(self) -> str:
