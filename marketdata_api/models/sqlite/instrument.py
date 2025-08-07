@@ -69,10 +69,35 @@ class Instrument(Base):
         
         # Add type-specific attributes in structured format
         if self.processed_attributes:
-            # Merge processed attributes into response
-            response.update(self.processed_attributes)
+            # Clean and merge processed attributes into response
+            cleaned_attributes = self._clean_json_attributes(self.processed_attributes)
+            response.update(cleaned_attributes)
         
         return response
+    
+    def _clean_json_attributes(self, attributes: Dict[str, Any]) -> Dict[str, Any]:
+        """Clean JSON attributes, removing NaN values and empty objects."""
+        import math
+        
+        def clean_value(value):
+            if isinstance(value, float) and math.isnan(value):
+                return None
+            elif isinstance(value, dict):
+                cleaned = {k: clean_value(v) for k, v in value.items()}
+                # Remove keys with None values or empty dicts
+                return {k: v for k, v in cleaned.items() if v is not None and v != {}}
+            elif isinstance(value, list):
+                return [clean_value(item) for item in value if not (isinstance(item, float) and math.isnan(item))]
+            else:
+                return value
+        
+        cleaned = {}
+        for key, value in attributes.items():
+            cleaned_value = clean_value(value)
+            if cleaned_value is not None and cleaned_value != {}:
+                cleaned[key] = cleaned_value
+        
+        return cleaned
 
 
 class TradingVenue(Base):

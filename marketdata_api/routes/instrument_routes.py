@@ -37,7 +37,7 @@ def list_instruments():
             # Apply filters - Debug log to check the filter
             logger.debug(f"Filtering instruments with type={instrument_type}, currency={currency}")
             if instrument_type:
-                query = query.filter(Instrument.type == instrument_type)
+                query = query.filter(Instrument.instrument_type == instrument_type)
                 # Additional debug to check if this filter matches anything
                 count = query.count()
                 logger.debug(f"Found {count} instruments with type={instrument_type}")
@@ -54,10 +54,10 @@ def list_instruments():
             for instrument in instruments:
                 result.append({
                     "id": instrument.id,
-                    "type": instrument.type,
+                    "instrument_type": instrument.instrument_type,
                     "isin": instrument.isin,
-                    "symbol": instrument.symbol,
                     "full_name": instrument.full_name,
+                    "short_name": instrument.short_name,
                     "currency": instrument.currency,
                     "cfi_code": instrument.cfi_code
                 })
@@ -140,7 +140,7 @@ def create_instrument():
             ResponseFields.MESSAGE: SuccessMessages.INSTRUMENT_CREATED,
             DbFields.ID: instrument.id,
             DbFields.ISIN: instrument.isin,
-            DbFields.TYPE: instrument.type
+            "instrument_type": instrument.instrument_type
         }), HTTPStatus.CREATED
         
     except Exception as e:
@@ -172,7 +172,7 @@ def update_instrument(identifier):
             ResponseFields.MESSAGE: SuccessMessages.INSTRUMENT_UPDATED,
             DbFields.ID: instrument.id,
             DbFields.ISIN: instrument.isin,
-            DbFields.TYPE: instrument.type
+            "instrument_type": instrument.instrument_type
         })
         
     except Exception as e:
@@ -355,25 +355,13 @@ def batch_process_instruments():
 
 # Helper function to build detailed instrument response
 def build_instrument_response(instrument):
-    """Build comprehensive response with all instrument details"""
-    response = {
-        "id": instrument.id,
-        "type": instrument.type,
-        "isin": instrument.isin,
-        "full_name": instrument.full_name,
-        "short_name": instrument.short_name,
-        "symbol": instrument.symbol,
-        "cfi_code": instrument.cfi_code,
-        "currency": instrument.currency,
-        "trading_venue": instrument.trading_venue,
-        "relevant_venue": instrument.relevant_venue,
-        "relevant_authority": instrument.relevant_authority,
-        "commodity_derivative": instrument.commodity_derivative,
-        "first_trade_date": instrument.first_trade_date.isoformat() if instrument.first_trade_date else None,
-        "termination_date": instrument.termination_date.isoformat() if getattr(instrument, "termination_date", None) else None,
-        "created_at": instrument.created_at.isoformat() if instrument.created_at else None,
-        "updated_at": instrument.updated_at.isoformat() if instrument.updated_at else None
-    }
+    """Build comprehensive response with all instrument details using unified architecture"""
+    
+    # Start with the model's built-in serialization method
+    response = instrument.to_api_response()
+    
+    # Add trading venues count
+    response["trading_venues_count"] = len(instrument.trading_venues) if instrument.trading_venues else 0
     
     # Add CFI decoding if available
     if instrument.cfi_code and len(instrument.cfi_code) == 6:
@@ -382,41 +370,6 @@ def build_instrument_response(instrument):
             response["cfi_decoded"] = cfi.describe()
         except Exception as e:
             response["cfi_decoded"] = {"error": str(e)}
-    
-    # Add type-specific attributes
-    instrument_type = instrument.type
-    if instrument_type == "equity":
-        response["equity_attributes"] = {
-            "asset_class": instrument.asset_class,
-            "shares_outstanding": instrument.shares_outstanding,
-            "market_cap": instrument.market_cap,
-            "sector": instrument.sector,
-            "industry": instrument.industry
-        }
-    elif instrument_type == "debt":
-        response["debt_attributes"] = {
-            "maturity_date": instrument.maturity_date.isoformat() if instrument.maturity_date else None,
-            "total_issued_nominal": instrument.total_issued_nominal,
-            "nominal_value_per_unit": instrument.nominal_value_per_unit,
-            "debt_seniority": instrument.debt_seniority,
-            "floating_rate_term_unit": instrument.floating_rate_term_unit,
-            "floating_rate_term_value": instrument.floating_rate_term_value,
-            "floating_rate_basis_points_spread": instrument.floating_rate_basis_points_spread,
-            "interest_rate_floating_reference_index": instrument.interest_rate_floating_reference_index
-        }
-    elif instrument_type == "future":
-        response["future_attributes"] = {
-            "expiration_date": instrument.expiration_date.isoformat() if instrument.expiration_date else None,
-            "price_multiplier": instrument.price_multiplier,
-            "delivery_type": instrument.delivery_type,
-            "underlying_isin": (instrument.underlying_single_isin or 
-                              instrument.basket_isin or 
-                              instrument.underlying_index_isin),
-            "underlying_single_isin": getattr(instrument, "underlying_single_isin", None),
-            "basket_isin": getattr(instrument, "basket_isin", None),
-            "underlying_index_isin": getattr(instrument, "underlying_index_isin", None),
-            "underlying_single_index_name": getattr(instrument, "underlying_single_index_name", None)
-        }
     
     # Add related entity info if available
     if instrument.legal_entity:
@@ -431,50 +384,12 @@ def build_instrument_response(instrument):
     
     # Add FIGI mapping if available
     if instrument.figi_mapping:
-        response["figi"] = {
+        response["figi_mapping"] = {
             "figi": instrument.figi_mapping.figi,
             "composite_figi": instrument.figi_mapping.composite_figi,
             "share_class_figi": instrument.figi_mapping.share_class_figi,
             "security_type": instrument.figi_mapping.security_type,
             "market_sector": instrument.figi_mapping.market_sector
         }
-    
-    # Add derivatives lookup for equities - find futures that have this instrument as underlying
-    if instrument_type == "equity":
-        from ..database.session import get_session
-        with get_session() as session:
-            # Import Future model from package to ensure relationships
-            from ..models.sqlite import Future
-            
-            future_rows = session.query(Future.isin, Future.symbol).filter(
-                (Future.underlying_single_isin == instrument.isin) |
-                (Future.basket_isin == instrument.isin) |
-                (Future.underlying_index_isin == instrument.isin)
-            ).all()
-            response["derivatives"] = [
-                {"isin": f[0], "symbol": f[1]} for f in future_rows if f[0]
-            ]
-    else:
-        response["derivatives"] = []
-    
-    # Add underlying instrument lookup for futures
-    if instrument_type == "future":
-        underlying_isin = (
-            getattr(instrument, "underlying_single_isin", None)
-            or getattr(instrument, "basket_isin", None)
-            or getattr(instrument, "underlying_index_isin", None)
-        )
-        underlying_full_name = None
-        if underlying_isin:
-            from ..database.session import get_session
-            from ..models.sqlite import Instrument
-            
-            with get_session() as session:
-                underlying_inst = session.query(Instrument).filter_by(isin=underlying_isin).first()
-                if underlying_inst:
-                    underlying_full_name = underlying_inst.full_name
-        response["underlying_instrument"] = {"full_name": underlying_full_name}
-    else:
-        response["underlying_instrument"] = {"full_name": None}
     
     return response
