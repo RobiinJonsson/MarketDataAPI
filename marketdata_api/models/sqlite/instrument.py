@@ -71,9 +71,102 @@ class Instrument(Base):
         if self.processed_attributes:
             # Clean and merge processed attributes into response
             cleaned_attributes = self._clean_json_attributes(self.processed_attributes)
-            response.update(cleaned_attributes)
+            
+            # Structure type-specific attributes for frontend consumption
+            if self.instrument_type == 'equity':
+                equity_attrs = self._format_equity_attributes(cleaned_attributes)
+                if equity_attrs:
+                    response['equity_attributes'] = equity_attrs
+            elif self.instrument_type == 'debt':
+                debt_attrs = self._format_debt_attributes(cleaned_attributes)
+                if debt_attrs:
+                    response['debt_attributes'] = debt_attrs
+            elif self.instrument_type == 'future':
+                future_attrs = self._format_future_attributes(cleaned_attributes)
+                if future_attrs:
+                    response['future_attributes'] = future_attrs
+            
+            # Also include any remaining unstructured attributes
+            remaining_attrs = {k: v for k, v in cleaned_attributes.items() 
+                             if not self._is_structured_attribute(k)}
+            if remaining_attrs:
+                response.update(remaining_attrs)
         
         return response
+    
+    def _format_equity_attributes(self, attrs: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Format equity-specific attributes into structured schema."""
+        equity_attrs = {}
+        
+        if 'price_multiplier' in attrs:
+            equity_attrs['price_multiplier'] = attrs['price_multiplier']
+        
+        if 'underlying_isin' in attrs:
+            equity_attrs['underlying_isin'] = attrs['underlying_isin']
+        
+        if 'underlying_index' in attrs:
+            equity_attrs['underlying_index'] = attrs['underlying_index']
+        
+        if 'asset_class' in attrs:
+            equity_attrs['asset_class'] = attrs['asset_class']
+        
+        return equity_attrs if equity_attrs else None
+    
+    def _format_debt_attributes(self, attrs: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Format debt-specific attributes into structured schema."""
+        debt_attrs = {}
+        
+        if 'maturity_date' in attrs:
+            debt_attrs['maturity_date'] = attrs['maturity_date']
+        
+        if 'total_issued_nominal' in attrs:
+            debt_attrs['total_issued_nominal'] = attrs['total_issued_nominal']
+        
+        if 'nominal_value_per_unit' in attrs:
+            debt_attrs['nominal_value_per_unit'] = attrs['nominal_value_per_unit']
+        
+        # Map potential debt-specific FIRDS fields
+        if 'debt_seniority' in attrs:
+            debt_attrs['debt_seniority'] = attrs['debt_seniority']
+        
+        if 'interest_rate' in attrs:
+            debt_attrs['interest_rate'] = attrs['interest_rate']
+        
+        return debt_attrs if debt_attrs else None
+    
+    def _format_future_attributes(self, attrs: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Format future-specific attributes into structured schema."""
+        future_attrs = {}
+        
+        if 'expiration_date' in attrs:
+            future_attrs['expiration_date'] = attrs['expiration_date']
+        
+        if 'delivery_type' in attrs:
+            future_attrs['delivery_type'] = attrs['delivery_type']
+        
+        if 'price_multiplier' in attrs:
+            future_attrs['price_multiplier'] = attrs['price_multiplier']
+        
+        if 'underlying_assets' in attrs:
+            future_attrs['underlying_assets'] = attrs['underlying_assets']
+        
+        if 'commodity_details' in attrs:
+            future_attrs['commodity_details'] = attrs['commodity_details']
+        
+        return future_attrs if future_attrs else None
+    
+    def _is_structured_attribute(self, key: str) -> bool:
+        """Check if an attribute is already handled in structured sections."""
+        structured_keys = {
+            # Equity attributes
+            'price_multiplier', 'underlying_isin', 'underlying_index', 'asset_class',
+            # Debt attributes  
+            'maturity_date', 'total_issued_nominal', 'nominal_value_per_unit', 
+            'debt_seniority', 'interest_rate',
+            # Future attributes
+            'expiration_date', 'delivery_type', 'underlying_assets', 'commodity_details'
+        }
+        return key in structured_keys
     
     def _clean_json_attributes(self, attributes: Dict[str, Any]) -> Dict[str, Any]:
         """Clean JSON attributes, removing NaN values and empty objects."""

@@ -253,8 +253,14 @@ class FileManagementService:
 
     def auto_cleanup_outdated_patterns(self) -> Dict[str, int]:
         """
-        Automatically clean up files that are outside the configured date range
-        or older versions of the same pattern type.
+        Automatically clean up files that are older versions of the same pattern type.
+        
+        For each pattern (e.g., FULINS_F, FULINS_C, etc.), keeps only the most recent
+        file and removes all older ones. This is independent of the date configuration
+        range - it purely focuses on keeping the latest version of each file type.
+        
+        Returns:
+            Dict[str, int]: Number of files removed per folder (firds/fitrs)
         """
         # Create safety backup before auto-cleanup
         self._create_safety_backup("auto_cleanup_outdated_patterns")
@@ -298,20 +304,6 @@ class FileManagementService:
                 # Fallback to dataset type
                 return self._extract_dataset_type(filename)
 
-        def is_date_in_config_range(date_str: str) -> bool:
-            """Check if date is within configured range."""
-            if not date_str:
-                return True  # Keep files we can't parse
-            
-            try:
-                file_date = datetime.strptime(date_str, '%Y%m%d')
-                config_start = datetime.strptime(esmaConfig.start_date, '%Y-%m-%d')
-                config_end = datetime.strptime(esmaConfig.end_date, '%Y-%m-%d')
-                
-                return config_start <= file_date <= config_end
-            except ValueError:
-                return True  # Keep files we can't parse
-
         removed_count = {'firds': 0, 'fitrs': 0}
         
         # Process both FIRDS and FITRS folders
@@ -335,31 +327,28 @@ class FileManagementService:
                         'name': file_path.name,
                         'date': file_date,
                         'date_parsed': datetime.strptime(file_date, '%Y%m%d') if file_date else None,
-                        'in_range': is_date_in_config_range(file_date),
                         'size': file_path.stat().st_size
                     })
             
-            # For each pattern group, keep only the latest files in range and remove outdated ones
+            # For each pattern group, keep only the most recent file and remove all older ones
             for pattern_key, files in file_groups.items():
                 if len(files) <= 1:
                     continue  # Nothing to clean up
                 
-                # Separate files: in-range vs out-of-range
-                in_range_files = [f for f in files if f['in_range'] and f['date_parsed']]
-                out_of_range_files = [f for f in files if not f['in_range'] and f['date_parsed']]
+                # Separate files by whether we can parse their dates
+                parseable_files = [f for f in files if f['date_parsed']]
                 unparseable_files = [f for f in files if not f['date_parsed']]
                 
                 files_to_remove = []
                 
-                # Always remove out-of-range files
-                files_to_remove.extend(out_of_range_files)
-                
-                # For in-range files, keep only the latest date
-                if len(in_range_files) > 1:
-                    # Group by date and keep all files from the latest date
-                    latest_date = max(f['date_parsed'] for f in in_range_files)
-                    older_files = [f for f in in_range_files if f['date_parsed'] < latest_date]
+                # For parseable files, keep only the most recent date
+                if len(parseable_files) > 1:
+                    # Find the latest date and keep all files from that date
+                    latest_date = max(f['date_parsed'] for f in parseable_files)
+                    older_files = [f for f in parseable_files if f['date_parsed'] < latest_date]
                     files_to_remove.extend(older_files)
+                
+                # Keep unparseable files for now (don't auto-remove files we can't understand)
                 
                 # Remove identified files
                 for file_info in files_to_remove:
@@ -367,7 +356,7 @@ class FileManagementService:
                         size_mb = file_info['size'] / (1024 * 1024)
                         self.logger.info(f"Auto-cleaning outdated file: {file_info['name']} "
                                        f"(pattern: {pattern_key}, date: {file_info['date']}, "
-                                       f"size: {size_mb:.1f} MB)")
+                                       f"size: {size_mb:.1f} MB, reason: older than latest)")
                         file_info['path'].unlink()
                         removed_count[folder_name] += 1
                     except Exception as e:
@@ -377,6 +366,8 @@ class FileManagementService:
         if total_removed > 0:
             self.logger.info(f"Auto-cleanup completed: removed {total_removed} outdated files "
                            f"(FIRDS: {removed_count['firds']}, FITRS: {removed_count['fitrs']})")
+        else:
+            self.logger.info("Auto-cleanup completed: no outdated files found")
         
         return removed_count
 

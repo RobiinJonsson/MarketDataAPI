@@ -162,7 +162,11 @@ class Utils:
                 if not os.path.exists(file_name) or update:
                     df = func(*args, **kwargs)
                     try:
-                        df.to_pickle(file_name)
+                        # Save as CSV instead of pickle since file has .csv extension
+                        if file_name.endswith('.csv'):
+                            df.to_csv(file_name, index=False, encoding='utf-8')
+                        else:
+                            df.to_pickle(file_name)
                         logger.info(f"Data saved: {file_name}")
                                     
                     except Exception as e:
@@ -174,7 +178,12 @@ class Utils:
 
                 else:
                     try:
-                        df = pd.read_pickle(file_name)
+                        # Load file based on extension
+                        if file_name.endswith('.csv'):
+                            df = pd.read_csv(file_name, encoding='utf-8')
+                        else:
+                            df = pd.read_pickle(file_name)
+                            
                         if "Unnamed: 0" in df.columns:
                             del df["Unnamed: 0"]
                     except Exception as e:

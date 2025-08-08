@@ -2,6 +2,26 @@
 
 All notable changes to the MarketDataAPI project will be documented in this file.
 
+## [2025-08-08] - Critical Bug Fixes: File Corruption & Auto-Cleanup
+
+### 🐛 CRITICAL BUG FIXES
+- **Fixed FIRDS File Corruption Issue**
+  - **PROBLEM**: Files with `.csv` extensions were saved as binary pickle files but loaded as CSV, causing garbled data with "Œ" characters
+  - **ROOT CAUSE**: Mismatch in `esma_utils.py` caching logic - saved with `df.to_pickle()` but loaded with `pd.read_csv()`
+  - **SOLUTION**: Restored proper CSV handling logic from backup version
+  - **IMPACT**: FIRDS F/D files now process correctly without corruption
+
+- **Fixed Auto-Cleanup Logic**
+  - **PROBLEM**: Auto-cleanup incorrectly used date configuration range to delete freshly downloaded files
+  - **ROOT CAUSE**: Logic checked if files were within `start_date` to `end_date` range and deleted "out-of-range" files
+  - **SOLUTION**: Removed date range filtering from auto-cleanup; now only keeps most recent file per pattern type
+  - **IMPACT**: Newly downloaded files are preserved regardless of their date vs configuration
+
+### 🛠️ Technical Details
+- **File Processing**: Fixed pickle/CSV format mismatch in caching system
+- **Cleanup Logic**: Simplified to pattern-based retention (keep latest FULINS_F, FULINS_C, etc.) independent of date config
+- **Date Configuration**: Now only used for download filtering, not cleanup decisions
+
 ## [2025-08-07] - MAJOR ARCHITECTURAL MIGRATION: Unified Document-Based Model
 
 ### 🚀 BREAKING CHANGES - Complete Architecture Overhaul
