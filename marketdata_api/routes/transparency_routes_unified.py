@@ -109,38 +109,34 @@ def list_transparency_calculations():
         
         logger.info(f"GET /transparency with params: file_type={file_type}, isin={isin}, page={page}, per_page={per_page}")
         
-        # Use the service instead of direct session management
-        service = TransparencyService()
-        
+        # Create a new session for this query
+        session = SessionLocal()
         try:
-            if isin:
-                # If ISIN is specified, use the service method for ISIN lookup
-                calculations = service.get_transparency_by_isin(isin)
-                if file_type:
-                    # Filter by file type if specified
-                    calculations = [calc for calc in calculations if calc.file_type == file_type]
-                total_count = len(calculations)
-            else:
-                # Get all calculations using service
-                all_calculations = service.get_all_transparency_calculations()
-                
-                # Apply file_type filter if specified
-                if file_type:
-                    calculations = [calc for calc in all_calculations if calc.file_type == file_type]
-                    logger.info(f"Applied file_type filter: {file_type}")
-                else:
-                    calculations = all_calculations
-                
-                total_count = len(calculations)
-                logger.info(f"Found {total_count} total transparency calculations matching filters")
-                
-                # Apply pagination
-                if page and per_page:
-                    offset = (page - 1) * per_page
-                    calculations = calculations[offset:offset + per_page]
-                else:
-                    calculations = calculations[offset:offset + limit]
+            # Build query
+            query = session.query(TransparencyCalculation)
             
+            # Apply filters
+            if file_type:
+                query = query.filter(TransparencyCalculation.file_type == file_type)
+                logger.info(f"Applied file_type filter: {file_type}")
+            
+            if isin:
+                query = query.filter(TransparencyCalculation.isin == isin)
+                logger.info(f"Applied isin filter: {isin}")
+            
+            # Get total count for pagination
+            total_count = query.count()
+            logger.info(f"Found {total_count} total transparency calculations matching filters")
+            
+            # Apply pagination
+            if page and per_page:
+                offset = (page - 1) * per_page
+                query = query.offset(offset).limit(per_page)
+            else:
+                query = query.limit(limit).offset(offset)
+            
+            # Execute query
+            calculations = query.all()
             logger.info(f"Retrieved {len(calculations)} transparency calculations after pagination")
             
             # Format calculations using the new unified format
@@ -162,9 +158,8 @@ def list_transparency_calculations():
                     ResponseFields.TOTAL: total_count
                 }
             })
-        except Exception as service_error:
-            logger.error(f"Service error in transparency calculations: {str(service_error)}")
-            raise service_error
+        finally:
+            session.close()
             
     except Exception as e:
         logger.error(f"Error in list_transparency_calculations: {str(e)}")
@@ -205,68 +200,50 @@ def get_transparency_calculation(transparency_id):
 
 @transparency_bp.route(Endpoints.TRANSPARENCY, methods=["POST"])
 def create_transparency_calculation():
-    """Create transparency calculation from FITRS data for an existing ISIN"""
+    """Create transparency calculation from FITRS data"""
     try:
         data = request.get_json()
         if not data:
             return jsonify({ResponseFields.ERROR: "No data provided"}), HTTPStatus.BAD_REQUEST
         
-        # Extract required fields
-        isin = data.get('isin')
-        instrument_type = data.get('instrument_type')
-        
-        if not isin:
-            return jsonify({ResponseFields.ERROR: "ISIN is required"}), HTTPStatus.BAD_REQUEST
-        
         # Use the unified transparency service
         service = TransparencyService()
         
-        # Check if this is raw FITRS data or if we need to create from ISIN lookup
-        if 'TechRcrdId' in data:
-            # This is raw FITRS data - create directly
-            source_filename = data.get('source_filename')
+        # Check if this is raw FITRS data or if we need to create from source filename
+        source_filename = data.get('source_filename')
+        if source_filename:
+            # Create from FITRS data with source filename
             calculation = service.create_transparency_calculation(
                 data=data,
                 source_filename=source_filename
             )
-            calculations = [calculation] if calculation else []
         else:
-            # This is an ISIN lookup request - search FITRS files
-            calculations = service.create_transparency(
-                isin=isin,
-                instrument_type=instrument_type
+            # Create from raw data
+            calculation = service.create_transparency_calculation(
+                data=data
             )
         
-        if not calculations:
+        if not calculation:
             return jsonify({
                 ResponseFields.ERROR: "Failed to create transparency calculation"
             }), HTTPStatus.BAD_REQUEST
         
         # Format the response
-        if len(calculations) == 1:
-            result = format_unified_transparency(calculations[0])
-        else:
-            result = [format_unified_transparency(calc) for calc in calculations]
-            
+        result = format_unified_transparency(calculation)
         if not result:
             return jsonify({ResponseFields.ERROR: "Error formatting created transparency calculation"}), HTTPStatus.INTERNAL_SERVER_ERROR
         
-        logger.info(f"Successfully created {len(calculations)} transparency calculation(s) for {isin}")
+        logger.info(f"Successfully created transparency calculation {calculation.id}")
         
         return jsonify({
             ResponseFields.STATUS: f"{HTTPStatus.CREATED} Created",
-            ResponseFields.MESSAGE: f"Successfully created {len(calculations)} transparency calculation(s)",
+            ResponseFields.MESSAGE: "Successfully created transparency calculation",
             ResponseFields.DATA: result
         }), HTTPStatus.CREATED
         
     except Exception as e:
         logger.error(f"Error in create_transparency_calculation: {str(e)}")
         logger.exception(e)
-        if "does not exist in the database" in str(e):
-            return jsonify({
-                ResponseFields.STATUS: f"{HTTPStatus.NOT_FOUND} Not Found",
-                ResponseFields.ERROR: str(e)
-            }), HTTPStatus.NOT_FOUND
         return jsonify({
             ResponseFields.STATUS: f"{HTTPStatus.INTERNAL_SERVER_ERROR} Internal Server Error",
             ResponseFields.ERROR: str(e)

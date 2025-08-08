@@ -838,13 +838,8 @@ class TransparencyList(Resource):
             from ..database.session import SessionLocal
             session = SessionLocal()
             try:
-                # Build query with eager loading
-                query = session.query(TransparencyCalculation).options(
-                    joinedload(TransparencyCalculation.equity_transparency),
-                    joinedload(TransparencyCalculation.non_equity_transparency),
-                    joinedload(TransparencyCalculation.debt_transparency),
-                    joinedload(TransparencyCalculation.futures_transparency)
-                )
+                # Build query - unified model no longer needs joinedload for polymorphic relationships
+                query = session.query(TransparencyCalculation)
                 
                 # Apply filters
                 if calculation_type:
@@ -859,13 +854,13 @@ class TransparencyList(Resource):
                 offset = (page - 1) * per_page
                 calculations = query.offset(offset).limit(per_page).all()
                 
-                # Use the direct formatting function from transparency_routes
-                from .transparency_routes import direct_format_transparency
+                # Use the formatting function from transparency_routes
+                from .transparency_routes import format_unified_transparency
                 
                 # Format each calculation
                 result = []
                 for calc in calculations:
-                    formatted_calc = direct_format_transparency(calc)
+                    formatted_calc = format_unified_transparency(calc)
                     if formatted_calc:
                         result.append(formatted_calc)
                 
@@ -948,11 +943,22 @@ class TransparencyList(Resource):
             service = ServicesFactory.get_transparency_service()
             
             # Get or create transparency calculations
-            created_calculations = service.get_or_create_transparency_calculation(
-                isin=isin,
-                calculation_type=calculation_type,
-                ensure_instrument=True
-            )
+            try:
+                created_calculations = service.create_transparency(
+                    isin=isin,
+                    instrument_type=instrument_type
+                )
+            except Exception as e:
+                if "does not exist in the database" in str(e):
+                    return {
+                        'status': '404 Not Found',
+                        'error': f'ISIN {isin} does not exist in the database'
+                    }, 404
+                else:
+                    return {
+                        'status': '500 Internal Server Error',
+                        'error': str(e)
+                    }, 500
             
             # Ensure we have a list
             if not isinstance(created_calculations, list):
@@ -968,11 +974,11 @@ class TransparencyList(Resource):
                 }, 404
             
             # 4. Format response with created calculations
-            from .transparency_routes import direct_format_transparency
+            from .transparency_routes import format_unified_transparency
             
             result = []
             for calc in created_calculations:
-                formatted_calc = direct_format_transparency(calc)
+                formatted_calc = format_unified_transparency(calc)
                 if formatted_calc:
                     result.append(formatted_calc)
             
@@ -1018,9 +1024,9 @@ class TransparencyItem(Resource):
                 session.close()
                 return {'status': '404 Not Found', 'error': 'Transparency calculation not found'}, 404
             
-            # Use the direct formatting function
-            from .transparency_routes import direct_format_transparency
-            result = direct_format_transparency(calculation)
+            # Use the formatting function from transparency_routes
+            from .transparency_routes import format_unified_transparency
+            result = format_unified_transparency(calculation)
             session.close()
             
             return result
@@ -1077,14 +1083,9 @@ class TransparencyByIsin(Resource):
             # Create a new session
             session = SessionLocal()
             try:
-                # Build query with eager loading
+                # Build query - unified model no longer needs joinedload for polymorphic relationships
                 query = session.query(TransparencyCalculation).filter(
                     TransparencyCalculation.isin == isin
-                ).options(
-                    joinedload(TransparencyCalculation.equity_transparency),
-                    joinedload(TransparencyCalculation.non_equity_transparency),
-                    joinedload(TransparencyCalculation.debt_transparency),
-                    joinedload(TransparencyCalculation.futures_transparency)
                 )
                 
                 # Apply filter for calculation type
@@ -1100,11 +1101,22 @@ class TransparencyByIsin(Resource):
                     session.close()
                     service = ServicesFactory.get_transparency_service()
                     
-                    created_calcs = service.get_or_create_transparency_calculation(
-                        isin=isin,
-                        calculation_type=calculation_type or 'EQUITY',
-                        ensure_instrument=True
-                    )
+                    try:
+                        created_calcs = service.create_transparency(
+                            isin=isin,
+                            instrument_type=calculation_type or 'equity'
+                        )
+                    except Exception as e:
+                        if "does not exist in the database" in str(e):
+                            return {
+                                'status': '404 Not Found',
+                                'error': f'ISIN {isin} does not exist in the database'
+                            }, 404
+                        else:
+                            return {
+                                'status': '500 Internal Server Error',
+                                'error': str(e)
+                            }, 500
                     
                     # Ensure we have a list
                     if not isinstance(created_calcs, list):
@@ -1114,12 +1126,12 @@ class TransparencyByIsin(Resource):
                     calculations = created_calcs
                     
                 # Format calculations
-                from .transparency_routes import direct_format_transparency
+                from .transparency_routes import format_unified_transparency
                 
                 result = []
                 for calc in calculations:
                     if calc:
-                        formatted_calc = direct_format_transparency(calc)
+                        formatted_calc = format_unified_transparency(calc)
                         if formatted_calc:
                             result.append(formatted_calc)
                 

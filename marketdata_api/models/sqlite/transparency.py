@@ -238,11 +238,3 @@ class TransparencyThreshold(Base):
                 thresholds.append(threshold)
         
         return thresholds
-
-
-# Legacy class aliases for backward compatibility
-# These can be removed once all references are updated
-EquityTransparency = TransparencyCalculation
-NonEquityTransparency = TransparencyCalculation
-DebtTransparency = TransparencyCalculation
-FuturesTransparency = TransparencyCalculation

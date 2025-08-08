@@ -168,6 +168,69 @@ class TransparencyService(TransparencyServiceInterface):
         finally:
             session.close()
 
+    def create_transparency(self, isin: str, instrument_type: str = None) -> List[TransparencyCalculation]:
+        """
+        Create transparency calculations for an ISIN from FITRS data.
+        
+        This method requires the ISIN to exist in the instruments table (FIRDS reference data).
+        If the ISIN doesn't exist in instruments, it raises an error.
+        Searches FITRS files to create transparency data.
+        
+        Args:
+            isin: The ISIN to create transparency data for
+            instrument_type: The instrument type to determine which FITRS files to search
+        """
+        # 1. First check if ISIN exists in instruments table (FIRDS reference data)
+        session = SessionLocal()
+        try:
+            instrument = session.query(Instrument).filter(
+                Instrument.isin == isin
+            ).first()
+            
+            if not instrument:
+                raise TransparencyNotFoundError(f"ISIN {isin} does not exist in the database")
+            
+            # Use provided instrument_type or get from database
+            final_instrument_type = instrument_type or instrument.instrument_type
+            self.logger.info(f"Found instrument {isin} with type {final_instrument_type}")
+            
+        finally:
+            session.close()
+        
+        # 2. Check if transparency calculations already exist
+        existing_calculations = self.get_transparency_by_isin(isin)
+        if existing_calculations:
+            self.logger.info(f"Found {len(existing_calculations)} existing transparency calculations for {isin}")
+            return existing_calculations
+        
+        # 3. Search FITRS files to create them
+        self.logger.info(f"No transparency data found for {isin}, searching FITRS files...")
+        
+        # Search for ISIN in stored FITRS files
+        created_calculations = self._search_and_create_from_fitrs_files(isin, final_instrument_type)
+        
+        if not created_calculations:
+            self.logger.warning(f"No transparency data found in FITRS files for {isin}")
+            return []
+        
+        self.logger.info(f"Created {len(created_calculations)} transparency calculations for {isin} from FITRS files")
+        return created_calculations
+
+    def get_all_transparency_calculations(self) -> List[TransparencyCalculation]:
+        """Get all transparency calculations"""
+        session = SessionLocal()
+        try:
+            calculations = session.query(TransparencyCalculation).all()
+            # Detach from session to avoid issues
+            for calc in calculations:
+                session.expunge(calc)
+            return calculations
+        except Exception as e:
+            self.logger.error(f"Failed to get all transparency calculations: {str(e)}")
+            return []
+        finally:
+            session.close()
+
     def get_transparency_by_isin(self, isin: str) -> Optional[List[TransparencyCalculation]]:
         """Get all transparency calculations for an ISIN"""
         session = SessionLocal()
@@ -175,6 +238,9 @@ class TransparencyService(TransparencyServiceInterface):
             calculations = session.query(TransparencyCalculation).filter(
                 TransparencyCalculation.isin == isin
             ).all()
+            # Detach from session to avoid issues
+            for calc in calculations:
+                session.expunge(calc)
             return calculations if calculations else None
         except Exception as e:
             self.logger.error(f"Failed to get transparency for ISIN {isin}: {str(e)}")
@@ -227,6 +293,112 @@ class TransparencyService(TransparencyServiceInterface):
         
         self.logger.info(f"Successfully processed {len(results)} transparency calculations from {source_filename}")
         return results
+
+    def _search_and_create_from_fitrs_files(self, isin: str, instrument_type: str) -> List[TransparencyCalculation]:
+        """
+        Search for ISIN in stored FITRS files and create transparency calculations.
+        
+        Uses instrument type to determine which specific files to search for optimal performance:
+        - equity/share -> FULECR_E files (equity files)
+        - bond/debt -> FULNCR_D files (debt files) 
+        - fund/etf -> FULNCR_F files (funds files)
+        - other -> FULNCR_C files (corporate files)
+        
+        Args:
+            isin: The ISIN to search for
+            instrument_type: The instrument type to determine file search strategy
+            
+        Returns:
+            List of created TransparencyCalculation instances
+        """
+        import os
+        import pandas as pd
+        
+        fitrs_directory = "c:/Users/robin/Projects/MarketDataAPI/downloads/fitrs"
+        created_calculations = []
+        
+        if not os.path.exists(fitrs_directory):
+            self.logger.warning(f"FITRS directory not found: {fitrs_directory}")
+            return []
+        
+        # Get all FITRS CSV files
+        all_fitrs_files = [f for f in os.listdir(fitrs_directory) if f.endswith('.csv')]
+        
+        # Determine which specific files to search based on instrument type
+        search_patterns = self._get_fitrs_file_patterns(instrument_type)
+        
+        # Filter files to only those matching our patterns
+        target_files = [f for f in all_fitrs_files if any(pattern in f for pattern in search_patterns)]
+        
+        self.logger.info(f"Searching {len(target_files)} {instrument_type} FITRS files for ISIN {isin}")
+        self.logger.debug(f"Target file patterns: {search_patterns}")
+        self.logger.debug(f"Target files: {target_files}")
+        
+        for filename in target_files:
+            filepath = os.path.join(fitrs_directory, filename)
+            self.logger.debug(f"Searching file {filename} for ISIN {isin}")
+            
+            try:
+                # Read the CSV file
+                df = pd.read_csv(filepath)
+                
+                # Search for the ISIN in both 'ISIN' and 'Id' columns (FULECR uses 'Id')
+                # Fixed pandas alignment issue by using proper column checks
+                matching_rows = pd.DataFrame()
+                
+                if 'ISIN' in df.columns:
+                    isin_matches = df[df['ISIN'] == isin]
+                    matching_rows = pd.concat([matching_rows, isin_matches], ignore_index=True)
+                
+                if 'Id' in df.columns:
+                    id_matches = df[df['Id'] == isin]
+                    matching_rows = pd.concat([matching_rows, id_matches], ignore_index=True)
+                
+                # Remove duplicates if any
+                matching_rows = matching_rows.drop_duplicates()
+                
+                if not matching_rows.empty:
+                    self.logger.info(f"Found {len(matching_rows)} records for {isin} in {filename}")
+                    
+                    # Create transparency calculations for each matching row
+                    for index, row in matching_rows.iterrows():
+                        try:
+                            # Convert pandas Series to dict, handling NaN values
+                            data = {k: (None if pd.isna(v) else v) for k, v in row.to_dict().items()}
+                            
+                            calc = self.create_transparency_calculation(
+                                data=data,
+                                source_filename=filename
+                            )
+                            created_calculations.append(calc)
+                            
+                        except Exception as e:
+                            self.logger.warning(f"Failed to create transparency calculation from row {index} in {filename}: {str(e)}")
+                            continue
+                            
+            except Exception as e:
+                self.logger.warning(f"Failed to read FITRS file {filename}: {str(e)}")
+                continue
+        
+        self.logger.info(f"Created {len(created_calculations)} transparency calculations for {isin} from FITRS files")
+        return created_calculations
+
+    def _get_fitrs_file_patterns(self, instrument_type: str) -> List[str]:
+        """
+        Get FITRS file patterns to search based on instrument type.
+        
+        Returns specific file patterns to optimize search performance.
+        """
+        instrument_type_lower = instrument_type.lower()
+        
+        if instrument_type_lower in ['equity', 'share', 'stock']:
+            return ['FULECR_', '_E_']  # Equity files
+        elif instrument_type_lower in ['bond', 'debt', 'note', 'debenture']:
+            return ['FULNCR_', '_D_']  # Debt files
+        elif instrument_type_lower in ['fund', 'etf', 'future', 'derivative']:
+            return ['FULNCR_', '_F_']  # Funds/Futures files
+        else:
+            return ['FULNCR_', '_C_']  # Corporate/Other files
 
     def _parse_date(self, date_str: Union[str, date, None]) -> Optional[date]:
         """Parse date string to date object"""

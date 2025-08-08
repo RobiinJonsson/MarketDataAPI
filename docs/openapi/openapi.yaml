@@ -404,6 +404,20 @@ paths:
         '200':
           description: Success
   /transparency/{transparency_id}:
+    get:
+      summary: Get transparency calculation by ID
+      description: ''
+      operationId: get_transparency_calculation
+      tags:
+      - transparency
+      parameters: []
+      responses:
+        '404':
+          description: Transparency calculation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     put:
       summary: Update an existing transparency calculation
       description: ''
@@ -426,20 +440,6 @@ paths:
                 $ref: '#/components/schemas/Error'
         '200':
           description: Transparency calculation updated
-    get:
-      summary: Get transparency calculation by ID
-      description: ''
-      operationId: get_transparency_calculation
-      tags:
-      - transparency
-      parameters: []
-      responses:
-        '404':
-          description: Transparency calculation not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
     delete:
       summary: Delete a transparency calculation
       description: ''

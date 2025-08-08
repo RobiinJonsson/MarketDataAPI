@@ -219,9 +219,9 @@
       }
     },
     {
-      "name": "Update an existing transparency calculation",
+      "name": "Get transparency calculation by ID",
       "request": {
-        "method": "PUT",
+        "method": "GET",
         "header": [],
         "url": {
           "raw": "{{base_url}}/transparency/{transparency_id}",
@@ -236,9 +236,9 @@
       }
     },
     {
-      "name": "Get transparency calculation by ID",
+      "name": "Update an existing transparency calculation",
       "request": {
-        "method": "GET",
+        "method": "PUT",
         "header": [],
         "url": {
           "raw": "{{base_url}}/transparency/{transparency_id}",
