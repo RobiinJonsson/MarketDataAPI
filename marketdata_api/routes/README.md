@@ -8,7 +8,7 @@ This directory contains the route definitions for the MarketData API. The routes
 - **instrument_routes.py**: Endpoints for instrument-related operations (create, read, update, delete, enrich)
 - **entity_routes.py**: Endpoints for legal entity operations (create, read, update, delete)
 - **file_management.py**: Advanced file management endpoints for ESMA data operations
-- **transparency_routes.py**: Endpoints for transparency calculations and MiFID II data
+- **transparency_routes.py**: Unified transparency endpoints using JSON-based storage and FITRS file search
 - **cfi_routes.py**: Endpoints for CFI code decoding
 - **market.py**: Market data related endpoints
 - **schema.py**: Schema-related endpoints
@@ -41,7 +41,7 @@ The API follows RESTful principles with the following main endpoint groups:
 - `/api/v1/entities` - Legal entity operations
 - `/api/v1/files` - File management operations for ESMA data
 - `/api/v1/esma-files` - ESMA registry file operations
-- `/api/v1/transparency` - Transparency calculations and MiFID II data
+- `/api/v1/transparency` - Unified transparency calculations with FIRDS validation and FITRS search
 - `/api/v1/cfi` - CFI code decoding
 - `/api/v1/batch` - Batch operations for instruments and entities
 

@@ -95,21 +95,24 @@ python scripts/cli.py batch batch-source equity SE
 MarketDataAPI/
 ├── marketdata_api/
 │   ├── models/           # SQLAlchemy models
-│   │   ├── instrument.py # Instrument models with polymorphic inheritance
-│   │   ├── legal_entity.py # Legal Entity models
-│   │   ├── figi.py       # FIGI mapping models
+│   │   ├── sqlite/       # Unified SQLite models
+│   │   │   ├── instrument.py # Clean instrument models (no polymorphism)
+│   │   │   ├── transparency.py # Unified transparency models (JSON-based)
+│   │   │   ├── legal_entity.py # Legal Entity models
+│   │   │   └── figi.py   # FIGI mapping models
 │   │   └── utils/        # Utilities for models
 │   ├── services/         # Business logic & external APIs
+│   │   ├── sqlite/       # SQLite service implementations
+│   │   │   ├── instrument_service.py # Instrument operations
+│   │   │   └── transparency_service.py # Unified transparency with FITRS search
 │   │   ├── file_management_service.py # Advanced file management
 │   │   ├── esma_data_loader.py # ESMA data loading and processing
-│   │   ├── esma_utils.py # ESMA utility functions
-│   │   ├── instrument_service.py # Instrument operations
-│   │   └── transparency_service.py # Transparency calculations
+│   │   └── esma_utils.py # ESMA utility functions
 │   ├── routes/          # API endpoints
 │   │   ├── file_management.py # File management endpoints
 │   │   ├── instrument_routes.py # Instrument endpoints
 │   │   ├── entity_routes.py # Legal entity endpoints
-│   │   └── transparency_routes.py # Transparency endpoints
+│   │   └── transparency_routes.py # Unified transparency endpoints
 │   ├── database/        # Database configuration
 │   ├── config/          # Configuration management
 │   └── tests/           # Test suite

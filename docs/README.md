@@ -40,7 +40,7 @@ The MarketDataAPI provides access to:
 - **Legal Entities**: LEI-based entity information from GLEIF
 - **Entity Relationships**: Parent-child relationships between entities  
 - **Schema Management**: Custom data transformation schemas
-- **Transparency Calculations**: MiFID II transparency data from FITRS
+- **Transparency Calculations**: Unified MiFID II transparency data from FITRS with FIRDS validation
 - **File Management**: Advanced file operations for ESMA data
 - **CFI Code Decoding**: Classification of Financial Instruments decoding
 
@@ -50,8 +50,9 @@ The MarketDataAPI provides access to:
 - `GET /instruments/{isin}` - Get instrument details
 - `GET /legal-entities` - List legal entities
 - `GET /legal-entities/{lei}` - Get entity details
-- `GET /transparency` - List transparency calculations
-- `GET /transparency/isin/{isin}` - Get transparency data for instrument
+- `GET /transparency` - List unified transparency calculations
+- `GET /transparency/isin/{isin}` - Get transparency data for existing instruments
+- `POST /transparency` - Create transparency data from FITRS files (requires FIRDS validation)
 
 ### File Management Endpoints
 
