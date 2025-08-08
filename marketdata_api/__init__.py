@@ -1,4 +1,5 @@
 from flask import Flask
+from flask_cors import CORS
 from marketdata_api.config import FLASK_ENV, Config
 from marketdata_api.database import init_database
 import logging
@@ -10,6 +11,9 @@ def create_app():
                 static_folder="../frontend/static")
     app.config["ENV"] = FLASK_ENV
     app.config["ROOT_PATH"] = Config.ROOT_PATH
+
+    # Enable CORS for all routes
+    CORS(app, origins=["http://localhost:3000", "http://127.0.0.1:3000"])
 
     # Set up logging and register cleanup
     if not os.path.exists('logs'):
