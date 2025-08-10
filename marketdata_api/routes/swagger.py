@@ -743,8 +743,10 @@ class EntityRelationships(Resource):
                         "relationship_status": rel.relationship_status,
                         "parent_lei": rel.parent_lei,
                         "parent_name": rel.parent.name if rel.parent else None,
+                        "parent_jurisdiction": rel.parent.jurisdiction if rel.parent else None,
                         "child_lei": rel.child_lei,
                         "child_name": rel.child.name if rel.child else None,
+                        "child_jurisdiction": rel.child.jurisdiction if rel.child else None,
                         "relationship_period_start": rel.relationship_period_start.isoformat() if rel.relationship_period_start else None,
                         "relationship_period_end": rel.relationship_period_end.isoformat() if rel.relationship_period_end else None,
                         "percentage_ownership": rel.percentage_of_ownership

@@ -169,6 +169,7 @@ export class ComprehensiveSearchComponent {
                 const parentInfo = {
                   lei: rel.parent_lei,
                   name: rel.parent_name,
+                  jurisdiction: rel.parent_jurisdiction,
                   relationship_status: rel.relationship_status,
                   relationship_period_start: rel.relationship_period_start,
                   relationship_period_end: rel.relationship_period_end
@@ -184,6 +185,7 @@ export class ComprehensiveSearchComponent {
                 const childInfo = {
                   lei: rel.child_lei,
                   name: rel.child_name,
+                  jurisdiction: rel.child_jurisdiction,
                   relationship_status: rel.relationship_status,
                   relationship_period_start: rel.relationship_period_start,
                   relationship_period_end: rel.relationship_period_end
@@ -776,44 +778,181 @@ export class ComprehensiveSearchComponent {
             </svg>
           </div>
           <h3 class="text-lg font-medium text-gray-900 mb-2">No Transparency Data</h3>
-          <p class="text-gray-600">No transparency calculations found for this instrument</p>
+          <p class="text-gray-600">No MiFID II transparency calculations found for this instrument</p>
         </div>
       `;
     }
 
+    // Separate data by methodology and sort by date
+    const sintData = transparency.filter((calc: any) => calc.raw_data?.Mthdlgy === 'SINT').sort((a: any, b: any) => new Date(a.from_date).getTime() - new Date(b.from_date).getTime());
+    const yearData = transparency.filter((calc: any) => calc.raw_data?.Mthdlgy === 'YEAR');
+    
     return `
       <div class="space-y-6">
-        ${transparency.map((calc: any, index: number) => `
-          <div class="bg-gray-50 rounded-lg p-4">
-            <div class="flex justify-between items-start mb-4">
-              <h3 class="font-semibold text-gray-900">Calculation ${index + 1}</h3>
-              <span class="text-xs text-gray-500">${formatDate(calc.created_at || calc.calculation_date)}</span>
+        <!-- MiFID II Overview -->
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <h3 class="font-semibold text-blue-900 mb-2">MiFID II Transparency Data</h3>
+          <p class="text-sm text-blue-700">
+            This data shows transparency calculations under MiFID II/MiFIR requirements for trading venues and systematic internalisers.
+            Includes liquidity indicators, large-in-scale thresholds, and market structure metrics.
+          </p>
+        </div>
+
+        ${yearData.length > 0 ? `
+        <!-- Annual Liquidity Assessment -->
+        <div class="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 class="font-semibold text-gray-900 mb-4">Annual Liquidity Assessment</h3>
+          ${yearData.map((calc: any) => `
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+              <div class="bg-gradient-to-r from-green-50 to-green-100 p-4 rounded-lg text-center">
+                <div class="text-sm font-medium text-green-700">Liquidity Status</div>
+                <div class="text-xl font-bold ${calc.liquidity ? 'text-green-600' : 'text-red-600'}">
+                  ${calc.liquidity ? 'LIQUID' : 'ILLIQUID'}
+                </div>
+              </div>
+              
+              ${calc.raw_data?.AvrgDalyTrnvr ? `
+              <div class="bg-blue-50 p-4 rounded-lg text-center">
+                <div class="text-sm font-medium text-blue-700">Avg Daily Turnover</div>
+                <div class="text-lg font-bold text-blue-600">€${this.formatCurrency(calc.raw_data.AvrgDalyTrnvr)}</div>
+              </div>
+              ` : ''}
+              
+              ${calc.raw_data?.AvrgDalyNbOfTxs ? `
+              <div class="bg-purple-50 p-4 rounded-lg text-center">
+                <div class="text-sm font-medium text-purple-700">Avg Daily Transactions</div>
+                <div class="text-lg font-bold text-purple-600">${formatNumber(calc.raw_data.AvrgDalyNbOfTxs)}</div>
+              </div>
+              ` : ''}
+              
+              ${calc.raw_data?.AvrgTxVal ? `
+              <div class="bg-orange-50 p-4 rounded-lg text-center">
+                <div class="text-sm font-medium text-orange-700">Avg Transaction Value</div>
+                <div class="text-lg font-bold text-orange-600">€${this.formatCurrency(calc.raw_data.AvrgTxVal)}</div>
+              </div>
+              ` : ''}
             </div>
             
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div class="text-center p-3 bg-white rounded">
-                <div class="text-2xl font-bold text-gray-900">${formatNumber(calc.total_transactions_executed || 0)}</div>
-                <div class="text-sm text-gray-600">Total Transactions</div>
-              </div>
-              <div class="text-center p-3 bg-white rounded">
-                <div class="text-2xl font-bold text-gray-900">${formatNumber(calc.total_volume_executed || 0)}</div>
-                <div class="text-sm text-gray-600">Total Volume</div>
-              </div>
-              <div class="text-center p-3 bg-white rounded">
-                <div class="text-2xl font-bold ${calc.liquidity ? 'text-green-600' : 'text-red-600'}">${calc.liquidity ? 'Liquid' : 'Illiquid'}</div>
-                <div class="text-sm text-gray-600">Status</div>
+            <!-- Market Structure Thresholds -->
+            ${calc.raw_data?.LrgInScale || calc.raw_data?.StdMktSz ? `
+            <div class="mt-4 bg-gray-50 p-4 rounded-lg">
+              <h4 class="font-medium text-gray-900 mb-3">Market Structure Thresholds</h4>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                ${calc.raw_data?.LrgInScale ? `
+                <div>
+                  <span class="text-sm text-gray-600">Large-in-Scale (LIS) Threshold:</span>
+                  <span class="ml-2 font-semibold">€${this.formatCurrency(calc.raw_data.LrgInScale)}</span>
+                </div>
+                ` : ''}
+                ${calc.raw_data?.StdMktSz ? `
+                <div>
+                  <span class="text-sm text-gray-600">Standard Market Size:</span>
+                  <span class="ml-2 font-semibold">€${this.formatCurrency(calc.raw_data.StdMktSz)}</span>
+                </div>
+                ` : ''}
               </div>
             </div>
-            
-            ${calc.avg_daily_volume ? `
-              <div class="mt-4 text-sm text-gray-600">
-                <strong>Average Daily Volume:</strong> ${formatNumber(calc.avg_daily_volume)}
-              </div>
             ` : ''}
+          `).join('')}
+        </div>
+        ` : ''}
+
+        ${sintData.length > 0 ? `
+        <!-- Semi-Annual Trading Activity -->
+        <div class="bg-white border border-gray-200 rounded-lg p-6">
+          <h3 class="font-semibold text-gray-900 mb-4">Semi-Annual Trading Activity</h3>
+          <div class="space-y-4">
+            ${sintData.map((calc: any) => `
+              <div class="border border-gray-100 rounded-lg p-4">
+                <div class="flex justify-between items-center mb-3">
+                  <h4 class="font-medium text-gray-900">
+                    ${this.formatDateRange(calc.from_date, calc.to_date)}
+                  </h4>
+                  <span class="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">SINT</span>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div class="text-center p-3 bg-blue-50 rounded">
+                    <div class="text-xl font-bold text-blue-600">${formatNumber(calc.total_transactions_executed || 0)}</div>
+                    <div class="text-sm text-blue-700">Total Transactions</div>
+                  </div>
+                  <div class="text-center p-3 bg-green-50 rounded">
+                    <div class="text-xl font-bold text-green-600">€${this.formatCurrency(calc.total_volume_executed || 0)}</div>
+                    <div class="text-sm text-green-700">Total Volume</div>
+                  </div>
+                  <div class="text-center p-3 bg-purple-50 rounded">
+                    <div class="text-xl font-bold text-purple-600">
+                      €${calc.total_transactions_executed > 0 ? this.formatCurrency((calc.total_volume_executed || 0) / calc.total_transactions_executed) : '0'}
+                    </div>
+                    <div class="text-sm text-purple-700">Avg per Transaction</div>
+                  </div>
+                </div>
+              </div>
+            `).join('')}
           </div>
-        `).join('')}
+          
+          <!-- Trading Trend Visualization -->
+          ${sintData.length > 1 ? `
+          <div class="mt-6 p-4 bg-gray-50 rounded-lg">
+            <h4 class="font-medium text-gray-900 mb-3">Volume Trend Analysis</h4>
+            <div class="text-sm text-gray-600">
+              ${this.calculateTrendInsight(sintData)}
+            </div>
+          </div>
+          ` : ''}
+        </div>
+        ` : ''}
+
+        <!-- Data Summary -->
+        <div class="bg-gray-50 rounded-lg p-4">
+          <h3 class="font-semibold text-gray-900 mb-2">Data Summary</h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <span class="text-gray-600">Total Records:</span>
+              <span class="ml-2 font-semibold">${transparency.length}</span>
+            </div>
+            <div>
+              <span class="text-gray-600">Annual Assessments:</span>
+              <span class="ml-2 font-semibold">${yearData.length}</span>
+            </div>
+            <div>
+              <span class="text-gray-600">Semi-Annual Periods:</span>
+              <span class="ml-2 font-semibold">${sintData.length}</span>
+            </div>
+          </div>
+        </div>
       </div>
     `;
+  }
+
+  private formatCurrency(value: number): string {
+    if (value >= 1000000) {
+      return (value / 1000000).toFixed(1) + 'M';
+    } else if (value >= 1000) {
+      return (value / 1000).toFixed(1) + 'K';
+    }
+    return value.toLocaleString();
+  }
+
+  private formatDateRange(fromDate: string, toDate: string): string {
+    const from = new Date(fromDate);
+    const to = new Date(toDate);
+    return `${from.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })} - ${to.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`;
+  }
+
+  private calculateTrendInsight(data: any[]): string {
+    if (data.length < 2) return 'Insufficient data for trend analysis';
+    
+    const volumes = data.map(d => d.total_volume_executed || 0);
+    const transactions = data.map(d => d.total_transactions_executed || 0);
+    
+    const volumeTrend = volumes[volumes.length - 1] > volumes[0] ? 'increasing' : 'decreasing';
+    const transactionTrend = transactions[transactions.length - 1] > transactions[0] ? 'increasing' : 'decreasing';
+    
+    const volumeChange = ((volumes[volumes.length - 1] - volumes[0]) / volumes[0] * 100).toFixed(1);
+    const transactionChange = ((transactions[transactions.length - 1] - transactions[0]) / transactions[0] * 100).toFixed(1);
+    
+    return `Trading volume is ${volumeTrend} (${volumeChange}% change) and transaction count is ${transactionTrend} (${transactionChange}% change) across the reporting periods.`;
   }
 
   private renderCfiTab(data: ComprehensiveInstrumentData): string {
