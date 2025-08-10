@@ -10,6 +10,59 @@ logger = logging.getLogger(__name__)
 GLEIF_BASE_URL = "https://api.gleif.org/api/v1/lei-records"
 DEFAULT_TIMEOUT = (5, 30)  # (connect timeout, read timeout) in seconds
 
+def _create_or_update_child_entity(session, child_data):
+    """
+    Create or update a child entity from GLEIF child data.
+    
+    Args:
+        session: SQLAlchemy database session
+        child_data: Child entity data from GLEIF API response
+    """
+    from ..database.model_mapper import map_lei_record
+    from ..models.sqlite.legal_entity import LegalEntity, EntityAddress, EntityRegistration
+    
+    try:
+        # Map the GLEIF data to our entity format
+        mapped_data = map_lei_record({"data": child_data})
+        entity_data = mapped_data["lei_record"]
+        lei = entity_data["lei"]
+        
+        # Check if entity already exists
+        entity = session.query(LegalEntity).filter(LegalEntity.lei == lei).first()
+        if not entity:
+            # Create new entity
+            entity = LegalEntity(**entity_data)
+            session.add(entity)
+            logger.debug(f"Created new child entity: {lei}")
+        else:
+            # Update existing entity
+            for key, value in entity_data.items():
+                setattr(entity, key, value)
+            logger.debug(f"Updated existing child entity: {lei}")
+        
+        # Update addresses if provided
+        if mapped_data.get("addresses"):
+            # Clear existing addresses and add new ones
+            entity.addresses = []
+            for addr_data in mapped_data["addresses"]:
+                address = EntityAddress(**addr_data)
+                entity.addresses.append(address)
+        
+        # Update registration if provided
+        if mapped_data.get("registration"):
+            if not entity.registration:
+                entity.registration = EntityRegistration(**mapped_data["registration"])
+            else:
+                # Update existing registration
+                for key, value in mapped_data["registration"].items():
+                    setattr(entity.registration, key, value)
+        
+        return entity
+        
+    except Exception as e:
+        logger.error(f"Error creating/updating child entity from GLEIF data: {e}", exc_info=True)
+        raise
+
 @log_api_call
 @retry_with_backoff(max_retries=3, initial_backoff=2)
 def fetch_lei_info(lei_code):
@@ -174,30 +227,37 @@ def process_parent_relationship(session, lei_code, parent_data, relationship_typ
         # This is a parent entity record
         parent_lei = parent_data["data"]["id"]
         
-        # Check if relationship already exists
-        existing_rel = session.query(EntityRelationship).filter_by(
-            parent_lei=parent_lei, 
-            child_lei=lei_code,
-            relationship_type=relationship_type
-        ).first()
-        
-        if existing_rel:
-            # Update existing relationship
-            existing_rel.last_updated = datetime.now(UTC)
-            return {"message": f"Updated existing {relationship_type.lower()} parent relationship"}
-        else:
-            # Create new relationship
-            new_rel = EntityRelationship(
-                parent_lei=parent_lei,
+        try:
+            # First, create or update the parent entity from GLEIF data
+            _create_or_update_child_entity(session, parent_data["data"])
+            
+            # Check if relationship already exists
+            existing_rel = session.query(EntityRelationship).filter_by(
+                parent_lei=parent_lei, 
                 child_lei=lei_code,
-                relationship_type=relationship_type,
-                relationship_status="ACTIVE",
-                relationship_period_start=datetime.now(UTC),
-                last_updated=datetime.now(UTC)
-            )
-            session.add(new_rel)
-            session.flush()  # Parent relationships are few, so we flush immediately
-            return {"message": f"Created new {relationship_type.lower()} parent relationship", "parent_lei": parent_lei}
+                relationship_type=relationship_type
+            ).first()
+            
+            if existing_rel:
+                # Update existing relationship
+                existing_rel.last_updated = datetime.now(UTC)
+                return {"message": f"Updated existing {relationship_type.lower()} parent relationship"}
+            else:
+                # Create new relationship
+                new_rel = EntityRelationship(
+                    parent_lei=parent_lei,
+                    child_lei=lei_code,
+                    relationship_type=relationship_type,
+                    relationship_status="ACTIVE",
+                    relationship_period_start=datetime.now(UTC),
+                    last_updated=datetime.now(UTC)
+                )
+                session.add(new_rel)
+                session.flush()  # Parent relationships are few, so we flush immediately
+                return {"message": f"Created new {relationship_type.lower()} parent relationship", "parent_lei": parent_lei}
+        except Exception as e:
+            logger.error(f"Error processing parent entity {parent_lei}: {e}", exc_info=True)
+            return {"error": f"Failed to process parent entity: {str(e)}"}
     elif "data" in parent_data and parent_data["data"].get("type") == "reporting-exceptions":
         # This is a reporting exception
         exception_data = parent_data["data"]
@@ -292,19 +352,22 @@ def process_children_relationships(session, parent_lei, children_data, relations
             child_lei = child["id"]
             found_child_leis.add(child_lei)
             
-            # Check if relationship already exists
-            if child_lei in existing_child_leis:
-                # Update existing relationship
-                existing_rel = current_rel_map[child_lei]
-                existing_rel.last_updated = datetime.now(UTC)
-                results["processed"] += 1
-                results["details"].append({
-                    "child_lei": child_lei,
-                    "action": "updated"
-                })
-            else:
-                # Create new relationship
-                try:
+            try:
+                # First, create or update the child entity from GLEIF data
+                _create_or_update_child_entity(session, child)
+                
+                # Check if relationship already exists
+                if child_lei in existing_child_leis:
+                    # Update existing relationship
+                    existing_rel = current_rel_map[child_lei]
+                    existing_rel.last_updated = datetime.now(UTC)
+                    results["processed"] += 1
+                    results["details"].append({
+                        "child_lei": child_lei,
+                        "action": "updated"
+                    })
+                else:
+                    # Create new relationship
                     new_rel = EntityRelationship(
                         parent_lei=parent_lei,
                         child_lei=child_lei,
@@ -329,12 +392,12 @@ def process_children_relationships(session, parent_lei, children_data, relations
                         results["batches"] += 1
                         batch_counter = 0
                         
-                except Exception as e:
-                    results["errors"] += 1
-                    results["details"].append({
-                        "child_lei": child_lei,
-                        "error": str(e)
-                    })
+            except Exception as e:
+                results["errors"] += 1
+                results["details"].append({
+                    "child_lei": child_lei,
+                    "error": str(e)
+                })
     
     # Flush any remaining items in the last batch
     if batch_counter > 0:
@@ -417,7 +480,9 @@ def prune_parent_relationship(session, lei_code, relationship_type):
 
 def sync_entity_relationships(session, lei_code, batch_size=100):
     """
-    Synchronize all parent and child relationships for an entity from GLEIF API.
+    Synchronize parent and direct child relationships for an entity from GLEIF API.
+    Optimized to only fetch direct parent, ultimate parent, and direct children
+    to avoid database bloat from extensive ultimate children structures.
     
     Args:
         session: SQLAlchemy database session
@@ -431,7 +496,7 @@ def sync_entity_relationships(session, lei_code, batch_size=100):
         "direct_parent": None,
         "ultimate_parent": None,
         "direct_children": None,
-        "ultimate_children": None
+        "ultimate_children": "skipped"  # Indicate that this was intentionally skipped
     }
     
     # Process direct parent
@@ -460,17 +525,14 @@ def sync_entity_relationships(session, lei_code, batch_size=100):
         # If the current result is an exception but a relationship existed before
         results["ultimate_parent"]["pruned_relationship"] = True
     
-    # Process direct children
+    # Process direct children only (skip ultimate children to avoid database bloat)
     direct_children_data = fetch_direct_children(lei_code)
     results["direct_children"] = process_children_relationships(
         session, lei_code, direct_children_data, "DIRECT", batch_size
     )
     
-    # Process ultimate children
-    ultimate_children_data = fetch_ultimate_children(lei_code)
-    results["ultimate_children"] = process_children_relationships(
-        session, lei_code, ultimate_children_data, "ULTIMATE", batch_size
-    )
+    # Skip ultimate children processing to avoid database bloat
+    # Ultimate children can be extensive and are often not needed for most use cases
     
     return results
 

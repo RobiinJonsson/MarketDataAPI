@@ -1,6 +1,6 @@
 import logging
 from typing import List, Optional, Dict, Any, Tuple
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_, or_
 from ...database.model_mapper import map_lei_record, flatten_address
 from ...database.session import get_session, SessionLocal
@@ -20,14 +20,39 @@ class LegalEntityService(LegalEntityServiceInterface):
         self.logger = logging.getLogger(__name__)
 
     def get_entity(self, lei: str) -> Tuple[Session, Optional[object]]:
-        """Get legal entity by LEI."""
+        """Get legal entity by LEI with all relationships eagerly loaded."""
         session = SessionLocal()
         try:
-            entity = session.query(LegalEntity).filter(LegalEntity.lei == lei).first()
+            entity = session.query(LegalEntity).options(
+                # Eager load addresses
+                joinedload(LegalEntity.addresses),
+                # Eager load registration
+                joinedload(LegalEntity.registration),
+                # Eager load direct parent relationship and the parent entity
+                joinedload(LegalEntity.direct_parent_relation).joinedload(EntityRelationship.parent),
+                # Eager load ultimate parent relationship and the parent entity
+                joinedload(LegalEntity.ultimate_parent_relation).joinedload(EntityRelationship.parent),
+                # Eager load direct children relationships and the child entities
+                joinedload(LegalEntity.direct_children_relations).joinedload(EntityRelationship.child),
+                # Eager load ultimate children relationships and the child entities
+                joinedload(LegalEntity.ultimate_children_relations).joinedload(EntityRelationship.child),
+                # Eager load parent exceptions
+                joinedload(LegalEntity.parent_exceptions)
+            ).filter(LegalEntity.lei == lei).first()
+            
             if entity:
+                # Ensure all relationships are loaded
                 session.refresh(entity)
+                self.logger.info(f"Loaded entity {lei} with relationships: "
+                               f"addresses={len(entity.addresses) if entity.addresses else 0}, "
+                               f"direct_parent={entity.direct_parent_relation is not None}, "
+                               f"ultimate_parent={entity.ultimate_parent_relation is not None}, "
+                               f"direct_children={len(entity.direct_children_relations) if entity.direct_children_relations else 0}, "
+                               f"ultimate_children={len(entity.ultimate_children_relations) if entity.ultimate_children_relations else 0}")
+            
             return session, entity
-        except:
+        except Exception as e:
+            self.logger.error(f"Error loading entity {lei}: {str(e)}")
             session.close()
             raise
 
@@ -72,7 +97,7 @@ class LegalEntityService(LegalEntityServiceInterface):
     def create_or_update_entity(self, lei: str) -> Tuple[Session, Optional[object]]:
         """Create or update legal entity from GLEIF data."""
         # Lazy import to avoid conflicts
-        from ..gleif import fetch_lei_info
+        from ..gleif import fetch_lei_info, sync_entity_relationships
         
         gleif_data = fetch_lei_info(lei)
         if not gleif_data:
@@ -83,6 +108,12 @@ class LegalEntityService(LegalEntityServiceInterface):
         try:
             mapped_data = map_lei_record(gleif_data)
             entity = self._update_entity_from_data(session, mapped_data)
+            
+            # Sync entity relationships after creating/updating the basic entity data
+            self.logger.info(f"Syncing relationships for LEI: {lei}")
+            relationship_results = sync_entity_relationships(session, lei)
+            self.logger.debug(f"Relationship sync results for {lei}: {relationship_results}")
+            
             session.commit()
             session.refresh(entity)  # Ensure entity is bound to session
             return session, entity

@@ -131,7 +131,6 @@ class LegalEntity(Base):
                     "jurisdiction": parent.jurisdiction,
                     "status": parent.status,
                     "relationship_status": self.direct_parent_relation.relationship_status,
-                    "percentage_of_ownership": self.direct_parent_relation.percentage_of_ownership,
                     "relationship_period_start": self.direct_parent_relation.relationship_period_start.isoformat() if self.direct_parent_relation.relationship_period_start else None,
                     "relationship_period_end": self.direct_parent_relation.relationship_period_end.isoformat() if self.direct_parent_relation.relationship_period_end else None
                 }
@@ -145,7 +144,6 @@ class LegalEntity(Base):
                     "jurisdiction": parent.jurisdiction,
                     "status": parent.status,
                     "relationship_status": self.ultimate_parent_relation.relationship_status,
-                    "percentage_of_ownership": self.ultimate_parent_relation.percentage_of_ownership,
                     "relationship_period_start": self.ultimate_parent_relation.relationship_period_start.isoformat() if self.ultimate_parent_relation.relationship_period_start else None,
                     "relationship_period_end": self.ultimate_parent_relation.relationship_period_end.isoformat() if self.ultimate_parent_relation.relationship_period_end else None
                 }
@@ -160,7 +158,6 @@ class LegalEntity(Base):
                         "jurisdiction": child.jurisdiction,
                         "status": child.status,
                         "relationship_status": relation.relationship_status,
-                        "percentage_of_ownership": relation.percentage_of_ownership,
                         "relationship_period_start": relation.relationship_period_start.isoformat() if relation.relationship_period_start else None,
                         "relationship_period_end": relation.relationship_period_end.isoformat() if relation.relationship_period_end else None
                     })
@@ -175,7 +172,6 @@ class LegalEntity(Base):
                         "jurisdiction": child.jurisdiction,
                         "status": child.status,
                         "relationship_status": relation.relationship_status,
-                        "percentage_of_ownership": relation.percentage_of_ownership,
                         "relationship_period_start": relation.relationship_period_start.isoformat() if relation.relationship_period_start else None,
                         "relationship_period_end": relation.relationship_period_end.isoformat() if relation.relationship_period_end else None
                     })

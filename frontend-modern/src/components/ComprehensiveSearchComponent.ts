@@ -5,7 +5,6 @@ interface ComprehensiveInstrumentData {
   transparency: any[];
   venues: any[];
   lei_data?: any;
-  parent_child_relationships?: any;
 }
 
 export class ComprehensiveSearchComponent {
@@ -140,21 +139,68 @@ export class ComprehensiveSearchComponent {
         return;
       }
 
-      // If instrument has LEI, fetch LEI relationships
+      // If instrument has LEI, fetch LEI data and relationships
       let leiData = null;
-      let parentChildData = null;
       if (actualInstrumentData.lei_id) {
         try {
           const [leiResponse, relationshipResponse] = await Promise.allSettled([
             this.fetchLeiData(actualInstrumentData.lei_id),
-            this.fetchParentChildData(actualInstrumentData.lei_id)
+            this.fetchRelationshipData(actualInstrumentData.lei_id)
           ]);
           
           leiData = leiResponse.status === 'fulfilled' ? leiResponse.value?.data : null;
-          parentChildData = relationshipResponse.status === 'fulfilled' ? relationshipResponse.value?.data : null;
+          const relationshipData = relationshipResponse.status === 'fulfilled' ? relationshipResponse.value?.data : null;
           
-          console.log('LEI Data:', leiData);
-          console.log('Parent-Child Data:', parentChildData);
+          // Merge relationship data into LEI data if both exist
+          if (leiData && relationshipData && relationshipData.relationships) {
+            // Convert the flat relationships array into the structured format the frontend expects
+            const relationships: any = {
+              direct_parent: null,
+              ultimate_parent: null,
+              direct_children: [],
+              ultimate_children: [],
+              parent_exceptions: []
+            };
+            
+            // Process relationships
+            relationshipData.relationships.forEach((rel: any) => {
+              if (rel.child_lei === actualInstrumentData.lei_id) {
+                // This entity is the child, so the relationship represents a parent
+                const parentInfo = {
+                  lei: rel.parent_lei,
+                  name: rel.parent_name,
+                  relationship_status: rel.relationship_status,
+                  relationship_period_start: rel.relationship_period_start,
+                  relationship_period_end: rel.relationship_period_end
+                };
+                
+                if (rel.relationship_type === 'DIRECT') {
+                  relationships.direct_parent = parentInfo;
+                } else if (rel.relationship_type === 'ULTIMATE') {
+                  relationships.ultimate_parent = parentInfo;
+                }
+              } else if (rel.parent_lei === actualInstrumentData.lei_id) {
+                // This entity is the parent, so the relationship represents a child
+                const childInfo = {
+                  lei: rel.child_lei,
+                  name: rel.child_name,
+                  relationship_status: rel.relationship_status,
+                  relationship_period_start: rel.relationship_period_start,
+                  relationship_period_end: rel.relationship_period_end
+                };
+                
+                if (rel.relationship_type === 'DIRECT') {
+                  relationships.direct_children.push(childInfo);
+                } else if (rel.relationship_type === 'ULTIMATE') {
+                  relationships.ultimate_children.push(childInfo);
+                }
+              }
+            });
+            
+            leiData.relationships = relationships;
+          }
+          
+          console.log('LEI Data with relationships:', leiData);
         } catch (error) {
           console.warn('Failed to fetch LEI data:', error);
         }
@@ -164,8 +210,7 @@ export class ComprehensiveSearchComponent {
         instrument: actualInstrumentData,
         transparency: actualTransparencyData,
         venues: actualVenuesData,
-        lei_data: leiData,
-        parent_child_relationships: parentChildData
+        lei_data: leiData
       };
 
       this.renderComprehensiveResults(comprehensiveData);
@@ -237,7 +282,7 @@ export class ComprehensiveSearchComponent {
     }
   }
 
-  private async fetchParentChildData(lei: string) {
+  private async fetchRelationshipData(lei: string) {
     try {
       const response = await fetch(`/api/v1/relationships/${lei}`);
       if (!response.ok) return null;
@@ -573,65 +618,117 @@ export class ComprehensiveSearchComponent {
         ${lei_data && lei_data.relationships ? `
           <div class="bg-purple-50 rounded-lg p-4">
             <h3 class="font-semibold text-gray-900 mb-4">Corporate Structure</h3>
-            <div class="space-y-4">
+            <div class="space-y-6">
               
-              <!-- Direct Parent -->
-              ${lei_data.relationships.direct_parent ? `
-                <div>
-                  <h4 class="text-sm font-medium text-gray-700 mb-2">Direct Parent</h4>
-                  <div class="bg-white rounded p-3">
-                    <div class="flex justify-between items-start">
-                      <div>
-                        <div class="font-medium text-gray-900">${lei_data.relationships.direct_parent.name}</div>
-                        <div class="text-sm text-gray-600 font-mono">${lei_data.relationships.direct_parent.lei}</div>
-                        <div class="text-sm text-gray-500">${lei_data.relationships.direct_parent.jurisdiction}</div>
+              <!-- Hierarchical Tree View -->
+              <div class="bg-white rounded-lg p-4 border border-gray-200">
+                <div class="space-y-3">
+                  
+                  <!-- Ultimate Parent (if different from direct parent) -->
+                  ${lei_data.relationships.ultimate_parent && lei_data.relationships.ultimate_parent.lei !== lei_data.relationships.direct_parent?.lei ? `
+                    <div class="flex items-center text-sm">
+                      <div class="flex-shrink-0 w-4 h-4 mr-3">
+                        <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd"/>
+                        </svg>
                       </div>
-                      <span class="text-xs text-gray-500">${lei_data.relationships.direct_parent.relationship_status}</span>
+                      <div class="bg-blue-100 rounded-lg p-3 flex-1">
+                        <div class="font-medium text-blue-900">${lei_data.relationships.ultimate_parent.name}</div>
+                        <div class="text-xs text-blue-700 font-mono">${lei_data.relationships.ultimate_parent.lei}</div>
+                        <div class="text-xs text-blue-600">${lei_data.relationships.ultimate_parent.jurisdiction} • Ultimate Parent</div>
+                      </div>
                     </div>
-                    ${lei_data.relationships.direct_parent.percentage_of_ownership ? `
-                      <div class="mt-2 text-sm text-gray-600">
-                        Ownership: ${lei_data.relationships.direct_parent.percentage_of_ownership}%
-                      </div>
-                    ` : ''}
-                  </div>
-                </div>
-              ` : ''}
+                    
+                    <!-- Connection line -->
+                    <div class="flex justify-center">
+                      <div class="w-px h-4 bg-gray-300"></div>
+                    </div>
+                  ` : ''}
 
-              <!-- Ultimate Parent -->
-              ${lei_data.relationships.ultimate_parent ? `
-                <div>
-                  <h4 class="text-sm font-medium text-gray-700 mb-2">Ultimate Parent</h4>
-                  <div class="bg-white rounded p-3">
-                    <div class="flex justify-between items-start">
-                      <div>
-                        <div class="font-medium text-gray-900">${lei_data.relationships.ultimate_parent.name}</div>
-                        <div class="text-sm text-gray-600 font-mono">${lei_data.relationships.ultimate_parent.lei}</div>
-                        <div class="text-sm text-gray-500">${lei_data.relationships.ultimate_parent.jurisdiction}</div>
+                  <!-- Direct Parent -->
+                  ${lei_data.relationships.direct_parent ? `
+                    <div class="flex items-center text-sm">
+                      <div class="flex-shrink-0 w-4 h-4 mr-3">
+                        <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd"/>
+                        </svg>
                       </div>
-                      <span class="text-xs text-gray-500">${lei_data.relationships.ultimate_parent.relationship_status}</span>
+                      <div class="bg-green-100 rounded-lg p-3 flex-1">
+                        <div class="font-medium text-green-900">${lei_data.relationships.direct_parent.name}</div>
+                        <div class="text-xs text-green-700 font-mono">${lei_data.relationships.direct_parent.lei}</div>
+                        <div class="text-xs text-green-600">${lei_data.relationships.direct_parent.jurisdiction} • Direct Parent</div>
+                      </div>
+                    </div>
+                    
+                    <!-- Connection line -->
+                    <div class="flex justify-center">
+                      <div class="w-px h-4 bg-gray-300"></div>
+                    </div>
+                  ` : ''}
+
+                  <!-- Current Entity -->
+                  <div class="flex items-center text-sm">
+                    <div class="flex-shrink-0 w-4 h-4 mr-3">
+                      <svg class="w-4 h-4 text-purple-500" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm0-2a6 6 0 100-12 6 6 0 000 12z" clip-rule="evenodd"/>
+                      </svg>
+                    </div>
+                    <div class="bg-purple-100 border-2 border-purple-300 rounded-lg p-3 flex-1">
+                      <div class="font-bold text-purple-900">${lei_data.name}</div>
+                      <div class="text-xs text-purple-700 font-mono">${instrument.lei_id}</div>
+                      <div class="text-xs text-purple-600">${lei_data.jurisdiction} • Current Entity</div>
                     </div>
                   </div>
-                </div>
-              ` : ''}
 
-              <!-- Direct Children -->
-              ${lei_data.relationships.direct_children && lei_data.relationships.direct_children.length > 0 ? `
-                <div>
-                  <h4 class="text-sm font-medium text-gray-700 mb-2">Direct Children (${lei_data.relationships.direct_children.length})</h4>
-                  <div class="space-y-2">
-                    ${lei_data.relationships.direct_children.map((child: any) => `
-                      <div class="bg-white rounded p-3">
-                        <div class="flex justify-between items-start">
-                          <div>
-                            <div class="font-medium text-gray-900">${child.name}</div>
-                            <div class="text-sm text-gray-600 font-mono">${child.lei}</div>
-                            <div class="text-sm text-gray-500">${child.jurisdiction}</div>
+                  <!-- Direct Children -->
+                  ${lei_data.relationships.direct_children && lei_data.relationships.direct_children.length > 0 ? `
+                    <!-- Connection line -->
+                    <div class="flex justify-center">
+                      <div class="w-px h-4 bg-gray-300"></div>
+                    </div>
+                    
+                    <!-- Children container -->
+                    <div class="pl-7">
+                      <div class="text-xs font-medium text-gray-600 mb-2">Direct Children (${lei_data.relationships.direct_children.length})</div>
+                      <div class="space-y-2">
+                        ${lei_data.relationships.direct_children.map((child: any) => `
+                          <div class="flex items-center text-sm">
+                            <div class="flex-shrink-0 w-4 h-4 mr-3">
+                              <svg class="w-4 h-4 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-1-11a1 1 0 012 0v2h2a1 1 0 110 2h-2v2a1 1 0 11-2 0v-2H7a1 1 0 110-2h2V7z" clip-rule="evenodd"/>
+                              </svg>
+                            </div>
+                            <div class="bg-orange-100 rounded-lg p-3 flex-1">
+                              <div class="font-medium text-orange-900">${child.name}</div>
+                              <div class="text-xs text-orange-700 font-mono">${child.lei}</div>
+                              <div class="text-xs text-orange-600">${child.jurisdiction} • Direct Child</div>
+                            </div>
                           </div>
-                          <span class="text-xs text-gray-500">${child.relationship_status}</span>
+                        `).join('')}
+                      </div>
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+
+              <!-- Parent Exceptions -->
+              ${lei_data.relationships.parent_exceptions && lei_data.relationships.parent_exceptions.length > 0 ? `
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <h4 class="text-sm font-medium text-amber-800 mb-3">Parent Reporting Exceptions</h4>
+                  <div class="space-y-2">
+                    ${lei_data.relationships.parent_exceptions.map((exception: any) => `
+                      <div class="bg-white border border-amber-200 rounded p-3">
+                        <div class="flex items-start justify-between">
+                          <div>
+                            <div class="text-sm font-medium text-amber-900">${exception.exception_type}</div>
+                            <div class="text-sm text-amber-700 mt-1">${exception.exception_reason}</div>
+                            <div class="text-xs text-amber-600 mt-1">Category: ${exception.exception_category}</div>
+                          </div>
+                          <span class="text-xs text-amber-500">${exception.last_updated ? formatDate(exception.last_updated) : ''}</span>
                         </div>
-                        ${child.percentage_of_ownership ? `
-                          <div class="mt-2 text-sm text-gray-600">
-                            Ownership: ${child.percentage_of_ownership}%
+                        ${exception.provided_parent_name ? `
+                          <div class="mt-2 text-xs text-amber-600">
+                            Referenced Parent: ${exception.provided_parent_name}${exception.provided_parent_lei ? ` (${exception.provided_parent_lei})` : ''}
                           </div>
                         ` : ''}
                       </div>
@@ -640,21 +737,24 @@ export class ComprehensiveSearchComponent {
                 </div>
               ` : ''}
 
-              <!-- Parent Exceptions -->
-              ${lei_data.relationships.parent_exceptions && lei_data.relationships.parent_exceptions.length > 0 ? `
-                <div>
-                  <h4 class="text-sm font-medium text-gray-700 mb-2">Parent Exceptions</h4>
-                  <div class="space-y-2">
-                    ${lei_data.relationships.parent_exceptions.map((exception: any) => `
-                      <div class="bg-orange-50 border border-orange-200 rounded p-3">
-                        <div class="text-sm font-medium text-orange-800">${exception.exception_type}</div>
-                        <div class="text-sm text-orange-700">${exception.exception_reason}</div>
-                        <div class="text-xs text-orange-600 mt-1">Category: ${exception.exception_category}</div>
-                      </div>
-                    `).join('')}
+              <!-- Summary Stats -->
+              <div class="bg-gray-100 rounded-lg p-4">
+                <h4 class="text-sm font-medium text-gray-700 mb-3">Structure Summary</h4>
+                <div class="grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <div class="text-lg font-semibold text-gray-900">${lei_data.relationships.direct_parent ? 1 : 0}</div>
+                    <div class="text-xs text-gray-600">Direct Parent</div>
+                  </div>
+                  <div>
+                    <div class="text-lg font-semibold text-gray-900">${lei_data.relationships.direct_children ? lei_data.relationships.direct_children.length : 0}</div>
+                    <div class="text-xs text-gray-600">Direct Children</div>
+                  </div>
+                  <div>
+                    <div class="text-lg font-semibold text-gray-900">${lei_data.relationships.parent_exceptions ? lei_data.relationships.parent_exceptions.length : 0}</div>
+                    <div class="text-xs text-gray-600">Exceptions</div>
                   </div>
                 </div>
-              ` : ''}
+              </div>
             </div>
           </div>
         ` : '<div class="text-sm text-gray-500">Relationship data not available</div>'}
