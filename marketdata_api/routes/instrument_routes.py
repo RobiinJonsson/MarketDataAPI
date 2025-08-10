@@ -77,104 +77,6 @@ def list_instruments():
         logger.error(traceback.format_exc())
         return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
-@instrument_bp.route(f"{Endpoints.INSTRUMENTS}/search", methods=["GET"])
-def search_instrument():
-    """Search for instrument by ISIN and return comprehensive data"""
-    try:
-        isin = request.args.get('isin')
-        if not isin:
-            return jsonify({"error": "ISIN parameter is required"}), HTTPStatus.BAD_REQUEST
-        
-        # Use factory pattern for service access
-        from ..interfaces.factory.services_factory import ServicesFactory
-        instrument_service = ServicesFactory.get_instrument_service()
-        
-        # Try to get existing instrument
-        session, instrument = instrument_service.get_instrument(isin)
-        
-        if not instrument:
-            # If not found, try to create from FIRDS
-            try:
-                instrument = instrument_service.create_instrument(isin, "equity")
-                if instrument:
-                    session, instrument = instrument_service.get_instrument(instrument.id)
-            except Exception as e:
-                logger.warning(f"Failed to create instrument from FIRDS: {str(e)}")
-                return jsonify({"error": f"Instrument not found and could not be created: {str(e)}"}), HTTPStatus.NOT_FOUND
-        
-        if not instrument:
-            return jsonify({"error": "Instrument not found"}), HTTPStatus.NOT_FOUND
-        
-        # Get transparency data
-        transparency_data = []
-        try:
-            transparency_service = ServicesFactory.get_transparency_service()
-            transparency_calculations = transparency_service.get_by_isin(isin)
-            transparency_data = [
-                {
-                    "id": calc.id,
-                    "isin": calc.isin,
-                    "tech_record_id": calc.tech_record_id,
-                    "from_date": calc.from_date,
-                    "to_date": calc.to_date,
-                    "liquidity": calc.liquidity,
-                    "total_transactions_executed": calc.total_transactions_executed,
-                    "total_volume_executed": calc.total_volume_executed,
-                    "transparency_fields": calc.transparency_fields,
-                    "created_at": calc.created_at.isoformat() if calc.created_at else None,
-                    "updated_at": calc.updated_at.isoformat() if calc.updated_at else None
-                }
-                for calc in transparency_calculations
-            ]
-        except Exception as e:
-            logger.warning(f"Failed to get transparency data: {str(e)}")
-        
-        # Get FIGI data
-        figi_data = []
-        try:
-            # Get FIGI data if available
-            if hasattr(instrument, 'figi_records') and instrument.figi_records:
-                figi_data = [
-                    {
-                        "id": figi.id,
-                        "figi": figi.figi,
-                        "name": figi.name,
-                        "ticker": figi.ticker,
-                        "exch_code": figi.exch_code,
-                        "composite_figi": figi.composite_figi,
-                        "share_class_figi": figi.share_class_figi,
-                        "security_type": figi.security_type,
-                        "market_sector": figi.market_sector,
-                        "security_description": figi.security_description,
-                        "created_at": figi.created_at.isoformat() if figi.created_at else None,
-                        "updated_at": figi.updated_at.isoformat() if figi.updated_at else None
-                    }
-                    for figi in instrument.figi_records
-                ]
-        except Exception as e:
-            logger.warning(f"Failed to get FIGI data: {str(e)}")
-        
-        # Return comprehensive instrument data
-        return jsonify({
-            "instrument": {
-                "id": instrument.id,
-                "isin": instrument.isin,
-                "symbol": instrument.symbol,
-                "name": instrument.name,
-                "cfi": instrument.cfi,
-                "instrument_type": instrument.instrument_type,
-                "created_at": instrument.created_at.isoformat() if instrument.created_at else None,
-                "updated_at": instrument.updated_at.isoformat() if instrument.updated_at else None
-            },
-            "transparency_data": transparency_data,
-            "figi_data": figi_data
-        }), HTTPStatus.OK
-        
-    except Exception as e:
-        logger.error(f"Error in search_instrument: {str(e)}")
-        logger.error(traceback.format_exc())
-        return jsonify({"error": str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
-
 @instrument_bp.route(f"{Endpoints.INSTRUMENTS}/<string:identifier>", methods=["GET"])
 def get_instrument(identifier):
     """Get instrument details by ID or ISIN, create from FIRDS if not found"""
@@ -482,12 +384,21 @@ def build_instrument_response(instrument):
     
     # Add FIGI mapping if available
     if instrument.figi_mapping:
+        response["figi"] = instrument.figi_mapping.figi
+        response["composite_figi"] = instrument.figi_mapping.composite_figi
+        response["share_class_figi"] = instrument.figi_mapping.share_class_figi
+        response["security_type"] = instrument.figi_mapping.security_type
+        response["market_sector"] = instrument.figi_mapping.market_sector
+        response["ticker"] = instrument.figi_mapping.ticker
+        
+        # Keep the nested object for compatibility
         response["figi_mapping"] = {
             "figi": instrument.figi_mapping.figi,
             "composite_figi": instrument.figi_mapping.composite_figi,
             "share_class_figi": instrument.figi_mapping.share_class_figi,
             "security_type": instrument.figi_mapping.security_type,
-            "market_sector": instrument.figi_mapping.market_sector
+            "market_sector": instrument.figi_mapping.market_sector,
+            "ticker": instrument.figi_mapping.ticker
         }
     
     return response

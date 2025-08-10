@@ -150,8 +150,11 @@ export class ComprehensiveSearchComponent {
             this.fetchParentChildData(actualInstrumentData.lei_id)
           ]);
           
-          leiData = leiResponse.status === 'fulfilled' ? leiResponse.value : null;
-          parentChildData = relationshipResponse.status === 'fulfilled' ? relationshipResponse.value : null;
+          leiData = leiResponse.status === 'fulfilled' ? leiResponse.value?.data : null;
+          parentChildData = relationshipResponse.status === 'fulfilled' ? relationshipResponse.value?.data : null;
+          
+          console.log('LEI Data:', leiData);
+          console.log('Parent-Child Data:', parentChildData);
         } catch (error) {
           console.warn('Failed to fetch LEI data:', error);
         }
@@ -285,7 +288,6 @@ export class ComprehensiveSearchComponent {
             ${this.renderTabButton('Legal Entity', 'lei')}
             ${this.renderTabButton('Transparency', 'transparency', Array.isArray(data.transparency) ? data.transparency.length : 0)}
             ${this.renderTabButton('CFI Classification', 'cfi')}
-            ${this.renderTabButton('FIGI Mapping', 'figi')}
             ${this.renderTabButton('Trading Venues', 'venues', Array.isArray(data.venues) ? data.venues.length : 0)}
           </nav>
         </div>
@@ -303,9 +305,6 @@ export class ComprehensiveSearchComponent {
           </div>
           <div id="tab-cfi" class="tab-content ${this.activeTab === 'cfi' ? '' : 'hidden'}">
             ${this.renderCfiTab(data)}
-          </div>
-          <div id="tab-figi" class="tab-content ${this.activeTab === 'figi' ? '' : 'hidden'}">
-            ${this.renderFigiTab(data)}
           </div>
           <div id="tab-venues" class="tab-content ${this.activeTab === 'venues' ? '' : 'hidden'}">
             ${this.renderVenuesTab(data)}
@@ -380,32 +379,62 @@ export class ComprehensiveSearchComponent {
               <dd class="text-sm text-gray-900 font-mono">${instrument.isin}</dd>
             </div>
             <div class="flex justify-between">
-              <dt class="text-sm font-medium text-gray-500">Symbol</dt>
+              <dt class="text-sm font-medium text-gray-500">Type</dt>
+              <dd class="text-sm text-gray-900 capitalize">${instrument.instrument_type}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-sm font-medium text-gray-500">Short Name</dt>
               <dd class="text-sm text-gray-900">${instrument.short_name || 'N/A'}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-sm font-medium text-gray-500">CFI Code</dt>
+              <dd class="text-sm text-gray-900 font-mono">${instrument.cfi_code || 'N/A'}</dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm font-medium text-gray-500">Currency</dt>
               <dd class="text-sm text-gray-900">${instrument.currency || 'N/A'}</dd>
             </div>
-            <div class="flex justify-between">
-              <dt class="text-sm font-medium text-gray-500">Type</dt>
-              <dd class="text-sm text-gray-900 capitalize">${instrument.instrument_type}</dd>
-            </div>
           </dl>
         </div>
 
         <div class="space-y-4">
-          <h3 class="font-semibold text-gray-900">Metadata</h3>
+          <h3 class="font-semibold text-gray-900">FIGI Information</h3>
           <dl class="space-y-3">
             <div class="flex justify-between">
+              <dt class="text-sm font-medium text-gray-500">FIGI</dt>
+              <dd class="text-sm text-gray-900 font-mono">${instrument.figi || 'N/A'}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-sm font-medium text-gray-500">Composite FIGI</dt>
+              <dd class="text-sm text-gray-900 font-mono">${instrument.composite_figi || 'N/A'}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-sm font-medium text-gray-500">Market Sector</dt>
+              <dd class="text-sm text-gray-900">${instrument.market_sector || 'N/A'}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-sm font-medium text-gray-500">Security Type</dt>
+              <dd class="text-sm text-gray-900">${instrument.security_type || 'N/A'}</dd>
+            </div>
+            <div class="flex justify-between">
+              <dt class="text-sm font-medium text-gray-500">Ticker</dt>
+              <dd class="text-sm text-gray-900">${instrument.ticker || 'N/A'}</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="space-y-4 md:col-span-2">
+          <h3 class="font-semibold text-gray-900">Metadata</h3>
+          <dl class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div class="flex justify-between md:block">
               <dt class="text-sm font-medium text-gray-500">Created</dt>
               <dd class="text-sm text-gray-900">${formatDate(instrument.created_at)}</dd>
             </div>
-            <div class="flex justify-between">
+            <div class="flex justify-between md:block">
               <dt class="text-sm font-medium text-gray-500">Updated</dt>
               <dd class="text-sm text-gray-900">${formatDate(instrument.updated_at)}</dd>
             </div>
-            <div class="flex justify-between">
+            <div class="flex justify-between md:block">
               <dt class="text-sm font-medium text-gray-500">Trading Venues</dt>
               <dd class="text-sm text-gray-900">${instrument.trading_venues_count || 0}</dd>
             </div>
@@ -416,7 +445,7 @@ export class ComprehensiveSearchComponent {
   }
 
   private renderLeiTab(data: ComprehensiveInstrumentData): string {
-    const { instrument, lei_data, parent_child_relationships } = data;
+    const { instrument, lei_data } = data;
     
     if (!instrument.lei_id) {
       return `
@@ -457,36 +486,170 @@ export class ComprehensiveSearchComponent {
               </div>
               <div>
                 <dt class="text-sm font-medium text-gray-500">Status</dt>
-                <dd class="text-sm text-gray-900">${lei_data.status || 'N/A'}</dd>
+                <dd class="text-sm text-gray-900">
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${lei_data.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                    ${lei_data.status || 'N/A'}
+                  </span>
+                </dd>
               </div>
+              <div>
+                <dt class="text-sm font-medium text-gray-500">Registered As</dt>
+                <dd class="text-sm text-gray-900">${lei_data.registered_as || 'N/A'}</dd>
+              </div>
+              <div>
+                <dt class="text-sm font-medium text-gray-500">Managing LOU</dt>
+                <dd class="text-sm text-gray-900">${lei_data.managing_lou || 'N/A'}</dd>
+              </div>
+              ${lei_data.bic ? `
+                <div>
+                  <dt class="text-sm font-medium text-gray-500">BIC</dt>
+                  <dd class="text-sm text-gray-900 font-mono">${lei_data.bic}</dd>
+                </div>
+              ` : ''}
+              ${lei_data.next_renewal_date ? `
+                <div>
+                  <dt class="text-sm font-medium text-gray-500">Next Renewal</dt>
+                  <dd class="text-sm text-gray-900">${formatDate(lei_data.next_renewal_date)}</dd>
+                </div>
+              ` : ''}
             ` : '<div class="col-span-2 text-sm text-gray-500">LEI details not available</div>'}
           </dl>
         </div>
 
-        <!-- Parent-Child Relationships -->
-        ${parent_child_relationships ? `
+        <!-- Addresses -->
+        ${lei_data && lei_data.addresses && lei_data.addresses.length > 0 ? `
           <div class="bg-blue-50 rounded-lg p-4">
-            <h3 class="font-semibold text-gray-900 mb-4">Corporate Structure</h3>
+            <h3 class="font-semibold text-gray-900 mb-4">Addresses</h3>
             <div class="space-y-3">
-              ${parent_child_relationships.parents ? `
+              ${lei_data.addresses.map((address: any) => `
+                <div class="bg-white rounded p-3">
+                  <div class="flex justify-between items-start mb-2">
+                    <h4 class="text-sm font-medium text-gray-700">${address.type || 'Address'}</h4>
+                    <span class="text-xs text-gray-500">${address.country || ''}</span>
+                  </div>
+                  <div class="text-sm text-gray-600">
+                    ${address.address_lines ? `<div>${address.address_lines}</div>` : ''}
+                    ${address.city ? `<div>${address.city}${address.region ? `, ${address.region}` : ''}</div>` : ''}
+                    ${address.postal_code ? `<div>${address.postal_code}</div>` : ''}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Registration Details -->
+        ${lei_data && lei_data.registration ? `
+          <div class="bg-green-50 rounded-lg p-4">
+            <h3 class="font-semibold text-gray-900 mb-4">Registration Details</h3>
+            <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <dt class="text-sm font-medium text-gray-500">Registration Status</dt>
+                <dd class="text-sm text-gray-900">${lei_data.registration.status || 'N/A'}</dd>
+              </div>
+              <div>
+                <dt class="text-sm font-medium text-gray-500">Last Update</dt>
+                <dd class="text-sm text-gray-900">${lei_data.registration.last_update ? formatDate(lei_data.registration.last_update) : 'N/A'}</dd>
+              </div>
+              <div>
+                <dt class="text-sm font-medium text-gray-500">Initial Date</dt>
+                <dd class="text-sm text-gray-900">${lei_data.registration.initial_date ? formatDate(lei_data.registration.initial_date) : 'N/A'}</dd>
+              </div>
+              <div>
+                <dt class="text-sm font-medium text-gray-500">Next Renewal</dt>
+                <dd class="text-sm text-gray-900">${lei_data.registration.next_renewal ? formatDate(lei_data.registration.next_renewal) : 'N/A'}</dd>
+              </div>
+              ${lei_data.registration.validation_sources ? `
+                <div class="md:col-span-2">
+                  <dt class="text-sm font-medium text-gray-500">Validation Sources</dt>
+                  <dd class="text-sm text-gray-900">${lei_data.registration.validation_sources}</dd>
+                </div>
+              ` : ''}
+            </dl>
+          </div>
+        ` : ''}
+
+        <!-- Parent-Child Relationships -->
+        ${lei_data && lei_data.relationships ? `
+          <div class="bg-purple-50 rounded-lg p-4">
+            <h3 class="font-semibold text-gray-900 mb-4">Corporate Structure</h3>
+            <div class="space-y-4">
+              
+              <!-- Direct Parent -->
+              ${lei_data.relationships.direct_parent ? `
                 <div>
-                  <h4 class="text-sm font-medium text-gray-700">Parent Entities</h4>
-                  <div class="mt-2 space-y-2">
-                    ${parent_child_relationships.parents.map((parent: any) => `
-                      <div class="text-sm text-gray-600">
-                        <span class="font-mono">${parent.lei}</span> - ${parent.name || 'Unknown'}
+                  <h4 class="text-sm font-medium text-gray-700 mb-2">Direct Parent</h4>
+                  <div class="bg-white rounded p-3">
+                    <div class="flex justify-between items-start">
+                      <div>
+                        <div class="font-medium text-gray-900">${lei_data.relationships.direct_parent.name}</div>
+                        <div class="text-sm text-gray-600 font-mono">${lei_data.relationships.direct_parent.lei}</div>
+                        <div class="text-sm text-gray-500">${lei_data.relationships.direct_parent.jurisdiction}</div>
+                      </div>
+                      <span class="text-xs text-gray-500">${lei_data.relationships.direct_parent.relationship_status}</span>
+                    </div>
+                    ${lei_data.relationships.direct_parent.percentage_of_ownership ? `
+                      <div class="mt-2 text-sm text-gray-600">
+                        Ownership: ${lei_data.relationships.direct_parent.percentage_of_ownership}%
+                      </div>
+                    ` : ''}
+                  </div>
+                </div>
+              ` : ''}
+
+              <!-- Ultimate Parent -->
+              ${lei_data.relationships.ultimate_parent ? `
+                <div>
+                  <h4 class="text-sm font-medium text-gray-700 mb-2">Ultimate Parent</h4>
+                  <div class="bg-white rounded p-3">
+                    <div class="flex justify-between items-start">
+                      <div>
+                        <div class="font-medium text-gray-900">${lei_data.relationships.ultimate_parent.name}</div>
+                        <div class="text-sm text-gray-600 font-mono">${lei_data.relationships.ultimate_parent.lei}</div>
+                        <div class="text-sm text-gray-500">${lei_data.relationships.ultimate_parent.jurisdiction}</div>
+                      </div>
+                      <span class="text-xs text-gray-500">${lei_data.relationships.ultimate_parent.relationship_status}</span>
+                    </div>
+                  </div>
+                </div>
+              ` : ''}
+
+              <!-- Direct Children -->
+              ${lei_data.relationships.direct_children && lei_data.relationships.direct_children.length > 0 ? `
+                <div>
+                  <h4 class="text-sm font-medium text-gray-700 mb-2">Direct Children (${lei_data.relationships.direct_children.length})</h4>
+                  <div class="space-y-2">
+                    ${lei_data.relationships.direct_children.map((child: any) => `
+                      <div class="bg-white rounded p-3">
+                        <div class="flex justify-between items-start">
+                          <div>
+                            <div class="font-medium text-gray-900">${child.name}</div>
+                            <div class="text-sm text-gray-600 font-mono">${child.lei}</div>
+                            <div class="text-sm text-gray-500">${child.jurisdiction}</div>
+                          </div>
+                          <span class="text-xs text-gray-500">${child.relationship_status}</span>
+                        </div>
+                        ${child.percentage_of_ownership ? `
+                          <div class="mt-2 text-sm text-gray-600">
+                            Ownership: ${child.percentage_of_ownership}%
+                          </div>
+                        ` : ''}
                       </div>
                     `).join('')}
                   </div>
                 </div>
               ` : ''}
-              ${parent_child_relationships.children ? `
+
+              <!-- Parent Exceptions -->
+              ${lei_data.relationships.parent_exceptions && lei_data.relationships.parent_exceptions.length > 0 ? `
                 <div>
-                  <h4 class="text-sm font-medium text-gray-700">Child Entities</h4>
-                  <div class="mt-2 space-y-2">
-                    ${parent_child_relationships.children.map((child: any) => `
-                      <div class="text-sm text-gray-600">
-                        <span class="font-mono">${child.lei}</span> - ${child.name || 'Unknown'}
+                  <h4 class="text-sm font-medium text-gray-700 mb-2">Parent Exceptions</h4>
+                  <div class="space-y-2">
+                    ${lei_data.relationships.parent_exceptions.map((exception: any) => `
+                      <div class="bg-orange-50 border border-orange-200 rounded p-3">
+                        <div class="text-sm font-medium text-orange-800">${exception.exception_type}</div>
+                        <div class="text-sm text-orange-700">${exception.exception_reason}</div>
+                        <div class="text-xs text-orange-600 mt-1">Category: ${exception.exception_category}</div>
                       </div>
                     `).join('')}
                   </div>
@@ -494,7 +657,7 @@ export class ComprehensiveSearchComponent {
               ` : ''}
             </div>
           </div>
-        ` : '<div class="text-sm text-gray-500">Parent-child relationship data not available</div>'}
+        ` : '<div class="text-sm text-gray-500">Relationship data not available</div>'}
       </div>
     `;
   }
@@ -605,55 +768,6 @@ export class ComprehensiveSearchComponent {
           ` : `
             <div class="text-sm text-gray-500">CFI code breakdown not available</div>
           `}
-        </div>
-      </div>
-    `;
-  }
-
-  private renderFigiTab(data: ComprehensiveInstrumentData): string {
-    const { instrument } = data;
-    
-    if (!instrument.figi_mapping) {
-      return `
-        <div class="text-center py-8">
-          <div class="text-gray-400 mb-4">
-            <svg class="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-          </div>
-          <h3 class="text-lg font-medium text-gray-900 mb-2">No FIGI Mapping</h3>
-          <p class="text-gray-600">This instrument does not have Financial Instrument Global Identifier (FIGI) mapping</p>
-        </div>
-      `;
-    }
-
-    const figi = instrument.figi_mapping;
-    return `
-      <div class="space-y-6">
-        <div class="bg-gray-50 rounded-lg p-4">
-          <h3 class="font-semibold text-gray-900 mb-4">FIGI Mapping</h3>
-          <dl class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <dt class="text-sm font-medium text-gray-500">FIGI</dt>
-              <dd class="text-sm text-gray-900 font-mono">${figi.figi}</dd>
-            </div>
-            <div>
-              <dt class="text-sm font-medium text-gray-500">Composite FIGI</dt>
-              <dd class="text-sm text-gray-900 font-mono">${figi.composite_figi || 'N/A'}</dd>
-            </div>
-            <div>
-              <dt class="text-sm font-medium text-gray-500">Share Class FIGI</dt>
-              <dd class="text-sm text-gray-900 font-mono">${figi.share_class_figi || 'N/A'}</dd>
-            </div>
-            <div>
-              <dt class="text-sm font-medium text-gray-500">Security Type</dt>
-              <dd class="text-sm text-gray-900">${figi.security_type || 'N/A'}</dd>
-            </div>
-            <div>
-              <dt class="text-sm font-medium text-gray-500">Market Sector</dt>
-              <dd class="text-sm text-gray-900">${figi.market_sector || 'N/A'}</dd>
-            </div>
-          </dl>
         </div>
       </div>
     `;

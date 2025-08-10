@@ -68,7 +68,7 @@ def list_entities():
 
 @entity_bp.route(f"{Endpoints.ENTITIES}/<string:lei>", methods=["GET"])
 def get_entity(lei):
-    """Get legal entity by LEI code"""
+    """Get legal entity by LEI code with comprehensive details"""
     try:
         service = ServicesFactory.get_legal_entity_service()
         session, entity = service.get_entity(lei)
@@ -76,40 +76,15 @@ def get_entity(lei):
         if not entity:
             return jsonify({ResponseFields.ERROR: ErrorMessages.ENTITY_NOT_FOUND}), HTTPStatus.NOT_FOUND
         
-        # Build comprehensive response
+        # Use the comprehensive API response method
         result = {
-            "lei": entity.lei,
-            "name": entity.name,
-            "jurisdiction": entity.jurisdiction,
-            "legal_form": entity.legal_form,
-            "registered_as": entity.registered_as,
-            "status": entity.status,
-            "creation_date": entity.creation_date.isoformat() if entity.creation_date else None,
-            "next_renewal_date": entity.next_renewal_date.isoformat() if entity.next_renewal_date else None
+            ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+            ResponseFields.DATA: entity.to_api_response(
+                include_relationships=True,
+                include_addresses=True,
+                include_registration=True
+            )
         }
-        
-        # Add addresses
-        if entity.addresses:
-            result["addresses"] = []
-            for address in entity.addresses:
-                result["addresses"].append({
-                    "type": address.type,
-                    "address_lines": address.address_lines,
-                    "country": address.country,
-                    "city": address.city,
-                    "region": address.region,
-                    "postal_code": address.postal_code
-                })
-        
-        # Add registration details
-        if entity.registration:
-            result["registration"] = {
-                "status": entity.registration.status,
-                "last_update": entity.registration.last_update.isoformat() if entity.registration.last_update else None,
-                "next_renewal": entity.registration.next_renewal.isoformat() if entity.registration.next_renewal else None,
-                "managing_lou": entity.registration.managing_lou,
-                "validation_sources": entity.registration.validation_sources
-            }
         
         session.close()
         return jsonify(result)        

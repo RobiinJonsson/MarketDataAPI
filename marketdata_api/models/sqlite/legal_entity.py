@@ -70,6 +70,131 @@ class LegalEntity(Base):
     # Parent exception reporting
     parent_exceptions = relationship(lambda: EntityRelationshipException, back_populates="entity", cascade="all, delete-orphan")
 
+    def to_api_response(self, include_relationships=True, include_addresses=True, include_registration=True):
+        """Build comprehensive API response for Legal Entity"""
+        response = {
+            "lei": self.lei,
+            "name": self.name,
+            "jurisdiction": self.jurisdiction,
+            "legal_form": self.legal_form,
+            "registered_as": self.registered_as,
+            "status": self.status,
+            "bic": self.bic,
+            "next_renewal_date": self.next_renewal_date.isoformat() if self.next_renewal_date else None,
+            "registration_status": self.registration_status,
+            "managing_lou": self.managing_lou,
+            "creation_date": self.creation_date.isoformat() if self.creation_date else None
+        }
+        
+        # Include addresses if requested and available
+        if include_addresses and self.addresses:
+            response["addresses"] = []
+            for address in self.addresses:
+                response["addresses"].append({
+                    "id": address.id,
+                    "type": address.type,
+                    "address_lines": address.address_lines,
+                    "country": address.country,
+                    "city": address.city,
+                    "region": address.region,
+                    "postal_code": address.postal_code
+                })
+        
+        # Include registration details if requested and available
+        if include_registration and self.registration:
+            registration = self.registration
+            response["registration"] = {
+                "initial_date": registration.initial_date.isoformat() if registration.initial_date else None,
+                "last_update": registration.last_update.isoformat() if registration.last_update else None,
+                "status": registration.status,
+                "next_renewal": registration.next_renewal.isoformat() if registration.next_renewal else None,
+                "managing_lou": registration.managing_lou,
+                "validation_sources": registration.validation_sources
+            }
+        
+        # Include parent-child relationships if requested
+        if include_relationships:
+            relationships = {
+                "direct_parent": None,
+                "ultimate_parent": None,
+                "direct_children": [],
+                "ultimate_children": [],
+                "parent_exceptions": []
+            }
+            
+            # Direct parent
+            if self.direct_parent_relation and self.direct_parent_relation.parent:
+                parent = self.direct_parent_relation.parent
+                relationships["direct_parent"] = {
+                    "lei": parent.lei,
+                    "name": parent.name,
+                    "jurisdiction": parent.jurisdiction,
+                    "status": parent.status,
+                    "relationship_status": self.direct_parent_relation.relationship_status,
+                    "percentage_of_ownership": self.direct_parent_relation.percentage_of_ownership,
+                    "relationship_period_start": self.direct_parent_relation.relationship_period_start.isoformat() if self.direct_parent_relation.relationship_period_start else None,
+                    "relationship_period_end": self.direct_parent_relation.relationship_period_end.isoformat() if self.direct_parent_relation.relationship_period_end else None
+                }
+            
+            # Ultimate parent
+            if self.ultimate_parent_relation and self.ultimate_parent_relation.parent:
+                parent = self.ultimate_parent_relation.parent
+                relationships["ultimate_parent"] = {
+                    "lei": parent.lei,
+                    "name": parent.name,
+                    "jurisdiction": parent.jurisdiction,
+                    "status": parent.status,
+                    "relationship_status": self.ultimate_parent_relation.relationship_status,
+                    "percentage_of_ownership": self.ultimate_parent_relation.percentage_of_ownership,
+                    "relationship_period_start": self.ultimate_parent_relation.relationship_period_start.isoformat() if self.ultimate_parent_relation.relationship_period_start else None,
+                    "relationship_period_end": self.ultimate_parent_relation.relationship_period_end.isoformat() if self.ultimate_parent_relation.relationship_period_end else None
+                }
+            
+            # Direct children
+            for relation in self.direct_children_relations:
+                if relation.child:
+                    child = relation.child
+                    relationships["direct_children"].append({
+                        "lei": child.lei,
+                        "name": child.name,
+                        "jurisdiction": child.jurisdiction,
+                        "status": child.status,
+                        "relationship_status": relation.relationship_status,
+                        "percentage_of_ownership": relation.percentage_of_ownership,
+                        "relationship_period_start": relation.relationship_period_start.isoformat() if relation.relationship_period_start else None,
+                        "relationship_period_end": relation.relationship_period_end.isoformat() if relation.relationship_period_end else None
+                    })
+            
+            # Ultimate children
+            for relation in self.ultimate_children_relations:
+                if relation.child:
+                    child = relation.child
+                    relationships["ultimate_children"].append({
+                        "lei": child.lei,
+                        "name": child.name,
+                        "jurisdiction": child.jurisdiction,
+                        "status": child.status,
+                        "relationship_status": relation.relationship_status,
+                        "percentage_of_ownership": relation.percentage_of_ownership,
+                        "relationship_period_start": relation.relationship_period_start.isoformat() if relation.relationship_period_start else None,
+                        "relationship_period_end": relation.relationship_period_end.isoformat() if relation.relationship_period_end else None
+                    })
+            
+            # Parent exceptions
+            for exception in self.parent_exceptions:
+                relationships["parent_exceptions"].append({
+                    "exception_type": exception.exception_type,
+                    "exception_reason": exception.exception_reason,
+                    "exception_category": exception.exception_category,
+                    "provided_parent_lei": exception.provided_parent_lei,
+                    "provided_parent_name": exception.provided_parent_name,
+                    "last_updated": exception.last_updated.isoformat() if exception.last_updated else None
+                })
+            
+            response["relationships"] = relationships
+        
+        return response
+
 class EntityAddress(Base):
     __tablename__ = "entity_addresses"
     __table_args__ = {'extend_existing': True}  # Allow table redefinition
