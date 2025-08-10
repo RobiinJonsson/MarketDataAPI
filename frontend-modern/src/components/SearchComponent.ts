@@ -1,6 +1,6 @@
-import { instrumentApi } from '../utils/api.js';
-import { isValidISIN, showLoading, showError, formatDate, formatNumber } from '../utils/helpers.js';
-import type { InstrumentSearchResult } from '../types/api.js';
+import { instrumentApi } from '../utils/api';
+import { isValidISIN, showLoading, showError, formatDate, formatNumber } from '../utils/helpers';
+import type { InstrumentSearchResult } from '../types/api';
 
 export class SearchComponent {
   private container: HTMLElement;
@@ -82,19 +82,62 @@ export class SearchComponent {
 
     showLoading(this.resultsContainer, 'Searching for instrument...');
     
-    const response = await instrumentApi.search(isin);
-    
-    if (response.status === 'error') {
-      showError(this.resultsContainer, response.error || 'Search failed');
-      return;
-    }
+    try {
+      // Add timeout to the request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await instrumentApi.search(isin);
+      clearTimeout(timeoutId);
+      
+      if (response.status === 'error') {
+        showError(this.resultsContainer, response.error || 'Search failed');
+        return;
+      }
 
-    if (!response.data) {
-      this.renderNoResults(isin);
-      return;
-    }
+      if (!response.data) {
+        this.renderNoResults(isin);
+        return;
+      }
 
-    this.renderResults(response.data);
+      // Debug: Log the actual backend response structure
+      console.log('Backend response:', response);
+      console.log('Instrument data from response.data:', response.data);
+
+      // The backend returns nested data: response.data.data contains the actual instrument
+      const instrumentData = (response.data as any).data;
+      console.log('Accessing fields from response.data.data:', {
+        id: instrumentData.id,
+        isin: instrumentData.isin,
+        short_name: instrumentData.short_name,
+        full_name: instrumentData.full_name,
+        cfi_code: instrumentData.cfi_code
+      });
+
+      const searchResult: InstrumentSearchResult = {
+        instrument: {
+          id: instrumentData.id || 'no-id',
+          isin: instrumentData.isin || 'no-isin',
+          symbol: instrumentData.short_name || 'no-symbol',
+          name: instrumentData.full_name || 'no-name',
+          cfi: instrumentData.cfi_code || 'no-cfi',
+          instrument_type: instrumentData.instrument_type || 'no-type',
+          created_at: instrumentData.created_at || new Date().toISOString(),
+          updated_at: instrumentData.updated_at || new Date().toISOString()
+        },
+        transparency_data: [], // No transparency data in this response
+        figi_data: instrumentData.figi_mapping ? [instrumentData.figi_mapping] : []
+      };
+
+      console.log('Mapped search result:', searchResult);
+      this.renderResults(searchResult);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        showError(this.resultsContainer, 'Request timed out. Please try again.');
+      } else {
+        showError(this.resultsContainer, 'Network error occurred. Please check your connection.');
+      }
+    }
   }
 
   private renderNoResults(isin: string): void {
@@ -113,6 +156,7 @@ export class SearchComponent {
   }
 
   private renderResults(data: InstrumentSearchResult): void {
+    console.log('renderResults called with:', data);
     const { instrument, transparency_data, figi_data } = data;
     
     this.resultsContainer.innerHTML = `

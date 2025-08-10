@@ -5,13 +5,20 @@ const API_BASE = '/api/v1';
 // Generic API fetch wrapper
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<ApiResponse<T>> {
   try {
+    // Add timeout support
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    
     const response = await fetch(`${API_BASE}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
       },
+      signal: controller.signal,
       ...options,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Network error' }));
@@ -22,6 +29,9 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
     return { status: 'success', data };
   } catch (error) {
     console.error('API request failed:', error);
+    if (error instanceof Error && error.name === 'AbortError') {
+      return { status: 'error', error: 'Request timed out. Please try again.' };
+    }
     return { 
       status: 'error', 
       error: error instanceof Error ? error.message : 'Unknown error' 

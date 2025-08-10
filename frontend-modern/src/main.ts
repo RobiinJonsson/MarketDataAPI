@@ -1,14 +1,14 @@
 import './styles/main.css';
-import { SearchComponent } from './components/SearchComponent.js';
+import { ComprehensiveSearchComponent } from './components/ComprehensiveSearchComponent.js';
 
 // Initialize the application when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   console.log('MarketData Frontend initialized');
   
-  // Initialize search component if search container exists
+  // Initialize comprehensive search component if search container exists
   const searchContainer = document.getElementById('search-container');
   if (searchContainer) {
-    new SearchComponent('search-container');
+    new ComprehensiveSearchComponent('search-container');
   }
   
   // Initialize tab functionality
