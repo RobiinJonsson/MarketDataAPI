@@ -1033,14 +1033,17 @@ export class ComprehensiveSearchComponent {
 
     return `
       <div class="space-y-4">
-        <h3 class="font-semibold text-gray-900">Trading Venues (${venues.length})</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <h3 class="font-semibold text-indigo-900">Trading Venues (${venues.length})</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           ${venues.map((venue: any) => `
-            <div class="bg-gray-50 rounded-lg p-4">
-              <div class="font-medium text-gray-900">${venue.name || venue.mic || 'Unknown Venue'}</div>
-              ${venue.mic ? `<div class="text-sm text-gray-600 font-mono">${venue.mic}</div>` : ''}
-              ${venue.country ? `<div class="text-sm text-gray-600">${venue.country}</div>` : ''}
-              ${venue.status ? `<div class="text-xs text-gray-500 mt-2">Status: ${venue.status}</div>` : ''}
+            <div class="bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 border border-indigo-200 shadow-md rounded-xl p-5 transition hover:scale-[1.02]">
+              <div class="font-bold text-indigo-900 text-lg mb-1">${venue.venue_full_name ? venue.venue_full_name : (venue.venue_short_name ? venue.venue_short_name : 'Unknown Venue')}</div>
+              ${venue.venue_id ? `<div class="text-xs text-indigo-700 font-mono mb-1">Venue ID: ${venue.venue_id}</div>` : ''}
+              ${venue.venue_short_name ? `<div class="text-xs text-purple-700 mb-1">Short Name: ${venue.venue_short_name}</div>` : ''}
+              ${venue.venue_currency ? `<div class="text-xs text-blue-700 mb-1">Currency: ${venue.venue_currency}</div>` : ''}
+              ${venue.first_trade_date ? `<div class="text-xs text-green-700 mb-1">First Trade: ${venue.first_trade_date}</div>` : ''}
+              <div class="text-xs ${venue.termination_date ? 'text-red-700' : 'text-green-700'} mb-1">${venue.termination_date ? `Terminated: ${venue.termination_date}` : 'Active'}</div>
+              ${venue.competent_authority ? `<div class="text-xs text-gray-500 mt-2">Authority: ${venue.competent_authority}</div>` : ''}
             </div>
           `).join('')}
         </div>
