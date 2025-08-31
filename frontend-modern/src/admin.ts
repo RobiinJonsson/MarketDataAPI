@@ -45,15 +45,20 @@ function initializeInstrumentForm(): void {
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     const formData = new FormData(form);
-    const data: CreateInstrumentRequest = {
-      isin: formData.get('isin') as string,
-      symbol: formData.get('symbol') as string || undefined,
-      name: formData.get('name') as string || undefined,
-      cfi: formData.get('cfi') as string || undefined,
-      instrument_type: formData.get('instrument_type') as string || undefined,
+    const isin = formData.get('isin') as string;
+    const type = formData.get('instrument_type') as string;
+    const fetchAndEnrich = formData.get('fetch_and_enrich');
+
+    // Build payload as in old frontend
+    const payload: any = {
+      isin,
+      type
     };
+    if (fetchAndEnrich) {
+      payload.fetch_and_enrich = true;
+    }
 
     const submitButton = form.querySelector('button[type="submit"]') as HTMLButtonElement;
     const originalText = submitButton.textContent;
@@ -61,12 +66,11 @@ function initializeInstrumentForm(): void {
     submitButton.disabled = true;
 
     try {
-      const response = await instrumentApi.create(data);
-      
+      const response = await instrumentApi.create(payload);
       if (response.status === 'success') {
-        showToast('Instrument created successfully!', 'success');
+        showToast('Instrument created and enriched successfully!', 'success');
         form.reset();
-        loadInstruments(); // Refresh the list
+        loadInstruments();
       } else {
         showToast(response.error || 'Failed to create instrument', 'error');
       }
@@ -77,6 +81,24 @@ function initializeInstrumentForm(): void {
       submitButton.disabled = false;
     }
   });
+
+  // Enrichment logic
+  async function enrichInstrument(isin: string) {
+    try {
+      const res = await fetch(`/api/v1/instruments/${encodeURIComponent(isin)}/enrich`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        return { status: 'error', error: err.error || `HTTP ${res.status}` };
+      }
+      const data = await res.json();
+      return { status: 'success', data };
+    } catch (error) {
+      return { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  }
 }
 
 function initializeTransparencyForm(): void {

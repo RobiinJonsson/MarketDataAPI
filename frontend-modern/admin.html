@@ -19,7 +19,7 @@
           <a href="/" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">
             Home
           </a>
-          <a href="/api/v1/docs" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">
+          <a href="/api/v1/swagger" class="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-md text-sm font-medium">
             API Docs
           </a>
         </div>
@@ -77,30 +77,23 @@
                     name="isin"
                     class="input-field"
                     placeholder="US0378331005"
-                    pattern="^[A-Z]{2}[A-Z0-9]{9}\\d$"
+                    pattern="^[A-Z]{2}[A-Z0-9]{9}\d$"
                     required
                   />
                 </div>
                 <div>
-                  <label for="symbol" class="block text-sm font-medium text-gray-700">Symbol</label>
-                  <input type="text" id="symbol" name="symbol" class="input-field" placeholder="AAPL" />
-                </div>
-                <div class="sm:col-span-2">
-                  <label for="name" class="block text-sm font-medium text-gray-700">Name</label>
-                  <input type="text" id="name" name="name" class="input-field" placeholder="Apple Inc." />
-                </div>
-                <div>
-                  <label for="cfi" class="block text-sm font-medium text-gray-700">CFI Code</label>
-                  <input type="text" id="cfi" name="cfi" class="input-field" placeholder="ESVUFR" />
-                </div>
-                <div>
-                  <label for="instrument_type" class="block text-sm font-medium text-gray-700">Type</label>
-                  <select id="instrument_type" name="instrument_type" class="input-field">
+                  <label for="instrument_type" class="block text-sm font-medium text-gray-700">Type *</label>
+                  <select id="instrument_type" name="instrument_type" class="input-field" required>
                     <option value="">Select type...</option>
-                    <option value="EQUITY">Equity</option>
-                    <option value="BOND">Bond</option>
-                    <option value="DERIVATIVE">Derivative</option>
+                    <option value="equity">Equity</option>
+                    <option value="debt">Debt</option>
+                    <option value="future">Future</option>
                   </select>
+                </div>
+                <div class="col-span-2">
+                  <label for="fetch_and_enrich" class="block text-sm font-medium text-gray-700">Fetch and Enrich</label>
+                  <input type="checkbox" id="fetch_and_enrich" name="fetch_and_enrich" class="mr-2" checked />
+                  <span class="text-sm text-gray-500">Automatically enrich instrument data after creation</span>
                 </div>
               </div>
               <div class="flex justify-end">

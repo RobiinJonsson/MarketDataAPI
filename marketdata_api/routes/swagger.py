@@ -321,9 +321,9 @@ class InstrumentList(Resource):
                 for instrument in instruments:
                     result.append({
                         "id": instrument.id,
-                        "type": instrument.type,
+                        "type": getattr(instrument, "instrument_type", None),
                         "isin": instrument.isin,
-                        "symbol": instrument.symbol,
+                        "symbol": instrument.short_name,
                         "full_name": instrument.full_name,
                         "currency": instrument.currency,
                         "cfi_code": instrument.cfi_code
