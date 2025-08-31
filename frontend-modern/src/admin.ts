@@ -1,7 +1,6 @@
 import './styles/main.css';
 import { instrumentApi, transparencyApi, fileApi } from './utils/api.js';
 import { showToast, showLoading, showError, formatDate } from './utils/helpers.js';
-import type { CreateInstrumentRequest } from './types/api.js';
 
 // Initialize the admin application when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
@@ -81,24 +80,6 @@ function initializeInstrumentForm(): void {
       submitButton.disabled = false;
     }
   });
-
-  // Enrichment logic
-  async function enrichInstrument(isin: string) {
-    try {
-      const res = await fetch(`/api/v1/instruments/${encodeURIComponent(isin)}/enrich`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        return { status: 'error', error: err.error || `HTTP ${res.status}` };
-      }
-      const data = await res.json();
-      return { status: 'success', data };
-    } catch (error) {
-      return { status: 'error', error: error instanceof Error ? error.message : 'Unknown error' };
-    }
-  }
 }
 
 function initializeTransparencyForm(): void {
@@ -229,7 +210,28 @@ async function loadInstruments(): Promise<void> {
     return;
   }
 
-  const instruments = response.data || [];
+  // Ensure instruments is always an array
+  type Instrument = {
+    id: string;
+    isin: string;
+    type: string;
+    full_name?: string;
+    symbol?: string;
+    currency?: string;
+    cfi_code?: string;
+    instrument_type?: string;
+    name?: string;
+    created_at?: string;
+  };
+  let instruments: Instrument[] = [];
+  if (Array.isArray(response.data)) {
+    instruments = response.data as Instrument[];
+  } else if (response.data && Array.isArray((response.data as any).data)) {
+  instruments = (response.data as any).data;
+  }
+  if (!Array.isArray(instruments)) {
+    instruments = [];
+  }
   
   if (instruments.length === 0) {
     container.innerHTML = `
@@ -242,32 +244,28 @@ async function loadInstruments(): Promise<void> {
 
   container.innerHTML = `
     <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
-          <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ISIN</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Symbol</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-          </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
-          ${instruments.map(instrument => `
-            <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">${instrument.isin}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${instrument.symbol || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${instrument.name || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${instrument.instrument_type || '-'}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${formatDate(instrument.created_at)}</td>
-              <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                <button onclick="deleteInstrument('${instrument.id}')" class="text-red-600 hover:text-red-900">Delete</button>
-              </td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>
+         <table class="min-w-full divide-y divide-gray-200">
+           <thead class="bg-gray-50">
+             <tr>
+               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ISIN</th>
+               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+             </tr>
+           </thead>
+           <tbody class="bg-white divide-y divide-gray-200">
+             ${instruments.map((instrument: Instrument) => `
+               <tr>
+                 <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">${instrument.isin}</td>
+                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${instrument.full_name || instrument.name || '-'}</td>
+                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${instrument.instrument_type || instrument.type || '-'}</td>
+                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                   <button onclick="deleteInstrument('${instrument.isin}')" class="text-red-600 hover:text-red-900">Delete</button>
+                 </td>
+               </tr>
+             `).join('')}
+           </tbody>
+         </table>
     </div>
   `;
 }
