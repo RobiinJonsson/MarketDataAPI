@@ -1,16 +1,18 @@
 """
 Unified Instrument Service Implementation
 
-This service implements the new document-based approach:
-1. Stores ALL venue records in database
-2. Uses JSON for flexible attribute storage
-3. Provides clean API responses without raw FIRDS data
-4. Much simpler than the polymorphic inheritance approach
+This service implements the document-based approach for ALL FIRDS instrument types:
+1. Supports all 10 FIRDS types: C,D,E,F,H,I,J,S,R,O
+2. Stores ALL venue records in database with promoted common fields
+3. Uses JSON for flexible type-specific attribute storage
+4. Provides clean API responses without raw FIRDS data
+5. Uses new FIRDS type mappings and constants
 """
 
 import uuid
 import json
 import logging
+import re
 from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime, UTC
@@ -20,6 +22,7 @@ from ...database.session import get_session, SessionLocal
 from ..openfigi import search_openfigi_with_fallback
 from ..gleif import fetch_lei_info
 from ...config import esmaConfig
+from ...constants import FirdsTypes, InstrumentTypes
 
 # Import the unified models
 from ...models.sqlite.instrument import Instrument, TradingVenue
@@ -46,23 +49,32 @@ class SqliteInstrumentService(InstrumentServiceInterface):
     
     def create_instrument(self, identifier: str, instrument_type: str = "equity") -> InstrumentInterface:
         """
-        Create instrument and store ALL venue records in database.
+        Create instrument with support for ALL FIRDS types and store venue records.
         
-        NEW BEHAVIOR:
-        1. Gets ALL FIRDS records for the ISIN
-        2. Creates single instrument with primary data
-        3. Creates separate venue records for EACH venue
-        4. Stores both original and processed data
+        UPDATED BEHAVIOR:
+        1. Auto-detects FIRDS type from files or uses provided type
+        2. Maps FIRDS type to business instrument type using new mappings
+        3. Creates single instrument with promoted common fields
+        4. Creates separate venue records for EACH venue
+        5. Stores both original and processed data with new structure
         """
         session = SessionLocal()
         
         try:
-            # Get ALL FIRDS data for this ISIN
-            all_venue_records = self._get_firds_data_from_storage(identifier, instrument_type)
+            # Get ALL FIRDS data for this ISIN (auto-detect type if needed)
+            all_venue_records, detected_firds_type = self._get_firds_data_from_storage_all_types(identifier, instrument_type)
             if not all_venue_records:
                 raise InstrumentNotFoundError(f"No FIRDS data found for {identifier}")
             
-            self.logger.info(f"Found {len(all_venue_records)} venue records for {identifier}")
+            self.logger.info(f"Found {len(all_venue_records)} venue records for {identifier} (FIRDS type: {detected_firds_type})")
+            
+            # Map FIRDS type to business instrument type
+            business_instrument_type = Instrument.map_firds_type_to_instrument_type(
+                detected_firds_type, 
+                all_venue_records[0].get('FinInstrmGnlAttrbts_ClssfctnTp')
+            )
+            
+            self.logger.info(f"Mapped FIRDS type {detected_firds_type} to business type: {business_instrument_type}")
             
             # Use first record for primary instrument data
             primary_record = all_venue_records[0]
@@ -74,19 +86,13 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                 session.delete(existing)
                 session.flush()
             
-            # Create instrument with core fields + JSON attributes
-            instrument_data = {
-                'id': str(uuid.uuid4()),
-                'isin': identifier,
-                'instrument_type': instrument_type,
-                'full_name': primary_record.get('FinInstrmGnlAttrbts_FullNm'),
-                'short_name': primary_record.get('FinInstrmGnlAttrbts_ShrtNm'),
-                'currency': primary_record.get('FinInstrmGnlAttrbts_NtnlCcy'),
-                'cfi_code': primary_record.get('FinInstrmGnlAttrbts_ClssfctnTp'),
-                'lei_id': primary_record.get('Issr'),
-                'firds_data': primary_record,  # Original FIRDS record
-                'processed_attributes': self._process_instrument_attributes(primary_record, instrument_type)
-            }
+            # Create instrument with promoted common fields + JSON attributes
+            instrument_data = self._build_instrument_data(
+                identifier, 
+                business_instrument_type, 
+                primary_record, 
+                detected_firds_type
+            )
             
             # Create new instrument
             instrument = Instrument(**instrument_data)
@@ -102,7 +108,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             
             session.commit()
             
-            self.logger.info(f"Created instrument {identifier} with {len(venue_records)} venue records")
+            self.logger.info(f"Created {business_instrument_type} instrument {identifier} with {len(venue_records)} venue records")
             
             # Try enrichment
             try:
@@ -121,6 +127,119 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             raise InstrumentServiceError(f"Failed to create instrument: {str(e)}") from e
         finally:
             session.close()
+    
+    def _build_instrument_data(self, identifier: str, business_instrument_type: str, 
+                             primary_record: Dict[str, Any], firds_type: str) -> Dict[str, Any]:
+        """Build instrument data dictionary with promoted common fields."""
+        
+        # Parse boolean commodity derivative indicator
+        commodity_deriv_ind = primary_record.get('FinInstrmGnlAttrbts_CmmdtyDerivInd')
+        if isinstance(commodity_deriv_ind, str):
+            commodity_deriv_ind = commodity_deriv_ind.lower() in ('true', '1', 'yes')
+        elif commodity_deriv_ind is None:
+            commodity_deriv_ind = False
+        
+        return {
+            'id': str(uuid.uuid4()),
+            'isin': identifier,
+            'instrument_type': business_instrument_type,
+            
+            # Promoted common fields (from FIRDS analysis)
+            'full_name': primary_record.get('FinInstrmGnlAttrbts_FullNm'),
+            'short_name': primary_record.get('FinInstrmGnlAttrbts_ShrtNm'),
+            'currency': primary_record.get('FinInstrmGnlAttrbts_NtnlCcy'),
+            'cfi_code': primary_record.get('FinInstrmGnlAttrbts_ClssfctnTp'),
+            'commodity_derivative_indicator': commodity_deriv_ind,
+            'lei_id': primary_record.get('Issr'),
+            'publication_from_date': self._parse_date(primary_record.get('TechAttrbts_PblctnPrd_FrDt')),
+            'competent_authority': primary_record.get('TechAttrbts_RlvntCmptntAuthrty'),
+            'relevant_trading_venue': primary_record.get('TechAttrbts_RlvntTradgVn'),
+            
+            # JSON storage for flexibility
+            'firds_data': primary_record,  # Original FIRDS record
+            'processed_attributes': self._process_instrument_attributes(primary_record, business_instrument_type, firds_type)
+        }
+    
+    def _get_firds_data_from_storage_all_types(self, identifier: str, 
+                                              preferred_type: str = None) -> Tuple[Optional[List[Dict[str, Any]]], Optional[str]]:
+        """
+        Fetch FIRDS data from all instrument types, auto-detecting the correct type.
+        
+        Returns:
+            Tuple of (records_list, detected_firds_type)
+        """
+        try:
+            from pathlib import Path
+            
+            # If preferred type is provided, try it first
+            if preferred_type:
+                legacy_mapping = {'equity': 'E', 'debt': 'D', 'future': 'F'}
+                if preferred_type in legacy_mapping:
+                    firds_type = legacy_mapping[preferred_type]
+                    records = self._search_firds_files_for_type(identifier, firds_type)
+                    if records:
+                        return records, firds_type
+            
+            # Search all FIRDS types (C,D,E,F,H,I,J,S,R,O)
+            for firds_type in FirdsTypes.MAPPING.keys():
+                self.logger.debug(f"Searching for {identifier} in FIRDS type {firds_type}")
+                records = self._search_firds_files_for_type(identifier, firds_type)
+                if records:
+                    self.logger.info(f"Found {identifier} in FIRDS type {firds_type}")
+                    return records, firds_type
+            
+            self.logger.warning(f"Identifier {identifier} not found in any FIRDS files")
+            return None, None
+
+        except Exception as e:
+            self.logger.error(f"Error fetching FIRDS data from storage: {str(e)}")
+            return None, None
+    
+    def _search_firds_files_for_type(self, identifier: str, firds_type: str) -> Optional[List[Dict[str, Any]]]:
+        """Search for identifier in FIRDS files of a specific type."""
+        try:
+            from pathlib import Path
+            import pandas as pd
+            
+            firds_path = Path(esmaConfig.firds_path)
+            if not firds_path.exists():
+                self.logger.error(f"FIRDS storage path does not exist: {firds_path}")
+                return None
+            
+            # Find files matching the pattern for this FIRDS type
+            file_pattern = f"*FULINS_{firds_type}*_firds_data.csv"
+            matching_files = list(firds_path.glob(file_pattern))
+            
+            if not matching_files:
+                self.logger.debug(f"No {firds_type} files found matching pattern: {file_pattern}")
+                return None
+            
+            # Search through files for the identifier
+            for file_path in matching_files:
+                try:
+                    self.logger.debug(f"Searching for {identifier} in {file_path.name}")
+                    
+                    df = pd.read_csv(str(file_path), dtype=str, low_memory=False)
+                    
+                    if df is not None and not df.empty and 'Id' in df.columns:
+                        # Check for the identifier in the data
+                        isin_data = df[df['Id'] == identifier]
+                        if not isin_data.empty:
+                            self.logger.info(f"Found {len(isin_data)} records for {identifier} in {file_path.name}")
+                            
+                            # Return ALL records for this ISIN, handling NaN values
+                            all_records = isin_data.fillna('').to_dict('records')
+                            return all_records
+                
+                except Exception as e:
+                    self.logger.warning(f"Error reading file {file_path}: {str(e)}")
+                    continue
+            
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error searching FIRDS files for type {firds_type}: {str(e)}")
+            return None
     
     def get_instrument_venues(self, identifier: str, instrument_type: str = "equity") -> Optional[List[Dict[str, Any]]]:
         """
@@ -194,92 +313,313 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             session.close()
             raise
     
-    def _process_instrument_attributes(self, firds_record: Dict[str, Any], instrument_type: str) -> Dict[str, Any]:
-        """Process type-specific attributes into clean JSON structure."""
+    def _process_instrument_attributes(self, firds_record: Dict[str, Any], 
+                                     business_instrument_type: str, firds_type: str) -> Dict[str, Any]:
+        """Process type-specific attributes into clean JSON structure for ALL FIRDS types."""
         attributes = {}
         
         try:
-            if instrument_type == "equity":
-                # Extract equity-specific fields
-                if firds_record.get('DerivInstrmAttrbts_PricMltplr'):
-                    try:
-                        attributes['price_multiplier'] = float(firds_record['DerivInstrmAttrbts_PricMltplr'])
-                    except (ValueError, TypeError):
-                        pass
+            # Process based on business instrument type (mapped from FIRDS type)
+            if business_instrument_type == "equity":
+                attributes.update(self._process_equity_attributes(firds_record))
                 
-                if firds_record.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'):
-                    attributes['underlying_isin'] = firds_record['DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN']
+            elif business_instrument_type == "debt":
+                attributes.update(self._process_debt_attributes(firds_record))
                 
-                if firds_record.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm'):
-                    attributes['underlying_index'] = firds_record['DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm']
+            elif business_instrument_type == "future":
+                attributes.update(self._process_future_attributes(firds_record))
                 
-                # Asset class attributes
-                asset_class = {}
-                if firds_record.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_BasePdct'):
-                    asset_class['oil_type'] = firds_record['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_BasePdct']
+            elif business_instrument_type == "collective_investment":
+                attributes.update(self._process_collective_investment_attributes(firds_record))
                 
-                if firds_record.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_SubPdct'):
-                    asset_class['sub_product'] = firds_record['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_SubPdct']
+            elif business_instrument_type == "hybrid":
+                attributes.update(self._process_hybrid_attributes(firds_record))
                 
-                if firds_record.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_BasePdct'):
-                    asset_class['metal_type'] = firds_record['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_BasePdct']
+            elif business_instrument_type == "interest_rate":
+                attributes.update(self._process_interest_rate_attributes(firds_record))
                 
-                if asset_class:
-                    attributes['asset_class'] = asset_class
-                    
-            elif instrument_type == "debt":
-                # Extract debt-specific fields
-                if firds_record.get('DebtInstrmAttrbts_MtrtyDt'):
-                    attributes['maturity_date'] = firds_record['DebtInstrmAttrbts_MtrtyDt']
+            elif business_instrument_type == "convertible":
+                attributes.update(self._process_convertible_attributes(firds_record))
                 
-                if firds_record.get('DebtInstrmAttrbts_TtlIssdNmnlAmt'):
-                    try:
-                        attributes['total_issued_nominal'] = float(firds_record['DebtInstrmAttrbts_TtlIssdNmnlAmt'])
-                    except (ValueError, TypeError):
-                        pass
+            elif business_instrument_type == "option":
+                attributes.update(self._process_option_attributes(firds_record))
                 
-                if firds_record.get('DebtInstrmAttrbts_NmnlValPerUnit'):
-                    try:
-                        attributes['nominal_value_per_unit'] = float(firds_record['DebtInstrmAttrbts_NmnlValPerUnit'])
-                    except (ValueError, TypeError):
-                        pass
-                        
-            elif instrument_type == "future":
-                # Extract future-specific fields
-                if firds_record.get('DerivInstrmAttrbts_XpryDt'):
-                    attributes['expiration_date'] = firds_record['DerivInstrmAttrbts_XpryDt']
+            elif business_instrument_type == "rights":
+                attributes.update(self._process_rights_attributes(firds_record))
                 
-                if firds_record.get('DerivInstrmAttrbts_DlvryTp'):
-                    attributes['delivery_type'] = firds_record['DerivInstrmAttrbts_DlvryTp']
-                
-                if firds_record.get('DerivInstrmAttrbts_PricMltplr'):
-                    try:
-                        attributes['price_multiplier'] = float(firds_record['DerivInstrmAttrbts_PricMltplr'])
-                    except (ValueError, TypeError):
-                        pass
+            elif business_instrument_type == "structured":
+                attributes.update(self._process_structured_attributes(firds_record))
+            
+            # Add FIRDS type metadata
+            attributes['firds_type'] = firds_type
+            attributes['business_type'] = business_instrument_type
+            
+            # Process common derivative attributes (present across multiple types)
+            self._process_common_derivative_attributes(firds_record, attributes)
         
         except Exception as e:
-            self.logger.warning(f"Error processing attributes for {instrument_type}: {e}")
+            self.logger.warning(f"Error processing attributes for {business_instrument_type}: {e}")
         
         return attributes
     
+    def _process_equity_attributes(self, firds_record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process equity-specific attributes."""
+        attributes = {}
+        
+        if firds_record.get('DerivInstrmAttrbts_PricMltplr'):
+            try:
+                attributes['price_multiplier'] = float(firds_record['DerivInstrmAttrbts_PricMltplr'])
+            except (ValueError, TypeError):
+                pass
+        
+        if firds_record.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'):
+            attributes['underlying_isin'] = firds_record['DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN']
+        
+        if firds_record.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm'):
+            attributes['underlying_index'] = firds_record['DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm']
+        
+        # Asset class attributes
+        asset_class = self._extract_asset_class_attributes(firds_record)
+        if asset_class:
+            attributes['asset_class'] = asset_class
+            
+        return attributes
+    
+    def _process_debt_attributes(self, firds_record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process debt-specific attributes."""
+        attributes = {}
+        
+        if firds_record.get('DebtInstrmAttrbts_MtrtyDt'):
+            attributes['maturity_date'] = firds_record['DebtInstrmAttrbts_MtrtyDt']
+        
+        if firds_record.get('DebtInstrmAttrbts_TtlIssdNmnlAmt'):
+            try:
+                attributes['total_issued_nominal'] = float(firds_record['DebtInstrmAttrbts_TtlIssdNmnlAmt'])
+            except (ValueError, TypeError):
+                pass
+        
+        if firds_record.get('DebtInstrmAttrbts_NmnlValPerUnit'):
+            try:
+                attributes['nominal_value_per_unit'] = float(firds_record['DebtInstrmAttrbts_NmnlValPerUnit'])
+            except (ValueError, TypeError):
+                pass
+        
+        if firds_record.get('DebtInstrmAttrbts_DebtSnrty'):
+            attributes['debt_seniority'] = firds_record['DebtInstrmAttrbts_DebtSnrty']
+        
+        # Interest rate attributes
+        if firds_record.get('DebtInstrmAttrbts_IntrstRate_Fxd'):
+            try:
+                attributes['interest_rate'] = float(firds_record['DebtInstrmAttrbts_IntrstRate_Fxd'])
+            except (ValueError, TypeError):
+                pass
+                
+        return attributes
+    
+    def _process_future_attributes(self, firds_record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process future-specific attributes."""
+        attributes = {}
+        
+        if firds_record.get('DerivInstrmAttrbts_XpryDt'):
+            attributes['expiration_date'] = firds_record['DerivInstrmAttrbts_XpryDt']
+        
+        if firds_record.get('DerivInstrmAttrbts_DlvryTp'):
+            attributes['delivery_type'] = firds_record['DerivInstrmAttrbts_DlvryTp']
+        
+        if firds_record.get('DerivInstrmAttrbts_PricMltplr'):
+            try:
+                attributes['price_multiplier'] = float(firds_record['DerivInstrmAttrbts_PricMltplr'])
+            except (ValueError, TypeError):
+                pass
+                
+        return attributes
+    
+    def _process_collective_investment_attributes(self, firds_record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process collective investment (Type C) specific attributes."""
+        attributes = {}
+        
+        if firds_record.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'):
+            attributes['underlying_isin'] = firds_record['DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN']
+        
+        # CIV-specific logic could be added here based on CFI code
+        cfi_code = firds_record.get('FinInstrmGnlAttrbts_ClssfctnTp', '')
+        if cfi_code.startswith('CI'):
+            attributes['fund_type'] = 'investment_fund'
+        elif cfi_code.startswith('CE'):
+            attributes['fund_type'] = 'etf'
+        elif cfi_code.startswith('CB'):
+            attributes['fund_type'] = 'reit'
+            
+        return attributes
+    
+    def _process_hybrid_attributes(self, firds_record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process hybrid instrument (Type H) specific attributes."""
+        attributes = {}
+        
+        if firds_record.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'):
+            attributes['underlying_isin'] = firds_record['DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN']
+        
+        if firds_record.get('DerivInstrmAttrbts_PricMltplr'):
+            try:
+                attributes['conversion_ratio'] = float(firds_record['DerivInstrmAttrbts_PricMltplr'])
+            except (ValueError, TypeError):
+                pass
+                
+        return attributes
+    
+    def _process_interest_rate_attributes(self, firds_record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process interest rate instrument (Type I) specific attributes."""
+        attributes = {}
+        
+        # Interest rate specific fields
+        if firds_record.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_RefRate_Nm'):
+            attributes['reference_rate'] = firds_record['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_RefRate_Nm']
+        
+        if firds_record.get('DerivInstrmAttrbts_IntrstRate_Fltg_BsisPtSprd'):
+            try:
+                attributes['spread'] = float(firds_record['DerivInstrmAttrbts_IntrstRate_Fltg_BsisPtSprd'])
+            except (ValueError, TypeError):
+                pass
+                
+        return attributes
+    
+    def _process_convertible_attributes(self, firds_record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process convertible instrument (Type J) specific attributes."""
+        attributes = {}
+        
+        if firds_record.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'):
+            attributes['underlying_isin'] = firds_record['DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN']
+        
+        if firds_record.get('DerivInstrmAttrbts_PricMltplr'):
+            try:
+                attributes['conversion_ratio'] = float(firds_record['DerivInstrmAttrbts_PricMltplr'])
+            except (ValueError, TypeError):
+                pass
+                
+        return attributes
+    
+    def _process_option_attributes(self, firds_record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process option (Type O) specific attributes."""
+        attributes = {}
+        
+        if firds_record.get('DerivInstrmAttrbts_XpryDt'):
+            attributes['expiration_date'] = firds_record['DerivInstrmAttrbts_XpryDt']
+        
+        if firds_record.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'):
+            attributes['underlying_isin'] = firds_record['DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN']
+        
+        # Option type could be derived from other fields or CFI code
+        cfi_code = firds_record.get('FinInstrmGnlAttrbts_ClssfctnTp', '')
+        if 'C' in cfi_code:
+            attributes['option_type'] = 'call'
+        elif 'P' in cfi_code:
+            attributes['option_type'] = 'put'
+            
+        return attributes
+    
+    def _process_rights_attributes(self, firds_record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process rights/warrants (Type R) specific attributes."""
+        attributes = {}
+        
+        if firds_record.get('DerivInstrmAttrbts_XpryDt'):
+            attributes['expiration_date'] = firds_record['DerivInstrmAttrbts_XpryDt']
+        
+        if firds_record.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'):
+            attributes['underlying_isin'] = firds_record['DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN']
+        
+        if firds_record.get('DerivInstrmAttrbts_PricMltplr'):
+            try:
+                attributes['exercise_ratio'] = float(firds_record['DerivInstrmAttrbts_PricMltplr'])
+            except (ValueError, TypeError):
+                pass
+                
+        return attributes
+    
+    def _process_structured_attributes(self, firds_record: Dict[str, Any]) -> Dict[str, Any]:
+        """Process structured product (Type S) specific attributes."""
+        attributes = {}
+        
+        if firds_record.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'):
+            attributes['underlying_isin'] = firds_record['DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN']
+        
+        if firds_record.get('DerivInstrmAttrbts_PricMltplr'):
+            try:
+                attributes['participation_rate'] = float(firds_record['DerivInstrmAttrbts_PricMltplr'])
+            except (ValueError, TypeError):
+                pass
+                
+        return attributes
+    
+    def _process_common_derivative_attributes(self, firds_record: Dict[str, Any], attributes: Dict[str, Any]) -> None:
+        """Process attributes common to multiple derivative types."""
+        
+        # Underlying instrument attributes
+        underlying_assets = {}
+        
+        if firds_record.get('DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN'):
+            underlying_assets['basket_isin'] = firds_record['DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN']
+        
+        if firds_record.get('DerivInstrmAttrbts_UndrlygInstrm_Bskt_LEI'):
+            underlying_assets['basket_lei'] = firds_record['DerivInstrmAttrbts_UndrlygInstrm_Bskt_LEI']
+        
+        if firds_record.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_LEI'):
+            underlying_assets['single_lei'] = firds_record['DerivInstrmAttrbts_UndrlygInstrm_Sngl_LEI']
+        
+        if underlying_assets:
+            attributes['underlying_assets'] = underlying_assets
+    
+    def _extract_asset_class_attributes(self, firds_record: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract asset class specific attributes."""
+        asset_class = {}
+        
+        # Oil/Energy attributes
+        if firds_record.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_BasePdct'):
+            asset_class['oil_type'] = firds_record['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_BasePdct']
+        
+        if firds_record.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_SubPdct'):
+            asset_class['sub_product'] = firds_record['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Oil_SubPdct']
+        
+        # Metal attributes
+        if firds_record.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_BasePdct'):
+            asset_class['metal_type'] = firds_record['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Metl_Prcs_BasePdct']
+        
+        # Electricity attributes
+        if firds_record.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Elctrcty_BasePdct'):
+            asset_class['electricity_type'] = firds_record['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_Elctrcty_BasePdct']
+        
+        # FX attributes
+        if firds_record.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_OthrNtnlCcy'):
+            asset_class['other_currency'] = firds_record['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_OthrNtnlCcy']
+        
+        return asset_class
+    
     def _create_venue_record(self, instrument_id: str, venue_data: Dict[str, Any]) -> TradingVenue:
-        """Create a venue record from FIRDS data."""
+        """Create a venue record from FIRDS data using updated model structure."""
+        
+        # Parse issuer requested as boolean
+        issuer_requested = venue_data.get('TradgVnRltdAttrbts_IssrReq')
+        if isinstance(issuer_requested, str):
+            issuer_requested = issuer_requested.lower() in ('true', '1', 'yes')
+        elif issuer_requested is None:
+            issuer_requested = False
         
         venue_record = TradingVenue(
             id=str(uuid.uuid4()),
             instrument_id=instrument_id,
             venue_id=venue_data.get('TradgVnRltdAttrbts_Id'),
             isin=venue_data.get('Id'),
+            
+            # Updated fields to match new model structure
             first_trade_date=self._parse_date(venue_data.get('TradgVnRltdAttrbts_FrstTradDt')),
             termination_date=self._parse_date(venue_data.get('TradgVnRltdAttrbts_TermntnDt')),
             admission_approval_date=self._parse_date(venue_data.get('TradgVnRltdAttrbts_AdmssnApprvlDtByIssr')),
             request_for_admission_date=self._parse_date(venue_data.get('TradgVnRltdAttrbts_ReqForAdmssnDt')),
+            issuer_requested=issuer_requested,  # Now boolean instead of string
+            
             venue_full_name=venue_data.get('FinInstrmGnlAttrbts_FullNm'),
             venue_short_name=venue_data.get('FinInstrmGnlAttrbts_ShrtNm'),
             classification_type=venue_data.get('FinInstrmGnlAttrbts_ClssfctnTp'),
             venue_currency=venue_data.get('FinInstrmGnlAttrbts_NtnlCcy'),
-            issuer_requested=venue_data.get('TradgVnRltdAttrbts_IssrReq'),
             competent_authority=venue_data.get('TechAttrbts_RlvntCmptntAuthrty'),
             relevant_trading_venue=venue_data.get('TechAttrbts_RlvntTradgVn'),
             publication_from_date=self._parse_date(venue_data.get('TechAttrbts_PblctnPrd_FrDt')),
@@ -288,7 +628,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
         
         # Store any additional venue-specific attributes (excluding mapped fields)
         venue_attributes = {}
-        mapped_fields = self._get_mapped_fields()
+        mapped_fields = self._get_mapped_fields_updated()
         
         for key, value in venue_data.items():
             if key not in mapped_fields and value is not None and value != "":
@@ -299,17 +639,15 @@ class SqliteInstrumentService(InstrumentServiceInterface):
         
         return venue_record
     
-    def _get_mapped_fields(self) -> set:
-        """Get list of fields that are already mapped to specific columns."""
+    def _get_mapped_fields_updated(self) -> set:
+        """Get updated list of fields that are mapped to specific columns."""
         return {
-            'Id', 'TradgVnRltdAttrbts_Id', 'TradgVnRltdAttrbts_FrstTradDt',
-            'TradgVnRltdAttrbts_TermntnDt', 'TradgVnRltdAttrbts_AdmssnApprvlDtByIssr',
-            'TradgVnRltdAttrbts_ReqForAdmssnDt', 'FinInstrmGnlAttrbts_FullNm',
-            'FinInstrmGnlAttrbts_ShrtNm', 'FinInstrmGnlAttrbts_ClssfctnTp',
-            'FinInstrmGnlAttrbts_NtnlCcy', 'TradgVnRltdAttrbts_IssrReq',
-            'TechAttrbts_RlvntCmptntAuthrty', 'TechAttrbts_RlvntTradgVn',
-            'TechAttrbts_PblctnPrd_FrDt', 'Issr', 'FinInstrmGnlAttrbts_CmmdtyDerivInd'
+            # Use the FIRDS column mapping from constants
+            *FirdsTypes.COLUMN_MAPPING.keys(),
+            # Additional commonly mapped fields
+            'original_firds_record', 'venue_attributes'
         }
+
     
     def _parse_date(self, date_str) -> Optional[datetime]:
         """Parse date string to datetime object."""
@@ -322,65 +660,6 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             else:
                 return datetime.strptime(date_str, '%Y-%m-%d')
         except (ValueError, AttributeError):
-            return None
-    
-    def _get_firds_data_from_storage(self, identifier: str, instrument_type: str) -> Optional[List[Dict[str, Any]]]:
-        """
-        Fetch ALL FIRDS data records from local storage for a given ISIN.
-        This is the same as the current implementation but returns all records.
-        """
-        try:
-            from pathlib import Path
-            
-            # Determine file type pattern
-            file_type = ('FULINS_E' if instrument_type == 'equity' else
-                        'FULINS_D' if instrument_type == 'debt' else
-                        'FULINS_F' if instrument_type == 'future' else None)
-            
-            if not file_type:
-                self.logger.error(f"Unsupported instrument type: {instrument_type}")
-                return None
-            
-            # Look for files in local storage
-            firds_path = Path(esmaConfig.firds_path)
-            if not firds_path.exists():
-                self.logger.error(f"FIRDS storage path does not exist: {firds_path}")
-                return None
-            
-            # Find files matching the pattern for this instrument type
-            matching_files = list(firds_path.glob(f"*{file_type}*_firds_data.csv"))
-            
-            if not matching_files:
-                self.logger.warning(f"No {file_type} files found in local storage: {firds_path}")
-                return None
-            
-            # Search through local files for the identifier
-            for file_path in matching_files:
-                try:
-                    self.logger.debug(f"Searching for {identifier} in {file_path.name}")
-                    
-                    import pandas as pd
-                    df = pd.read_csv(str(file_path), dtype=str, low_memory=False)
-                    
-                    if df is not None and not df.empty:
-                        # Check for the identifier in the data
-                        isin_data = df[df['Id'] == identifier]
-                        if not isin_data.empty:
-                            self.logger.info(f"Found {len(isin_data)} records for {identifier} in {file_path.name}")
-                            
-                            # Return ALL records for this ISIN, handling NaN values
-                            all_records = isin_data.fillna('').to_dict('records')
-                            return all_records
-                
-                except Exception as e:
-                    self.logger.warning(f"Error reading file {file_path}: {str(e)}")
-                    continue
-            
-            self.logger.warning(f"Identifier {identifier} not found in any local {file_type} files")
-            return None
-
-        except Exception as e:
-            self.logger.error(f"Error fetching FIRDS data from storage: {str(e)}")
             return None
     
     def enrich_instrument(self, instrument: InstrumentInterface) -> Tuple[Session, InstrumentInterface]:

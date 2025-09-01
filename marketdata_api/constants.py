@@ -34,8 +34,8 @@ class API:
     PREFIX = "/api/v1"
     NAME = "MarketDataAPI CRUD API"
 
-# Instrument Types
-class InstrumentTypes:
+# Instrument Types (Legacy - see expanded version at end of file)
+class LegacyInstrumentTypes:
     EQUITY = "equity"
     DEBT = "debt"
     FUTURE = "future"
@@ -55,7 +55,7 @@ class ErrorMessages:
     SCHEMA_NOT_FOUND = "Schema not found"
     DATABASE_ERROR = "A database error occurred"
     INVALID_CFI_LENGTH = "CFI code must be 6 characters"
-    INVALID_INSTRUMENT_TYPE = f"Invalid instrument type. Must be one of: {', '.join(InstrumentTypes.VALID_TYPES)}"
+    INVALID_INSTRUMENT_TYPE = f"Invalid instrument type. Must be one of: {', '.join(LegacyInstrumentTypes.VALID_TYPES)}"
     INVALID_BATCH_OPERATION = f"Invalid operation, must be '{BatchOperations.CREATE}' or '{BatchOperations.ENRICH}'"
     INVALID_DATA_FORMAT = "Invalid data format"
     MISSING_IDENTIFIERS = "Missing or invalid 'identifiers' list"
@@ -188,3 +188,118 @@ class DbFields:
     FIGI = "figi"
     CREATED_AT = "created_at"
     UPDATED_AT = "updated_at"
+
+
+# FIRDS Instrument Type Mappings
+class FirdsTypes:
+    """FIRDS instrument type mappings and metadata."""
+    
+    MAPPING = {
+        'C': {
+            'instrument_type': 'collective_investment',
+            'description': 'Collective Investment Vehicles (CIVs)',
+            'cfi_category': 'C',
+            'examples': ['Mutual funds', 'ETFs', 'REITs', 'Hedge funds']
+        },
+        'D': {
+            'instrument_type': 'debt',
+            'description': 'Debt Securities',
+            'cfi_category': 'D', 
+            'examples': ['Bonds', 'Notes', 'Commercial paper', 'Asset-backed securities']
+        },
+        'E': {
+            'instrument_type': 'equity',
+            'description': 'Equities',
+            'cfi_category': 'E',
+            'examples': ['Common shares', 'Preferred shares', 'Depository receipts', 'Rights']
+        },
+        'F': {
+            'instrument_type': 'future',
+            'description': 'Futures',
+            'cfi_category': 'F',
+            'examples': ['Commodity futures', 'Financial futures', 'Index futures']
+        },
+        'H': {
+            'instrument_type': 'hybrid',
+            'description': 'Hybrid/Structured Instruments',
+            'cfi_category': 'M',  # Miscellaneous/Others in CFI
+            'examples': ['Structured notes', 'Barrier products', 'Participation certificates']
+        },
+        'I': {
+            'instrument_type': 'interest_rate',
+            'description': 'Interest Rate Derivatives',
+            'cfi_category': 'H',  # Listed derivatives in CFI
+            'examples': ['Interest rate swaps', 'FRAs', 'Interest rate futures']
+        },
+        'J': {
+            'instrument_type': 'convertible',
+            'description': 'Convertible Instruments',
+            'cfi_category': 'D',  # Often debt with conversion features
+            'examples': ['Convertible bonds', 'Convertible preferred shares']
+        },
+        'O': {
+            'instrument_type': 'option',
+            'description': 'Options',
+            'cfi_category': 'O',  # Options in CFI
+            'examples': ['Call options', 'Put options', 'Exotic options']
+        },
+        'R': {
+            'instrument_type': 'rights',
+            'description': 'Rights and Warrants',
+            'cfi_category': 'R',  # Rights in CFI
+            'examples': ['Subscription rights', 'Warrants', 'Purchase rights']
+        },
+        'S': {
+            'instrument_type': 'structured',
+            'description': 'Structured Products and Swaps',
+            'cfi_category': 'S',  # Swaps in CFI
+            'examples': ['Credit default swaps', 'Structured products', 'Total return swaps']
+        }
+    }
+    
+    # Common FIRDS column mappings to database fields
+    COLUMN_MAPPING = {
+        # Core identification
+        'Id': 'isin',
+        
+        # General attributes
+        'FinInstrmGnlAttrbts_FullNm': 'full_name',
+        'FinInstrmGnlAttrbts_ShrtNm': 'short_name',
+        'FinInstrmGnlAttrbts_ClssfctnTp': 'cfi_code',
+        'FinInstrmGnlAttrbts_NtnlCcy': 'currency',
+        'FinInstrmGnlAttrbts_CmmdtyDerivInd': 'commodity_derivative_indicator',
+        'Issr': 'lei_id',
+        
+        # Technical/regulatory attributes
+        'TechAttrbts_PblctnPrd_FrDt': 'publication_from_date',
+        'TechAttrbts_RlvntCmptntAuthrty': 'competent_authority',
+        'TechAttrbts_RlvntTradgVn': 'relevant_trading_venue',
+        
+        # Trading venue related attributes (for TradingVenue model)
+        'TradgVnRltdAttrbts_Id': 'venue_id',
+        'TradgVnRltdAttrbts_IssrReq': 'issuer_requested',
+        'TradgVnRltdAttrbts_FrstTradDt': 'first_trade_date',
+        'TradgVnRltdAttrbts_TermntnDt': 'termination_date',
+        'TradgVnRltdAttrbts_AdmssnApprvlDtByIssr': 'admission_approval_date',
+        'TradgVnRltdAttrbts_ReqForAdmssnDt': 'request_for_admission_date',
+    }
+
+
+# Updated Instrument Types (expanded from original)
+class InstrumentTypes:
+    EQUITY = "equity"
+    DEBT = "debt" 
+    FUTURE = "future"
+    COLLECTIVE_INVESTMENT = "collective_investment"
+    HYBRID = "hybrid"
+    INTEREST_RATE = "interest_rate"
+    CONVERTIBLE = "convertible"
+    OPTION = "option"
+    RIGHTS = "rights"
+    STRUCTURED = "structured"
+    OTHER = "other"
+    
+    VALID_TYPES = [
+        EQUITY, DEBT, FUTURE, COLLECTIVE_INVESTMENT, HYBRID,
+        INTEREST_RATE, CONVERTIBLE, OPTION, RIGHTS, STRUCTURED, OTHER
+    ]
