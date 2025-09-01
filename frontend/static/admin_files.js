@@ -27,7 +27,7 @@ class FileManager {
         $('#download-dialog-close, #download-dialog-cancel').on('click', () => this.hideDownloadDialog());
         $('#execute-download-btn').on('click', () => this.executeDownload());
         $('#load-available-files').on('click', () => this.loadAvailableESMAFiles());
-        $('#download-file-type, #download-asset-type, #download-date-from, #download-date-to').on('change', () => this.loadAvailableESMAFiles());
+        // Remove auto-search on filter change - only search when button is clicked
         
         // Select all files checkbox functionality
         $('#select-all-files').on('change', function() {
@@ -232,8 +232,10 @@ class FileManager {
             const data = await response.json();
             
             if (response.ok) {
-                this.renderAvailableFiles(data.files);
-                $('#available-files-count').text(`${data.total_count} files available`);
+                // Use all files from backend response without additional filtering
+                let files = data.files;
+                this.renderAvailableFiles(files);
+                $('#available-files-count').text(`${files.length} files available`);
             } else {
                 throw new Error(data.error || 'Failed to load available files');
             }
@@ -252,7 +254,7 @@ class FileManager {
             return;
         }
         
-        files.slice(0, 20).forEach(file => {  // Show only first 20 for performance
+        files.forEach(file => {
             const row = $(`
                 <tr>
                     <td>
@@ -266,10 +268,6 @@ class FileManager {
             `);
             tbody.append(row);
         });
-        
-        if (files.length > 20) {
-            tbody.append(`<tr><td colspan="4" class="text-center"><em>... and ${files.length - 20} more files</em></td></tr>`);
-        }
     }
 
     async executeDownload() {

@@ -288,12 +288,20 @@ class FileManagementService:
         def get_file_pattern_key(filename: str) -> str:
             """Get the pattern key for grouping files (e.g., FULINS_E, FULINS_D)."""
             filename_upper = filename.upper()
-            
             # Extract the base pattern
             if match := re.search(r'(FULINS_[CDEFHIJORS])_\d{8}', filename_upper):
                 return match.group(1)
             elif match := re.search(r'(DVCRES)_\d{8}', filename_upper):
                 return match.group(1)
+            # For FULNCR and FULECR, include asset type in the pattern key
+            elif match := re.search(r'(FULNCR)_\d{8}_([CDEF])', filename_upper):
+                return f"{match.group(1)}_{match.group(2)}"
+            elif match := re.search(r'(FULNCR)_\d{8}_\w+_([CDEF])', filename_upper):
+                return f"{match.group(1)}_{match.group(2)}"
+            elif match := re.search(r'(FULECR)_\d{8}_([CDEF])', filename_upper):
+                return f"{match.group(1)}_{match.group(2)}"
+            elif match := re.search(r'(FULECR)_\d{8}_\w+_([CDEF])', filename_upper):
+                return f"{match.group(1)}_{match.group(2)}"
             elif match := re.search(r'(FULNCR)_\d{8}', filename_upper):
                 return match.group(1)
             elif match := re.search(r'(FULECR)_\d{8}', filename_upper):
@@ -436,28 +444,28 @@ class FileManagementService:
                                 datasets: List[str] = ['firds', 'fitrs'],
                                 date_from: Optional[str] = None,
                                 date_to: Optional[str] = None,
-                                file_type: Optional[str] = None) -> List[ESMAFileInfo]:
+                                file_type: Optional[str] = None,
+                                asset_type: Optional[str] = None) -> List[ESMAFileInfo]:
         """Get list of available ESMA files from the registry."""
         
         try:
             loader = self._get_esma_loader()
-            
             # Set date range if provided
             if date_from:
                 loader.creation_date_from = date_from
             if date_to:
                 loader.creation_date_to = date_to
-                
             # Load file list from ESMA
             files_df = loader.load_mifid_file_list(datasets)
-            
             if files_df.empty:
                 return []
-            
             # Apply additional filters
             if file_type:
                 files_df = files_df[files_df['file_name'].str.contains(file_type, case=False, na=False)]
-                
+            if asset_type:
+                # Filter by asset type in filename pattern (e.g., FULINS_C_, FULINS_D_, etc.)
+                asset_pattern = f'_{asset_type}_'
+                files_df = files_df[files_df['file_name'].str.contains(asset_pattern, case=False, na=False)]
             # Convert to ESMAFileInfo objects
             esma_files = []
             for _, row in files_df.iterrows():
@@ -471,7 +479,7 @@ class FileManagementService:
                     file_size=row.get('file_size', None)
                 )
                 esma_files.append(esma_file)
-                
+            
             return esma_files
             
         except Exception as e:

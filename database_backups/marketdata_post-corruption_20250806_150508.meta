@@ -1,5 +1,0 @@
-timestamp: 20250806_150508
-backup_type: post-corruption
-description: Backup after data loss incident - empty tables but intact schema
-original_db_path: marketdata_api\database\marketdata.db
-backup_size: 208896

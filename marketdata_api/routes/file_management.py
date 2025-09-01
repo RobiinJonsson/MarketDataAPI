@@ -85,13 +85,15 @@ def get_available_esma_files():
         date_from = request.args.get('date_from')
         date_to = request.args.get('date_to')
         file_type = request.args.get('file_type')
+        asset_type = request.args.get('asset_type')  # <-- Added
         
         service = FileManagementService()
         esma_files = service.get_available_esma_files(
             datasets=datasets,
             date_from=date_from,
             date_to=date_to,
-            file_type=file_type
+            file_type=file_type,
+            asset_type=asset_type  # <-- Added
         )
         
         # Convert to dictionary format
@@ -115,7 +117,8 @@ def get_available_esma_files():
                 'datasets': datasets,
                 'date_from': date_from,
                 'date_to': date_to,
-                'file_type': file_type
+                'file_type': file_type,
+                'asset_type': asset_type  # <-- Added
             }
         })
         
