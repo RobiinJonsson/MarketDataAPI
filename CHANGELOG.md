@@ -2,6 +2,61 @@
 
 All notable changes to the MarketDataAPI project will be documented in this file.
 
+## [2025-09-02] - FIRDS REFERENCE DATA EXPANSION: Complete Model Support for All 10 FIRDS Types
+
+### ✅ COMPREHENSIVE FIRDS EXPANSION COMPLETED
+- **FULL COVERAGE**: Successfully expanded ESMA model from 3 instrument types (C, D, E) to ALL 10 FIRDS types (C, D, E, F, H, I, J, S, R, O)
+- **DATA ANALYSIS**: Created comprehensive analysis script examining 29 FIRDS CSV files with 118 unique columns
+- **MODEL MODERNIZATION**: Updated unified instrument model with promoted common fields for performance optimization
+
+### 🔍 FIRDS Analysis & Research Phase
+- **Analysis Script**: `scripts/analyze_firds_files.py` - Comprehensive analysis of all FIRDS file types
+  - **FILES PROCESSED**: 29 FIRDS CSV files across all 10 instrument types
+  - **COLUMNS ANALYZED**: 118 unique columns identified across all files
+  - **COMMON FIELDS**: 14 common fields promoted to dedicated database columns for performance
+  - **DOCUMENTATION**: Generated detailed markdown report with column patterns and data samples
+
+### 🗄️ Database Schema Enhancement
+- **Common Fields Promotion**: Added 4 new dedicated columns to instruments table
+  - `commodity_derivative_indicator` (BOOLEAN) - Financial derivative classification
+  - `publication_from_date` (DATETIME) - ESMA publication period start date  
+  - `competent_authority` (VARCHAR) - Relevant competent authority identifier
+  - `relevant_trading_venue` (VARCHAR) - Associated trading venue identifier
+- **Migration**: `add_firds_common_fields.py` - Clean database migration preserving all existing data
+- **Performance**: Indexed common fields enable fast filtering across all 10 FIRDS types
+
+### 📊 Constants & Mappings Framework
+- **FirdsTypes Class**: Comprehensive mapping framework in `marketdata_api/constants.py`
+  - **TYPE MAPPINGS**: All 10 FIRDS types (C→collective_investment, D→debt, E→equity, F→future, H→hybrid, I→interest_rate, J→convertible, O→option, R→rights, S→structured)
+  - **COLUMN MAPPINGS**: FIRDS column to model field mappings for all instrument types
+  - **BUSINESS LOGIC**: Maps FIRDS technical types to business instrument classifications
+
+### 🛠️ Service Layer Transformation
+- **SqliteInstrumentService**: Complete rewrite to support all 10 FIRDS types
+  - **AUTO-DETECTION**: `_get_firds_data_from_storage_all_types()` automatically detects FIRDS type from files
+  - **TYPE-SPECIFIC PROCESSING**: Dedicated attribute processors for each of 10 instrument types
+  - **UNIFIED ARCHITECTURE**: Single service handles C,D,E,F,H,I,J,S,R,O with type-specific JSON storage
+  - **BACKWARDS COMPATIBILITY**: Maintains existing API while supporting new instrument types
+
+### 🔧 Technical Improvements
+- **Fixed File Pattern Filtering**: Corrected FIRDS file search patterns to properly match all file types
+- **Enhanced Data Processing**: Type-specific attribute extractors for complex derivative instruments
+- **Improved Error Handling**: Robust error handling for malformed or missing FIRDS data across all types
+
+### 📋 CFI Code Classification System - ISO 10962 Compliance
+- **Complete CFI Decoder**: Rebuilt `marketdata_api/models/cfi.py` with full ISO 10962 standard compliance
+  - **COMPREHENSIVE COVERAGE**: All categories (E-Equities, D-Debt, R-Entitlements, O-Options, F-Futures, S-Swaps, H-Non-Listed, I-Others, J-Collective Investment, K-Commodity, L-Structured, M-Financing, N-Referential, T-Other Assets)
+  - **DETAILED ATTRIBUTES**: Complete attribute decoding for all instrument types with voting rights, redemption features, income types, form classifications
+  - **VALIDATION**: Proper CFI code format validation and error handling for malformed codes
+- **API Integration**: CFI route `/api/v1/utilities/cfi/{cfi_code}` fully functional with new decoder
+- **Testing Verified**: Comprehensive testing with real CFI codes from FIRDS data (ESVUFR, DBFTFB, etc.)
+
+### 🎯 Architecture Benefits
+- **SCALABILITY**: Framework ready for future FIRDS specification changes or new instrument types
+- **PERFORMANCE**: Common field promotion reduces JSON parsing for frequently accessed data
+- **FLEXIBILITY**: JSON storage accommodates type-specific attributes without schema changes
+- **MAINTAINABILITY**: Clear separation between common fields and instrument-specific attributes
+
 ## [2025-08-08] - COMPLETED: Unified Transparency Architecture Migration
 
 ### ✅ MISSION ACCOMPLISHED - Unified Transparency System
