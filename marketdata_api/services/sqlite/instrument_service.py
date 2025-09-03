@@ -13,6 +13,7 @@ import uuid
 import json
 import logging
 import re
+import time
 from typing import Dict, Any, Optional, List, Tuple
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime, UTC
@@ -79,12 +80,14 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             # Use first record for primary instrument data
             primary_record = all_venue_records[0]
             
-            # Check for existing and delete if present
+            # Check for existing and delete if present (with transaction optimization)
             existing = session.query(Instrument).filter(Instrument.isin == identifier).first()
             if existing:
-                self.logger.info(f"Deleting existing instrument {identifier}")
+                self.logger.info(f"🗑️  Deleting existing instrument {identifier}")
+                # Delete related venues first to avoid constraint issues
+                session.query(TradingVenue).filter(TradingVenue.instrument_id == existing.id).delete()
                 session.delete(existing)
-                session.flush()
+                session.flush()  # Ensure deletion is processed before creating new
             
             # Create instrument with promoted common fields + JSON attributes
             instrument_data = self._build_instrument_data(
@@ -100,13 +103,26 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             session.flush()
             
             # Create venue records for ALL venues
+            venue_creation_start = time.time()
             venue_records = []
-            for venue_data in all_venue_records:
+            self.logger.info(f"🏢 Creating {len(all_venue_records)} venue records...")
+            
+            for i, venue_data in enumerate(all_venue_records, 1):
                 venue_record = self._create_venue_record(instrument.id, venue_data)
                 venue_records.append(venue_record)
                 session.add(venue_record)
+                if i % 10 == 0:  # Log progress every 10 venues
+                    self.logger.debug(f"  📍 Created {i}/{len(all_venue_records)} venues...")
             
+            venue_creation_elapsed = time.time() - venue_creation_start
+            self.logger.info(f"✅ Created {len(venue_records)} venue records in {venue_creation_elapsed:.1f}s")
+            
+            # Commit all changes
+            commit_start = time.time()
+            self.logger.info("💾 Committing to database...")
             session.commit()
+            commit_elapsed = time.time() - commit_start
+            self.logger.info(f"✅ Database commit completed in {commit_elapsed:.1f}s")
             
             self.logger.info(f"Created {business_instrument_type} instrument {identifier} with {len(venue_records)} venue records")
             
@@ -171,39 +187,80 @@ class SqliteInstrumentService(InstrumentServiceInterface):
         try:
             from pathlib import Path
             
+            self.logger.info(f"🔍 Starting FIRDS search for {identifier}")
+            search_start = time.time()
+            
             # If preferred type is provided, try it first
             if preferred_type:
-                legacy_mapping = {'equity': 'E', 'debt': 'D', 'future': 'F'}
-                if preferred_type in legacy_mapping:
-                    firds_type = legacy_mapping[preferred_type]
+                # Map business instrument type back to FIRDS type for efficient search
+                business_to_firds = {
+                    'equity': 'E',
+                    'debt': 'D', 
+                    'future': 'F',
+                    'collective_investment': 'C',
+                    'hybrid': 'H',
+                    'interest_rate': 'I',
+                    'convertible': 'J',
+                    'option': 'O',
+                    'rights': 'R',
+                    'structured': 'S'
+                }
+                
+                if preferred_type in business_to_firds:
+                    firds_type = business_to_firds[preferred_type]
+                    self.logger.info(f"🎯 Trying preferred type first: {preferred_type} → FIRDS {firds_type}")
                     records = self._search_firds_files_for_type(identifier, firds_type)
                     if records:
+                        elapsed = time.time() - search_start
+                        self.logger.info(f"✅ Found in preferred type {firds_type} in {elapsed:.1f}s")
+                        return records, firds_type
+                    else:
+                        self.logger.info(f"❌ Not found in preferred FIRDS type {firds_type}, will search all types")
+                elif preferred_type in {'E', 'D', 'F'}:  # Legacy direct FIRDS types
+                    firds_type = preferred_type
+                    self.logger.info(f"🎯 Trying legacy FIRDS type: {firds_type}")
+                    records = self._search_firds_files_for_type(identifier, firds_type)
+                    if records:
+                        elapsed = time.time() - search_start
+                        self.logger.info(f"✅ Found in legacy type {firds_type} in {elapsed:.1f}s")
                         return records, firds_type
             
             # Search all FIRDS types (C,D,E,F,H,I,J,S,R,O)
-            for firds_type in FirdsTypes.MAPPING.keys():
-                self.logger.debug(f"Searching for {identifier} in FIRDS type {firds_type}")
-                records = self._search_firds_files_for_type(identifier, firds_type)
-                if records:
-                    self.logger.info(f"Found {identifier} in FIRDS type {firds_type}")
-                    return records, firds_type
+            types_to_search = list(FirdsTypes.MAPPING.keys())
+            self.logger.info(f"🔄 Searching {len(types_to_search)} FIRDS types: {types_to_search}")
             
-            self.logger.warning(f"Identifier {identifier} not found in any FIRDS files")
+            for i, firds_type in enumerate(types_to_search, 1):
+                type_start = time.time()
+                self.logger.debug(f"  📂 [{i}/{len(types_to_search)}] Searching type {firds_type}...")
+                records = self._search_firds_files_for_type(identifier, firds_type)
+                type_elapsed = time.time() - type_start
+                
+                if records:
+                    total_elapsed = time.time() - search_start
+                    self.logger.info(f"✅ Found {identifier} in FIRDS type {firds_type} (searched {i} types, {total_elapsed:.1f}s total)")
+                    return records, firds_type
+                else:
+                    self.logger.debug(f"  ❌ Not found in type {firds_type} ({type_elapsed:.1f}s)")
+            
+            total_elapsed = time.time() - search_start
+            self.logger.warning(f"❌ {identifier} not found in any FIRDS files after {total_elapsed:.1f}s")
             return None, None
 
         except Exception as e:
-            self.logger.error(f"Error fetching FIRDS data from storage: {str(e)}")
+            self.logger.error(f"💥 Error fetching FIRDS data from storage: {str(e)}")
             return None, None
     
     def _search_firds_files_for_type(self, identifier: str, firds_type: str) -> Optional[List[Dict[str, Any]]]:
-        """Search for identifier in FIRDS files of a specific type."""
+        """Search for identifier in FIRDS files of a specific type with performance optimization."""
         try:
             from pathlib import Path
             import pandas as pd
             
+            search_start = time.time()
+            
             firds_path = Path(esmaConfig.firds_path)
             if not firds_path.exists():
-                self.logger.error(f"FIRDS storage path does not exist: {firds_path}")
+                self.logger.error(f"❌ FIRDS storage path does not exist: {firds_path}")
                 return None
             
             # Find files matching the pattern for this FIRDS type
@@ -211,34 +268,59 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             matching_files = list(firds_path.glob(file_pattern))
             
             if not matching_files:
-                self.logger.debug(f"No {firds_type} files found matching pattern: {file_pattern}")
+                self.logger.debug(f"    📁 No {firds_type} files found matching pattern: {file_pattern}")
                 return None
+                
+            self.logger.debug(f"    📁 Found {len(matching_files)} files for type {firds_type}")
             
-            # Search through files for the identifier
-            for file_path in matching_files:
+            # Search through files for the identifier (newest files first for better cache hit)
+            matching_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+            
+            for file_idx, file_path in enumerate(matching_files, 1):
                 try:
-                    self.logger.debug(f"Searching for {identifier} in {file_path.name}")
+                    file_start = time.time()
+                    self.logger.debug(f"      📄 [{file_idx}/{len(matching_files)}] Reading {file_path.name}...")
                     
-                    df = pd.read_csv(str(file_path), dtype=str, low_memory=False)
+                    # Read with optimizations
+                    df = pd.read_csv(
+                        str(file_path), 
+                        dtype=str, 
+                        low_memory=False,
+                        usecols=lambda x: x == 'Id' or not x.startswith('Unnamed')  # Skip unnamed columns
+                    )
+                    
+                    file_read_time = time.time() - file_start
                     
                     if df is not None and not df.empty and 'Id' in df.columns:
-                        # Check for the identifier in the data
+                        search_start_df = time.time()
+                        
+                        # Optimized search - use pandas vectorized operations
                         isin_data = df[df['Id'] == identifier]
+                        
+                        search_time = time.time() - search_start_df
+                        
                         if not isin_data.empty:
-                            self.logger.info(f"Found {len(isin_data)} records for {identifier} in {file_path.name}")
+                            total_time = time.time() - search_start
+                            self.logger.info(f"      ✅ Found {len(isin_data)} records in {file_path.name} (read: {file_read_time:.1f}s, search: {search_time:.1f}s, total: {total_time:.1f}s)")
                             
-                            # Return ALL records for this ISIN, handling NaN values
+                            # Return ALL records for this ISIN, handling NaN values efficiently
                             all_records = isin_data.fillna('').to_dict('records')
                             return all_records
+                        else:
+                            self.logger.debug(f"      ❌ Not in {file_path.name} ({len(df)} total records, read: {file_read_time:.1f}s, search: {search_time:.1f}s)")
+                    else:
+                        self.logger.warning(f"      ⚠️  Invalid file structure in {file_path.name}")
                 
                 except Exception as e:
-                    self.logger.warning(f"Error reading file {file_path}: {str(e)}")
+                    self.logger.warning(f"      💥 Error reading file {file_path}: {str(e)}")
                     continue
             
+            total_search_time = time.time() - search_start
+            self.logger.debug(f"    ❌ Not found in any {firds_type} files ({total_search_time:.1f}s)")
             return None
             
         except Exception as e:
-            self.logger.error(f"Error searching FIRDS files for type {firds_type}: {str(e)}")
+            self.logger.error(f"💥 Error searching FIRDS files for type {firds_type}: {str(e)}")
             return None
     
     def get_instrument_venues(self, identifier: str, instrument_type: str = "equity") -> Optional[List[Dict[str, Any]]]:
