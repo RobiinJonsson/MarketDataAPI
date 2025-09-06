@@ -13,6 +13,7 @@ from sqlalchemy import Column, String, DateTime, Float, Date, ForeignKey, Boolea
 from sqlalchemy.orm import relationship
 from .base_model import Base
 from datetime import datetime, UTC
+from typing import Dict, Any
 
 
 class TransparencyCalculation(Base):
@@ -41,7 +42,21 @@ class TransparencyCalculation(Base):
     total_volume_executed = Column(Float)  # TtlVolOfTxsExctd
     
     # File type and source tracking
-    file_type = Column(String, nullable=False)  # 'FULECR_E', 'FULNCR_C', 'FULNCR_D', 'FULNCR_F'
+    file_type = Column(String, nullable=False)  
+    """
+    FITRS file types based on instrument categories:
+    - FULECR_C: ETFs/ETCs (equity files)
+    - FULECR_E: Equities/Shares (equity files) 
+    - FULECR_R: Rights (equity files)
+    - FULNCR_C: Corporate/Certificates (non-equity)
+    - FULNCR_D: Debt/Bonds (non-equity)
+    - FULNCR_E: ETFs (non-equity category)
+    - FULNCR_F: Funds/Derivatives (non-equity)
+    - FULNCR_H: Structured Products (non-equity)
+    - FULNCR_I: Index-linked (non-equity)
+    - FULNCR_J: Warrants (non-equity)
+    - FULNCR_O: Options (non-equity)
+    """
     source_file = Column(String)  # Original filename for tracking
     
     # JSON storage for all file-specific data
@@ -105,13 +120,62 @@ class TransparencyCalculation(Base):
     )
     
     def get_field(self, field_name: str, default=None):
-        """Get a field from raw_data JSON with fallback to direct attribute"""
+        """
+        Get a field from raw_data JSON with fallback to direct attribute.
+        Handles null/empty values appropriately based on FITRS analysis findings.
+        """
         # First check if it's a direct attribute
-        if hasattr(self, field_name.lower()):
-            return getattr(self, field_name.lower())
+        attr_name = field_name.lower()
+        if hasattr(self, attr_name):
+            value = getattr(self, attr_name)
+            # Return default if value is None or empty string
+            if value is None or value == '':
+                return default
+            return value
         
-        # Then check raw_data
-        return self.raw_data.get(field_name, default)
+        # Then check raw_data, handling various null representations
+        if field_name in self.raw_data:
+            value = self.raw_data[field_name]
+            # Handle pandas-style null values and empty strings
+            if value is None or value == '' or str(value).lower() in ['nan', 'null', 'none']:
+                return default
+            return value
+        
+        return default
+    
+    def has_valid_data(self, field_name: str) -> bool:
+        """Check if a field has valid (non-null, non-empty) data"""
+        value = self.get_field(field_name)
+        return value is not None and value != '' and str(value).lower() not in ['nan', 'null', 'none']
+    
+    def get_transaction_data(self) -> Dict[str, Any]:
+        """
+        Get transaction data with proper null handling.
+        Based on FITRS analysis: ~25% fill rate for transaction fields.
+        """
+        return {
+            'total_transactions': self.get_field('TtlNbOfTxsExctd', 0) if self.has_valid_data('TtlNbOfTxsExctd') else None,
+            'total_volume': self.get_field('TtlVolOfTxsExctd', 0.0) if self.has_valid_data('TtlVolOfTxsExctd') else None,
+            'has_transaction_data': self.has_valid_data('TtlNbOfTxsExctd') or self.has_valid_data('TtlVolOfTxsExctd')
+        }
+    
+    def get_threshold_data(self) -> Dict[str, Any]:
+        """
+        Get threshold data with proper null handling.
+        Based on FITRS analysis: ~31% fill rate for threshold amount fields.
+        """
+        return {
+            'pre_trade_large_scale_amt': self.get_field('PreTradLrgInScaleThrshld_Amt') if self.has_valid_data('PreTradLrgInScaleThrshld_Amt') else None,
+            'post_trade_large_scale_amt': self.get_field('PstTradLrgInScaleThrshld_Amt') if self.has_valid_data('PstTradLrgInScaleThrshld_Amt') else None,
+            'pre_trade_instrument_specific_amt': self.get_field('PreTradInstrmSzSpcfcThrshld_Amt') if self.has_valid_data('PreTradInstrmSzSpcfcThrshld_Amt') else None,
+            'post_trade_instrument_specific_amt': self.get_field('PstTradInstrmSzSpcfcThrshld_Amt') if self.has_valid_data('PstTradInstrmSzSpcfcThrshld_Amt') else None,
+            'has_threshold_data': any([
+                self.has_valid_data('PreTradLrgInScaleThrshld_Amt'),
+                self.has_valid_data('PstTradLrgInScaleThrshld_Amt'),
+                self.has_valid_data('PreTradInstrmSzSpcfcThrshld_Amt'),
+                self.has_valid_data('PstTradInstrmSzSpcfcThrshld_Amt')
+            ])
+        }
     
     def get_criteria_pairs(self):
         """Extract all criteria name/value pairs from raw_data"""
@@ -130,13 +194,30 @@ class TransparencyCalculation(Base):
     
     @property
     def is_equity(self):
-        """Check if this is equity transparency data"""
-        return self.file_type == 'FULECR_E'
+        """Check if this is equity transparency data (FULECR files)"""
+        return self.file_type.startswith('FULECR_')
     
     @property
     def is_non_equity(self):
-        """Check if this is non-equity transparency data"""
-        return self.file_type in ['FULNCR_C', 'FULNCR_D', 'FULNCR_F']
+        """Check if this is non-equity transparency data (FULNCR files)"""
+        return self.file_type.startswith('FULNCR_')
+    
+    @property
+    def instrument_category(self):
+        """Get the specific instrument category (C, D, E, F, H, I, J, O, R)"""
+        if '_' in self.file_type:
+            return self.file_type.split('_')[1]
+        return None
+    
+    @property
+    def is_debt_instrument(self):
+        """Check if this is specifically a debt instrument (FULNCR_D)"""
+        return self.file_type == 'FULNCR_D'
+    
+    @property
+    def is_derivatives_or_complex(self):
+        """Check if this is derivatives or complex instruments (F, H, I, J, O)"""
+        return self.instrument_category in ['F', 'H', 'I', 'J', 'O']
     
     @property
     def instrument_classification(self):

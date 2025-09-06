@@ -1,8 +1,8 @@
 """
-Unified Transparency Routes
+Enhanced Transparency Routes
 
-Routes for managing transparency calculations using the new unified architecture.
-Replaces the complex polymorphic inheritance approach with simplified JSON-based storage.
+Routes for managing transparency calculations using the unified architecture.
+Updated with full FITRS file type support and enhanced filtering capabilities.
 """
 
 import logging
@@ -15,6 +15,7 @@ from ..constants import (
 )
 from typing import Dict, Any
 from ..database.session import SessionLocal
+from sqlalchemy import and_, or_
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -51,11 +52,33 @@ def format_unified_transparency(calc: TransparencyCalculation) -> Dict[str, Any]
             "raw_data": calc.raw_data if calc.raw_data else {}
         }
         
-        # Add derived information
+        # Add enhanced derived information with new model properties
         result["is_equity"] = calc.is_equity
         result["is_non_equity"] = calc.is_non_equity
+        result["instrument_category"] = calc.instrument_category  # C, D, E, F, H, I, J, O, R
+        result["is_debt_instrument"] = calc.is_debt_instrument
+        result["is_derivatives_or_complex"] = calc.is_derivatives_or_complex
         result["instrument_classification"] = calc.instrument_classification
         result["description"] = calc.description
+        
+        # Add enhanced data availability information using new model methods
+        try:
+            transaction_data = calc.get_transaction_data()
+            result["transaction_data"] = transaction_data
+            result["has_transaction_data"] = transaction_data.get("has_transaction_data", False)
+        except Exception as e:
+            logger.warning(f"Error getting transaction data for {calc.id}: {e}")
+            result["transaction_data"] = {"has_transaction_data": False}
+            result["has_transaction_data"] = False
+        
+        try:
+            threshold_data = calc.get_threshold_data()
+            result["threshold_data"] = threshold_data
+            result["has_threshold_data"] = threshold_data.get("has_threshold_data", False)
+        except Exception as e:
+            logger.warning(f"Error getting threshold data for {calc.id}: {e}")
+            result["threshold_data"] = {"has_threshold_data": False}
+            result["has_threshold_data"] = False
         
         # Add criteria pairs for non-equity instruments
         if calc.is_non_equity:
@@ -97,53 +120,109 @@ def format_unified_transparency(calc: TransparencyCalculation) -> Dict[str, Any]
 
 @transparency_bp.route(Endpoints.TRANSPARENCY, methods=["GET"])
 def list_transparency_calculations():
-    """Get all transparency calculations with optional filtering"""
+    """
+    Get all transparency calculations with enhanced filtering options.
+    
+    Query Parameters:
+    - file_type: Specific FITRS file type (e.g., FULNCR_D, FULECR_E)
+    - instrument_category: Instrument category (C, D, E, F, H, I, J, O, R)  
+    - is_equity: Filter by equity instruments (true/false)
+    - is_debt: Filter by debt instruments (true/false)
+    - has_transaction_data: Filter by records with transaction data (true/false)
+    - has_threshold_data: Filter by records with threshold data (true/false)
+    - isin: Filter by specific ISIN
+    """
     try:
-        # Query parameters for filtering
+        # Enhanced query parameters for filtering
         file_type = request.args.get('file_type')
+        instrument_category = request.args.get('instrument_category')  # C, D, E, F, H, I, J, O, R
+        is_equity = request.args.get('is_equity')  # true/false
+        is_debt = request.args.get('is_debt')  # true/false
+        has_transaction_data = request.args.get('has_transaction_data')  # true/false
+        has_threshold_data = request.args.get('has_threshold_data')  # true/false
         isin = request.args.get('isin')
+        
+        # Pagination parameters
         limit = request.args.get(QueryParams.LIMIT, Pagination.DEFAULT_LIMIT, type=int)
         offset = request.args.get(QueryParams.OFFSET, Pagination.DEFAULT_OFFSET, type=int)
         page = request.args.get(QueryParams.PAGE, Pagination.DEFAULT_PAGE, type=int)
         per_page = min(request.args.get(QueryParams.PER_PAGE, Pagination.DEFAULT_PER_PAGE, type=int), Pagination.MAX_PER_PAGE)
         
-        logger.info(f"GET /transparency with params: file_type={file_type}, isin={isin}, page={page}, per_page={per_page}")
+        logger.info(f"GET /transparency with enhanced params: file_type={file_type}, category={instrument_category}, is_equity={is_equity}, is_debt={is_debt}, isin={isin}")
         
-        # Use the service instead of direct session management
-        service = TransparencyService()
-        
+        # Create a new session for this query
+        session = SessionLocal()
         try:
-            if isin:
-                # If ISIN is specified, use the service method for ISIN lookup
-                calculations = service.get_transparency_by_isin(isin)
-                if file_type:
-                    # Filter by file type if specified
-                    calculations = [calc for calc in calculations if calc.file_type == file_type]
-                total_count = len(calculations)
-            else:
-                # Get all calculations using service
-                all_calculations = service.get_all_transparency_calculations()
-                
-                # Apply file_type filter if specified
-                if file_type:
-                    calculations = [calc for calc in all_calculations if calc.file_type == file_type]
-                    logger.info(f"Applied file_type filter: {file_type}")
-                else:
-                    calculations = all_calculations
-                
-                total_count = len(calculations)
-                logger.info(f"Found {total_count} total transparency calculations matching filters")
-                
-                # Apply pagination
-                if page and per_page:
-                    offset = (page - 1) * per_page
-                    calculations = calculations[offset:offset + per_page]
-                else:
-                    calculations = calculations[offset:offset + limit]
+            # Build query
+            query = session.query(TransparencyCalculation)
             
+            # Apply specific file type filter
+            if file_type:
+                query = query.filter(TransparencyCalculation.file_type == file_type)
+                logger.info(f"Applied file_type filter: {file_type}")
+            
+            # Apply instrument category filter (C, D, E, F, H, I, J, O, R)
+            if instrument_category:
+                # Filter by file types that end with the specified category
+                category_pattern = f'%_{instrument_category.upper()}'
+                query = query.filter(TransparencyCalculation.file_type.like(category_pattern))
+                logger.info(f"Applied instrument_category filter: {instrument_category}")
+            
+            # Apply equity/non-equity filters
+            if is_equity and is_equity.lower() == 'true':
+                query = query.filter(TransparencyCalculation.file_type.like('FULECR_%'))
+                logger.info("Applied is_equity=true filter")
+            elif is_equity and is_equity.lower() == 'false':
+                query = query.filter(TransparencyCalculation.file_type.like('FULNCR_%'))
+                logger.info("Applied is_equity=false filter")
+            
+            # Apply debt instrument filter
+            if is_debt and is_debt.lower() == 'true':
+                query = query.filter(TransparencyCalculation.file_type == 'FULNCR_D')
+                logger.info("Applied is_debt=true filter")
+            elif is_debt and is_debt.lower() == 'false':
+                query = query.filter(TransparencyCalculation.file_type != 'FULNCR_D')
+                logger.info("Applied is_debt=false filter")
+            
+            # Apply data availability filters
+            if has_transaction_data and has_transaction_data.lower() == 'true':
+                query = query.filter(
+                    or_(
+                        TransparencyCalculation.total_transactions_executed.isnot(None),
+                        TransparencyCalculation.total_volume_executed.isnot(None)
+                    )
+                )
+                logger.info("Applied has_transaction_data=true filter")
+            elif has_transaction_data and has_transaction_data.lower() == 'false':
+                query = query.filter(
+                    and_(
+                        TransparencyCalculation.total_transactions_executed.is_(None),
+                        TransparencyCalculation.total_volume_executed.is_(None)
+                    )
+                )
+                logger.info("Applied has_transaction_data=false filter")
+            
+            # Apply ISIN filter
+            if isin:
+                query = query.filter(TransparencyCalculation.isin == isin)
+                logger.info(f"Applied isin filter: {isin}")
+            
+            # Get total count for pagination
+            total_count = query.count()
+            logger.info(f"Found {total_count} total transparency calculations matching filters")
+            
+            # Apply pagination
+            if page and per_page:
+                offset = (page - 1) * per_page
+                query = query.offset(offset).limit(per_page)
+            else:
+                query = query.limit(limit).offset(offset)
+            
+            # Execute query
+            calculations = query.all()
             logger.info(f"Retrieved {len(calculations)} transparency calculations after pagination")
             
-            # Format calculations using the new unified format
+            # Format calculations using the enhanced unified format
             result = []
             for calc in calculations:
                 formatted_calc = format_unified_transparency(calc)
@@ -398,6 +477,90 @@ def process_fitrs_file():
         
     except Exception as e:
         logger.error(f"Error in process_fitrs_file: {str(e)}")
+        logger.exception(e)
+        return jsonify({
+            ResponseFields.STATUS: f"{HTTPStatus.INTERNAL_SERVER_ERROR} Internal Server Error",
+            ResponseFields.ERROR: str(e)
+        }), HTTPStatus.INTERNAL_SERVER_ERROR
+
+
+@transparency_bp.route(f"{Endpoints.TRANSPARENCY}/stats", methods=["GET"])
+def get_transparency_statistics():
+    """
+    Get comprehensive transparency statistics by file type and instrument category.
+    Useful for understanding data distribution across the expanded FITRS file types.
+    """
+    try:
+        logger.info("GET /transparency/stats")
+        
+        session = SessionLocal()
+        try:
+            from sqlalchemy import func
+            
+            # Get file type distribution
+            file_type_stats = session.query(
+                TransparencyCalculation.file_type,
+                func.count(TransparencyCalculation.id).label('count')
+            ).group_by(TransparencyCalculation.file_type).all()
+            
+            # Get data availability statistics
+            transaction_data_stats = session.query(
+                func.count(TransparencyCalculation.id).label('total'),
+                func.count(TransparencyCalculation.total_transactions_executed).label('with_transactions'),
+                func.count(TransparencyCalculation.total_volume_executed).label('with_volume')
+            ).first()
+            
+            # Get equity vs non-equity distribution
+            equity_stats = session.query(
+                func.sum(func.case([(TransparencyCalculation.file_type.like('FULECR_%'), 1)], else_=0)).label('equity_count'),
+                func.sum(func.case([(TransparencyCalculation.file_type.like('FULNCR_%'), 1)], else_=0)).label('non_equity_count')
+            ).first()
+            
+            # Get instrument category breakdown
+            category_stats = {}
+            for file_type, count in file_type_stats:
+                category = file_type.split('_')[1] if '_' in file_type else 'Unknown'
+                if category not in category_stats:
+                    category_stats[category] = {'total': 0, 'file_types': {}}
+                category_stats[category]['total'] += count
+                category_stats[category]['file_types'][file_type] = count
+            
+            # Calculate data availability percentages
+            total_records = transaction_data_stats.total if transaction_data_stats else 0
+            transaction_fill_rate = (transaction_data_stats.with_transactions / total_records * 100) if total_records > 0 else 0
+            volume_fill_rate = (transaction_data_stats.with_volume / total_records * 100) if total_records > 0 else 0
+            
+            result = {
+                "summary": {
+                    "total_records": total_records,
+                    "equity_records": equity_stats.equity_count if equity_stats else 0,
+                    "non_equity_records": equity_stats.non_equity_count if equity_stats else 0,
+                    "transaction_data_fill_rate": round(transaction_fill_rate, 1),
+                    "volume_data_fill_rate": round(volume_fill_rate, 1)
+                },
+                "file_type_distribution": {
+                    ft: count for ft, count in file_type_stats
+                },
+                "instrument_categories": category_stats,
+                "data_availability": {
+                    "total_records": total_records,
+                    "records_with_transactions": transaction_data_stats.with_transactions if transaction_data_stats else 0,
+                    "records_with_volume": transaction_data_stats.with_volume if transaction_data_stats else 0,
+                    "transaction_fill_rate_percent": round(transaction_fill_rate, 1),
+                    "volume_fill_rate_percent": round(volume_fill_rate, 1)
+                }
+            }
+            
+            return jsonify({
+                ResponseFields.STATUS: f"{HTTPStatus.OK} OK",
+                ResponseFields.DATA: result
+            }), HTTPStatus.OK
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        logger.error(f"Error in get_transparency_statistics: {str(e)}")
         logger.exception(e)
         return jsonify({
             ResponseFields.STATUS: f"{HTTPStatus.INTERNAL_SERVER_ERROR} Internal Server Error",

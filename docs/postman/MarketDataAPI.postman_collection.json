@@ -169,9 +169,9 @@
       }
     },
     {
-      "name": "Create transparency calculations from FITRS data for a given ISIN",
+      "name": "Get all transparency calculations with optional filtering",
       "request": {
-        "method": "POST",
+        "method": "GET",
         "header": [],
         "url": {
           "raw": "{{base_url}}/transparency",
@@ -185,9 +185,9 @@
       }
     },
     {
-      "name": "Get all transparency calculations with optional filtering",
+      "name": "Create transparency calculations from FITRS data for a given ISIN",
       "request": {
-        "method": "GET",
+        "method": "POST",
         "header": [],
         "url": {
           "raw": "{{base_url}}/transparency",
@@ -236,9 +236,9 @@
       }
     },
     {
-      "name": "Update an existing transparency calculation",
+      "name": "Delete a transparency calculation",
       "request": {
-        "method": "PUT",
+        "method": "DELETE",
         "header": [],
         "url": {
           "raw": "{{base_url}}/transparency/{transparency_id}",
@@ -253,9 +253,9 @@
       }
     },
     {
-      "name": "Delete a transparency calculation",
+      "name": "Update an existing transparency calculation",
       "request": {
-        "method": "DELETE",
+        "method": "PUT",
         "header": [],
         "url": {
           "raw": "{{base_url}}/transparency/{transparency_id}",

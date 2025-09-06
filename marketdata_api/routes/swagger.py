@@ -197,19 +197,34 @@ schema_detail_response = api.model('SchemaDetailResponse', {
     'data': fields.Nested(schema_detailed)
 })
 
-# Transparency models
+# Updated Transparency models for unified architecture
 transparency_base = api.model('TransparencyBase', {
     'id': fields.String(required=True, description="Unique identifier"),
     'isin': fields.String(required=True, description="International Securities Identification Number"),
-    'calculation_type': fields.String(required=True, description="Type of calculation", enum=['EQUITY', 'NON_EQUITY']),
-    'tech_record_id': fields.String(description="Technical record identifier"),
-    'from_date': fields.DateTime(description="From date"),
-    'to_date': fields.DateTime(description="To date"),
+    'file_type': fields.String(required=True, description="FITRS file type", enum=[
+        'FULECR_C', 'FULECR_E', 'FULECR_R',  # Equity types
+        'FULNCR_C', 'FULNCR_D', 'FULNCR_E', 'FULNCR_F', 
+        'FULNCR_H', 'FULNCR_I', 'FULNCR_J', 'FULNCR_O'  # Non-equity types
+    ]),
+    'instrument_category': fields.String(description="Instrument category (C, D, E, F, H, I, J, O, R)"),
+    'is_equity': fields.Boolean(description="Whether this is equity transparency data"),
+    'is_non_equity': fields.Boolean(description="Whether this is non-equity transparency data"),
+    'is_debt_instrument': fields.Boolean(description="Whether this is specifically a debt instrument"),
+    'is_derivatives_or_complex': fields.Boolean(description="Whether this is derivatives or complex instruments"),
+    'instrument_classification': fields.String(description="Financial instrument classification"),
+    'description': fields.String(description="Instrument description"),
+    'tech_record_id': fields.Integer(description="Technical record identifier"),
+    'from_date': fields.Date(description="From date"),
+    'to_date': fields.Date(description="To date"),
     'liquidity': fields.Boolean(description="Liquidity indicator"),
     'total_transactions_executed': fields.Integer(description="Total number of transactions executed"),
     'total_volume_executed': fields.Float(description="Total volume of transactions executed"),
+    'has_transaction_data': fields.Boolean(description="Whether record has transaction data"),
+    'has_threshold_data': fields.Boolean(description="Whether record has threshold data"),
+    'source_file': fields.String(description="Source FITRS filename"),
     'created_at': fields.DateTime(description="Creation timestamp"),
-    'updated_at': fields.DateTime(description="Last update timestamp")
+    'updated_at': fields.DateTime(description="Last update timestamp"),
+    'raw_data': fields.Raw(description="Raw FITRS data in JSON format")
 })
 
 # Updated details models to match the actual response format
@@ -250,7 +265,14 @@ transparency_create_request = api.model('TransparencyCreateRequest', {
 })
 
 batch_transparency_request = api.model('BatchTransparencyRequest', {
-    'calculation_type': fields.String(required=True, description="Type of calculation", enum=['EQUITY', 'NON_EQUITY']),
+    'file_type': fields.String(description="FITRS file type filter", enum=[
+        'FULECR_C', 'FULECR_E', 'FULECR_R',  
+        'FULNCR_C', 'FULNCR_D', 'FULNCR_E', 'FULNCR_F', 
+        'FULNCR_H', 'FULNCR_I', 'FULNCR_J', 'FULNCR_O'
+    ]),
+    'instrument_category': fields.String(description="Instrument category filter (C, D, E, F, H, I, J, O, R)"),
+    'is_equity': fields.Boolean(description="Filter by equity instruments"),
+    'is_debt': fields.Boolean(description="Filter by debt instruments"),
     'isin_prefix': fields.String(description="ISIN prefix filter (e.g., 'NL' for Netherlands)"),
     'limit': fields.Integer(description="Maximum number of calculations to create", default=10),
     'cfi_type': fields.String(description="CFI type filter (D, F, E)", enum=['D', 'F', 'E'])
@@ -809,7 +831,13 @@ from . import transparency_routes
 class TransparencyList(Resource):
     @api.doc('list_transparency_calculations')
     @api.marshal_with(transparency_list_response)
-    @api.param('calculation_type', 'Filter by calculation type', enum=['EQUITY', 'NON_EQUITY'])
+    @api.param('file_type', 'Filter by FITRS file type', enum=['FULECR_C', 'FULECR_E', 'FULECR_R', 'FULNCR_C', 'FULNCR_D', 'FULNCR_E', 'FULNCR_F', 'FULNCR_H', 'FULNCR_I', 'FULNCR_J', 'FULNCR_O'])
+    @api.param('instrument_category', 'Filter by instrument category (C, D, E, F, H, I, J, O, R)')
+    @api.param('is_equity', 'Filter by equity instruments (true/false)')
+    @api.param('is_debt', 'Filter by debt instruments (true/false)')
+    @api.param('has_transaction_data', 'Filter by records with transaction data (true/false)')
+    @api.param('has_threshold_data', 'Filter by records with threshold data (true/false)')
+    @api.param('calculation_type', 'Legacy filter - maps to file_type patterns', enum=['EQUITY', 'NON_EQUITY'])
     @api.param('instrument_type', 'Filter by instrument type', enum=['equity', 'debt', 'futures'])
     @api.param('isin', 'Filter by ISIN')
     @api.param('page', 'Page number', type='integer', default=1)
@@ -843,9 +871,13 @@ class TransparencyList(Resource):
                 # Build query - unified model no longer needs joinedload for polymorphic relationships
                 query = session.query(TransparencyCalculation)
                 
-                # Apply filters
+                # Apply filters - updated for unified transparency model
                 if calculation_type:
-                    query = query.filter(TransparencyCalculation.calculation_type == calculation_type)
+                    # Map old calculation_type to new file_type patterns
+                    if calculation_type.upper() == 'EQUITY':
+                        query = query.filter(TransparencyCalculation.file_type.like('FULECR_%'))
+                    elif calculation_type.upper() == 'NON_EQUITY':
+                        query = query.filter(TransparencyCalculation.file_type.like('FULNCR_%'))
                 if isin:
                     query = query.filter(TransparencyCalculation.isin == isin)
                 
@@ -924,11 +956,10 @@ class TransparencyList(Resource):
             
             if not instrument:
                 logger.info(f"Instrument {isin} not found, creating from FITRS data")
-                # Create instrument using FITRS data
-                instrument = instrument_service.get_or_create_instrument(
-                    isin=isin,
-                    instrument_type=instrument_type,
-                    create_from_fitrs=True
+                # Create instrument using FITRS data - use correct method signature
+                instrument = instrument_service.create_instrument(
+                    identifier=isin,
+                    instrument_type=instrument_type
                 )
                 
                 if not instrument:
@@ -993,7 +1024,6 @@ class TransparencyList(Resource):
                 'meta': {
                     'isin': isin,
                     'instrument_type': instrument_type,
-                    'calculation_type': calculation_type,
                     'total_created': len(result)
                 }
             }, 201
@@ -1059,7 +1089,8 @@ class TransparencyItem(Resource):
 class TransparencyByIsin(Resource):
     @api.doc('get_transparency_by_isin')
     # Remove the marshal_with decorator that might be causing issues
-    @api.param('calculation_type', 'Calculation type to get/create', enum=['EQUITY', 'NON_EQUITY'])
+    @api.param('file_type', 'Filter by specific FITRS file type', enum=['FULECR_C', 'FULECR_E', 'FULECR_R', 'FULNCR_C', 'FULNCR_D', 'FULNCR_E', 'FULNCR_F', 'FULNCR_H', 'FULNCR_I', 'FULNCR_J', 'FULNCR_O'])
+    @api.param('calculation_type', 'Legacy filter - maps to equity/non-equity patterns', enum=['EQUITY', 'NON_EQUITY'])
     @api.param('ensure_instrument', 'Ensure instrument exists before creating transparency data', type='boolean', default=True)
     def get(self, isin):
         """Get transparency calculations for a specific ISIN"""
@@ -1090,9 +1121,13 @@ class TransparencyByIsin(Resource):
                     TransparencyCalculation.isin == isin
                 )
                 
-                # Apply filter for calculation type
+                # Apply filter for file type instead of calculation_type (updated for unified transparency model)
                 if calculation_type:
-                    query = query.filter(TransparencyCalculation.calculation_type == calculation_type)
+                    # Map old calculation_type to new file_type patterns
+                    if calculation_type.upper() == 'EQUITY':
+                        query = query.filter(TransparencyCalculation.file_type.like('FULECR_%'))
+                    elif calculation_type.upper() == 'NON_EQUITY':
+                        query = query.filter(TransparencyCalculation.file_type.like('FULNCR_%'))
                 
                 # Execute query
                 calculations = query.all()

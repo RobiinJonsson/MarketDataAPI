@@ -55,49 +55,142 @@ class TransparencyService(TransparencyServiceInterface):
 
     
     def validate_transparency_data(self, data: Dict[str, Any]) -> None:
-        """Validate required transparency data fields"""
+        """
+        Validate required transparency data fields with improved handling for sparse data.
+        
+        Based on FITRS analysis, many fields have low fill rates:
+        - Transaction data: ~25% fill rate
+        - Threshold amounts: ~31% fill rate  
+        - Dates: ~95% missing in some files
+        """
         required_fields = ['TechRcrdId']
-        missing = [f for f in required_fields if f not in data]
+        missing = [f for f in required_fields if f not in data or data[f] is None]
         if missing:
             raise TransparencyValidationError(f"Missing required fields: {', '.join(missing)}")
         
         # Validate ISIN presence for non-equity data
         if 'ISIN' not in data and 'Id' not in data:
             raise TransparencyValidationError("Either ISIN or Id field must be present")
+        
+        # For debt instruments, check for basic classification
+        if 'FinInstrmClssfctn' in data:
+            classification = data.get('FinInstrmClssfctn', '').upper()
+            if classification == 'BOND':
+                # Debt-specific validation - be lenient with sparse data
+                if not data.get('Desc') and not data.get('CritVal'):
+                    self.logger.warning(f"Debt instrument missing description and criteria value")
+        
+        # Validate numeric fields when present
+        numeric_fields = ['TtlNbOfTxsExctd', 'TtlVolOfTxsExctd', 'PreTradLrgInScaleThrshld_Amt', 
+                         'PstTradLrgInScaleThrshld_Amt', 'PreTradInstrmSzSpcfcThrshld_Amt', 
+                         'PstTradInstrmSzSpcfcThrshld_Amt']
+        
+        for field in numeric_fields:
+            if field in data and data[field] is not None and data[field] != '':
+                try:
+                    float(data[field])
+                except (ValueError, TypeError):
+                    self.logger.warning(f"Invalid numeric value for {field}: {data[field]}")
+                    data[field] = None  # Set to None rather than fail validation
     
     def determine_file_type(self, data: Dict[str, Any], source_filename: str = None) -> str:
         """
         Determine FITRS file type from data structure or filename.
         
-        Returns: 'FULECR_E', 'FULNCR_C', 'FULNCR_D', or 'FULNCR_F'
+        Based on FITRS analysis, we have these instrument types:
+        - FULECR: C (ETFs/ETCs), E (Equities/Shares), R (Rights)  
+        - FULNCR: C (Corporate/Certificates), D (Debt/Bonds), E (ETFs), F (Funds/Derivatives), 
+                  H (Structured Products), I (Index-linked), J (Warrants), O (Options)
+        
+        Returns: Specific file type like 'FULECR_E', 'FULNCR_D', etc.
         """
-        # Try filename first if available
+        # Try filename first if available - this is the most reliable method
         if source_filename:
-            if 'FULECR' in source_filename and '_E_' in source_filename:
-                return 'FULECR_E'
-            elif 'FULNCR' in source_filename:
-                if '_C_' in source_filename:
-                    return 'FULNCR_C'
-                elif '_D_' in source_filename:
-                    return 'FULNCR_D'
-                elif '_F_' in source_filename:
-                    return 'FULNCR_F'
+            import re
+            
+            # Match all the actual instrument types found in FITRS analysis
+            instrument_patterns = {
+                # FULECR patterns (equity files)
+                'FULECR_C': r'FULECR.*_C_',  # ETFs/ETCs
+                'FULECR_E': r'FULECR.*_E_',  # Equities/Shares
+                'FULECR_R': r'FULECR.*_R_',  # Rights
+                
+                # FULNCR patterns (non-equity files)
+                'FULNCR_C': r'FULNCR.*_C_',  # Corporate/Certificates
+                'FULNCR_D': r'FULNCR.*_D_',  # Debt/Bonds  
+                'FULNCR_E': r'FULNCR.*_E_',  # ETFs (non-equity)
+                'FULNCR_F': r'FULNCR.*_F_',  # Funds/Derivatives
+                'FULNCR_H': r'FULNCR.*_H_',  # Structured Products
+                'FULNCR_I': r'FULNCR.*_I_',  # Index-linked
+                'FULNCR_J': r'FULNCR.*_J_',  # Warrants
+                'FULNCR_O': r'FULNCR.*_O_',  # Options
+            }
+            
+            for file_type, pattern in instrument_patterns.items():
+                if re.search(pattern, source_filename):
+                    return file_type
         
-        # Analyze data structure
-        has_isin = 'ISIN' in data
-        has_id_only = 'Id' in data and not has_isin
-        has_desc = 'Desc' in data
-        has_methodology = 'Mthdlgy' in data
-        has_multiple_criteria = any(f'CritNm_{i}' in data for i in range(2, 8))
+        # Enhanced data structure analysis for when filename isn't available
+        has_isin = 'ISIN' in data and data.get('ISIN')
+        has_id_only = 'Id' in data and data.get('Id') and not has_isin
+        has_desc = 'Desc' in data and data.get('Desc')
+        has_methodology = 'Mthdlgy' in data and data.get('Mthdlgy')
+        has_classification = 'FinInstrmClssfctn' in data and data.get('FinInstrmClssfctn')
         
+        # Get key classification indicators
+        classification = data.get('FinInstrmClssfctn', '').upper()
+        description = data.get('Desc', '').lower()
+        criteria_value = data.get('CritVal', '').upper()
+        
+        # Equity classification (FULECR files)
         if has_id_only and has_methodology and not has_desc:
-            return 'FULECR_E'  # Equity - has Id, methodology, no description
-        elif has_isin and has_desc and has_multiple_criteria:
-            return 'FULNCR_F'  # Futures - has multiple criteria pairs
-        elif has_isin and has_desc and 'bond' in data.get('Desc', '').lower():
-            return 'FULNCR_D'  # Debt - has description mentioning bonds
+            # This is equity data - determine specific type
+            if 'equity' in description or 'EQTY' in classification:
+                return 'FULECR_E'  # Shares/Equities
+            elif 'etc' in description or 'etf' in description:
+                return 'FULECR_C'  # ETFs/ETCs
+            elif 'right' in description or 'RGHT' in classification:
+                return 'FULECR_R'  # Rights
+            else:
+                return 'FULECR_E'  # Default to equities
+        
+        # Non-equity classification (FULNCR files) - be specific about instrument types
         elif has_isin and has_desc:
-            return 'FULNCR_C'  # Corporate - basic non-equity
+            # Debt instruments
+            if classification == 'BOND' or 'bond' in description or 'BOND' in criteria_value:
+                return 'FULNCR_D'  # Debt/Bonds
+            
+            # ETFs (non-equity)
+            elif classification == 'ETFS' or 'etf' in description or 'ETC' in description:
+                return 'FULNCR_E'  # ETFs (non-equity category)
+                
+            # Structured products  
+            elif 'structured' in description or 'STRP' in classification:
+                return 'FULNCR_H'  # Structured Products
+                
+            # Warrants
+            elif 'warrant' in description or 'WRNT' in classification:
+                return 'FULNCR_J'  # Warrants
+                
+            # Options
+            elif 'option' in description or 'OPTN' in classification:
+                return 'FULNCR_O'  # Options
+                
+            # Index-linked
+            elif 'index' in description or 'INDX' in classification:
+                return 'FULNCR_I'  # Index-linked
+                
+            # Funds and derivatives (complex instruments)
+            elif any(f'CritNm_{i}' in data for i in range(3, 8)) or 'fund' in description:
+                return 'FULNCR_F'  # Funds/Derivatives
+                
+            # Default corporate/certificates
+            else:
+                return 'FULNCR_C'  # Corporate/Certificates
+        
+        # Fallback
+        self.logger.warning(f"Could not determine specific file type for data: {data.keys()}")
+        return 'FULNCR_C'  # Conservative fallback
         
         # Default fallback
         return 'FULNCR_C'

@@ -301,34 +301,6 @@ paths:
         '401':
           description: Unauthorized
   /transparency:
-    post:
-      summary: Create transparency calculations from FITRS data for a given ISIN
-      description: ''
-      operationId: create_transparency_calculation
-      tags:
-      - transparency
-      parameters:
-      - name: payload
-        in: body
-        description: ''
-        required: true
-        schema:
-          type: string
-      responses:
-        '404':
-          description: No transparency data found in FITRS for the given ISIN
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '400':
-          description: Bad request - missing required fields
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '201':
-          description: Transparency calculations created from FITRS data
     get:
       summary: Get all transparency calculations with optional filtering
       description: ''
@@ -362,7 +334,43 @@ paths:
           type: string
       - name: calculation_type
         in: query
-        description: Filter by calculation type
+        description: Legacy filter - maps to file_type patterns
+        required: false
+        schema:
+          type: string
+      - name: has_threshold_data
+        in: query
+        description: Filter by records with threshold data (true/false)
+        required: false
+        schema:
+          type: string
+      - name: has_transaction_data
+        in: query
+        description: Filter by records with transaction data (true/false)
+        required: false
+        schema:
+          type: string
+      - name: is_debt
+        in: query
+        description: Filter by debt instruments (true/false)
+        required: false
+        schema:
+          type: string
+      - name: is_equity
+        in: query
+        description: Filter by equity instruments (true/false)
+        required: false
+        schema:
+          type: string
+      - name: instrument_category
+        in: query
+        description: Filter by instrument category (C, D, E, F, H, I, J, O, R)
+        required: false
+        schema:
+          type: string
+      - name: file_type
+        in: query
+        description: Filter by FITRS file type
         required: false
         schema:
           type: string
@@ -380,6 +388,34 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TransparencyListResponse'
+    post:
+      summary: Create transparency calculations from FITRS data for a given ISIN
+      description: ''
+      operationId: create_transparency_calculation
+      tags:
+      - transparency
+      parameters:
+      - name: payload
+        in: body
+        description: ''
+        required: true
+        schema:
+          type: string
+      responses:
+        '404':
+          description: No transparency data found in FITRS for the given ISIN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Bad request - missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '201':
+          description: Transparency calculations created from FITRS data
   /transparency/isin/{isin}:
     get:
       summary: Get transparency calculations for a specific ISIN
@@ -396,7 +432,13 @@ paths:
           type: boolean
       - name: calculation_type
         in: query
-        description: Calculation type to get/create
+        description: Legacy filter - maps to equity/non-equity patterns
+        required: false
+        schema:
+          type: string
+      - name: file_type
+        in: query
+        description: Filter by specific FITRS file type
         required: false
         schema:
           type: string
@@ -418,6 +460,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete a transparency calculation
+      description: ''
+      operationId: delete_transparency_calculation
+      tags:
+      - transparency
+      parameters: []
+      responses:
+        '404':
+          description: Transparency calculation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: Transparency calculation deleted
     put:
       summary: Update an existing transparency calculation
       description: ''
@@ -440,22 +498,6 @@ paths:
                 $ref: '#/components/schemas/Error'
         '200':
           description: Transparency calculation updated
-    delete:
-      summary: Delete a transparency calculation
-      description: ''
-      operationId: delete_transparency_calculation
-      tags:
-      - transparency
-      parameters: []
-      responses:
-        '404':
-          description: Transparency calculation not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '200':
-          description: Transparency calculation deleted
 components:
   schemas:
     InstrumentListResponse:
@@ -622,31 +664,6 @@ components:
       required:
       - instrument_type
       - isin
-    Error:
-      type: object
-      properties:
-        status:
-          type: string
-          description: Error status
-          example: error
-          enum:
-          - error
-        error:
-          $ref: '#/components/schemas/ErrorDetails'
-      required:
-      - status
-    ErrorDetails:
-      type: object
-      properties:
-        code:
-          type: string
-          description: Error code
-        message:
-          type: string
-          description: Error message description
-      required:
-      - code
-      - message
     TransparencyListResponse:
       type: object
       properties:
@@ -674,24 +691,54 @@ components:
         isin:
           type: string
           description: International Securities Identification Number
-        calculation_type:
+        file_type:
           type: string
-          description: Type of calculation
-          example: EQUITY
+          description: FITRS file type
+          example: FULECR_C
           enum:
-          - EQUITY
-          - NON_EQUITY
-        tech_record_id:
+          - FULECR_C
+          - FULECR_E
+          - FULECR_R
+          - FULNCR_C
+          - FULNCR_D
+          - FULNCR_E
+          - FULNCR_F
+          - FULNCR_H
+          - FULNCR_I
+          - FULNCR_J
+          - FULNCR_O
+        instrument_category:
           type: string
+          description: Instrument category (C, D, E, F, H, I, J, O, R)
+        is_equity:
+          type: boolean
+          description: Whether this is equity transparency data
+        is_non_equity:
+          type: boolean
+          description: Whether this is non-equity transparency data
+        is_debt_instrument:
+          type: boolean
+          description: Whether this is specifically a debt instrument
+        is_derivatives_or_complex:
+          type: boolean
+          description: Whether this is derivatives or complex instruments
+        instrument_classification:
+          type: string
+          description: Financial instrument classification
+        description:
+          type: string
+          description: Instrument description
+        tech_record_id:
+          type: integer
           description: Technical record identifier
         from_date:
           type: string
           description: From date
-          format: date-time
+          format: date
         to_date:
           type: string
           description: To date
-          format: date-time
+          format: date
         liquidity:
           type: boolean
           description: Liquidity indicator
@@ -701,6 +748,15 @@ components:
         total_volume_executed:
           type: number
           description: Total volume of transactions executed
+        has_transaction_data:
+          type: boolean
+          description: Whether record has transaction data
+        has_threshold_data:
+          type: boolean
+          description: Whether record has threshold data
+        source_file:
+          type: string
+          description: Source FITRS filename
         created_at:
           type: string
           description: Creation timestamp
@@ -709,8 +765,11 @@ components:
           type: string
           description: Last update timestamp
           format: date-time
+        raw_data:
+          type: object
+          description: Raw FITRS data in JSON format
       required:
-      - calculation_type
+      - file_type
       - id
       - isin
     TransparencyDetails:
@@ -776,6 +835,31 @@ components:
           description: Criterion value (non-equity)
       required:
       - type
+    Error:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Error status
+          example: error
+          enum:
+          - error
+        error:
+          $ref: '#/components/schemas/ErrorDetails'
+      required:
+      - status
+    ErrorDetails:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Error message description
+      required:
+      - code
+      - message
   securitySchemes:
     ApiKeyAuth:
       type: apiKey
