@@ -3,7 +3,7 @@ from flask import Blueprint, jsonify, render_template
 from sqlalchemy.exc import SQLAlchemyError
 from ..constants import (
     API, Endpoints, ResponseFields, ErrorMessages, HTTPStatus,
-    Pagination, CFI as CFIConstants
+    Pagination
 )
 
 # Setup logging
@@ -30,8 +30,7 @@ def api_info():
         "version": API.VERSION,
         "endpoints": {
             "instruments": f"{API.PREFIX}{Endpoints.INSTRUMENTS}",
-            "entities": f"{API.PREFIX}{Endpoints.ENTITIES}",
-            "cfi": f"{API.PREFIX}{Endpoints.CFI}/{{cfi_code}}"
+            "entities": f"{API.PREFIX}{Endpoints.ENTITIES}"
         }
     })
 

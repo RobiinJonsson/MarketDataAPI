@@ -24,22 +24,11 @@ class Pagination:
     MAX_PER_PAGE = 100
     MAX_BATCH_SIZE = 100
 
-# CFI Code Validation
-class CFI:
-    REQUIRED_LENGTH = 6
-
 # API Version and Info
 class API:
     VERSION = "1.0"
     PREFIX = "/api/v1"
     NAME = "MarketDataAPI CRUD API"
-
-# Instrument Types (Legacy - see expanded version at end of file)
-class LegacyInstrumentTypes:
-    EQUITY = "equity"
-    DEBT = "debt"
-    FUTURE = "future"
-    VALID_TYPES = [EQUITY, DEBT, FUTURE]
 
 # Batch Operations
 class BatchOperations:
@@ -54,8 +43,6 @@ class ErrorMessages:
     ENTITY_NOT_FOUND = "Legal entity not found"
     SCHEMA_NOT_FOUND = "Schema not found"
     DATABASE_ERROR = "A database error occurred"
-    INVALID_CFI_LENGTH = "CFI code must be 6 characters"
-    INVALID_INSTRUMENT_TYPE = f"Invalid instrument type. Must be one of: {', '.join(LegacyInstrumentTypes.VALID_TYPES)}"
     INVALID_BATCH_OPERATION = f"Invalid operation, must be '{BatchOperations.CREATE}' or '{BatchOperations.ENRICH}'"
     INVALID_DATA_FORMAT = "Invalid data format"
     MISSING_IDENTIFIERS = "Missing or invalid 'identifiers' list"
@@ -125,7 +112,6 @@ class Endpoints:
     INSTRUMENTS = "/instruments"
     ENTITIES = "/entities"
     TRANSPARENCY = "/transparency"
-    CFI = "/cfi"
     BATCH = "/batch"
     BATCH_INSTRUMENTS = "/batch/instruments"
     BATCH_ENTITIES = "/batch/entities"

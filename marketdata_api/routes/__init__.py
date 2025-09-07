@@ -12,7 +12,6 @@ def register_routes(app: Flask) -> None:
         from .common_routes import common_bp
         from .instrument_routes import instrument_bp
         from .entity_routes import entity_bp
-        from .cfi_routes import cfi_bp
         from .transparency_routes import transparency_bp
        
         
@@ -21,7 +20,6 @@ def register_routes(app: Flask) -> None:
             (common_bp, "common"),
             (instrument_bp, "instrument"),
             (entity_bp, "entity"),
-            (cfi_bp, "cfi"),
             (transparency_bp, "transparency"),
         ]
         

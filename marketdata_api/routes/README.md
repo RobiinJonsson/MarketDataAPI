@@ -5,11 +5,10 @@ This directory contains the route definitions for the MarketData API. The routes
 ## Route Files
 
 - **common_routes.py**: Common API routes and utilities, including API info and error handlers
-- **instrument_routes.py**: Endpoints for instrument-related operations (create, read, update, delete, enrich)
+- **instrument_routes.py**: Endpoints for instrument-related operations (create, read, update, delete, enrich) including CFI decoding
 - **entity_routes.py**: Endpoints for legal entity operations (create, read, update, delete)
 - **file_management.py**: Advanced file management endpoints for ESMA data operations
 - **transparency_routes.py**: Unified transparency endpoints using JSON-based storage and FITRS file search
-- **cfi_routes.py**: Endpoints for CFI code decoding
 - **market.py**: Market data related endpoints
 - **schema.py**: Schema-related endpoints
 - **swagger.py**: Swagger documentation endpoints
@@ -25,7 +24,6 @@ def register_routes(app: Flask) -> None:
     app.register_blueprint(common_bp)
     app.register_blueprint(instrument_bp)
     app.register_blueprint(entity_bp)
-    app.register_blueprint(cfi_bp)
     # Additional blueprints...
 ```
 
