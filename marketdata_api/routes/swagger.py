@@ -228,6 +228,36 @@ cfi_comprehensive_response = api.model('CFIComprehensiveResponse', {
     'error': fields.String(description="Error message if validation failed")
 })
 
+# Updated CFI response model (without validation wrapper)
+cfi_info_response = api.model('CFIInfoResponse', {
+    'cfi_code': fields.String(required=True, description="The CFI code"),
+    'category': fields.String(description="CFI category letter"),
+    'category_description': fields.String(description="CFI category description"),
+    'group': fields.String(description="CFI group letter"),
+    'group_description': fields.String(description="CFI group description"),
+    'attributes': fields.String(description="CFI attributes (4 characters)"),
+    'decoded_attributes': fields.Nested(cfi_decoded_attributes, description="Decoded CFI attributes"),
+    'business_type': fields.String(description="Business instrument type"),
+    'fitrs_patterns': fields.List(fields.String, description="FITRS file patterns for this CFI"),
+    'is_equity': fields.Boolean(description="Whether this is an equity instrument"),
+    'is_debt': fields.Boolean(description="Whether this is a debt instrument"),
+    'is_collective_investment': fields.Boolean(description="Whether this is a collective investment"),
+    'is_derivative': fields.Boolean(description="Whether this is a derivative")
+})
+
+# Instrument CFI classification response
+instrument_cfi_classification = api.model('InstrumentCFIClassification', {
+    'isin': fields.String(required=True, description="Instrument ISIN"),
+    'instrument_id': fields.Integer(required=True, description="Internal instrument ID"),
+    'current_instrument_type': fields.String(description="Current instrument type in database"),
+    'cfi_classification': fields.Nested(cfi_info_response, description="Full CFI classification"),
+    'consistency_check': fields.Nested(api.model('ConsistencyCheck', {
+        'cfi_suggests_type': fields.String(description="Type suggested by CFI code"),
+        'current_type': fields.String(description="Current type in database"),
+        'is_consistent': fields.Boolean(description="Whether CFI and database types match")
+    }), description="Consistency analysis between CFI and database")
+})
+
 valid_types_response = api.model('ValidTypesResponse', {
     'valid_types': fields.List(fields.String, required=True, description="List of valid instrument types"),
     'message': fields.String(required=True, description="Description message")
@@ -601,58 +631,6 @@ class InstrumentTypes(Resource):
                 }
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
-@instruments_ns.route('/validate-cfi')
-class CFIValidation(Resource):
-    @instruments_ns.doc(
-        description='Validate a CFI code and return comprehensive instrument information including business type, decoded attributes, and file patterns'
-    )
-    @instruments_ns.expect(cfi_validation_request)
-    @instruments_ns.response(200, 'CFI code is valid', cfi_comprehensive_response)
-    @instruments_ns.response(400, 'CFI code is invalid', error_model)
-    @instruments_ns.response(500, 'Internal server error', error_model)
-    def post(self):
-        """Validate CFI code and return comprehensive information"""
-        try:
-            from ..models.utils.cfi_instrument_manager import validate_cfi_code, CFIInstrumentTypeManager
-            
-            data = request.json
-            if not data or 'cfi_code' not in data:
-                return {
-                    ResponseFields.STATUS: "error",
-                    ResponseFields.ERROR: {
-                        "code": str(HTTPStatus.BAD_REQUEST),
-                        ResponseFields.MESSAGE: "CFI code is required"
-                    }
-                }, HTTPStatus.BAD_REQUEST
-                
-            cfi_code = data['cfi_code']
-            is_valid, error_msg = validate_cfi_code(cfi_code)
-            
-            if not is_valid:
-                return {
-                    "valid": False,
-                    "error": error_msg,
-                    "cfi_code": cfi_code
-                }, HTTPStatus.BAD_REQUEST
-                
-            # Get comprehensive CFI information
-            cfi_info = CFIInstrumentTypeManager.get_cfi_info(cfi_code)
-            
-            return {
-                "valid": True,
-                "message": "CFI code is valid",
-                **cfi_info
-            }
-            
-        except Exception as e:
-            return {
-                ResponseFields.STATUS: "error", 
-                ResponseFields.ERROR: {
-                    "code": str(HTTPStatus.INTERNAL_SERVER_ERROR), 
-                    ResponseFields.MESSAGE: str(e)
-                }
-            }, HTTPStatus.INTERNAL_SERVER_ERROR
-
 @instruments_ns.route('/cfi/<string:cfi_code>')
 class CFIInfo(Resource):
     @instruments_ns.doc(
@@ -661,7 +639,7 @@ class CFIInfo(Resource):
             'cfi_code': 'The 6-character CFI code to decode (e.g., ESVUFR)'
         }
     )
-    @instruments_ns.response(200, 'Success', cfi_comprehensive_response)
+    @instruments_ns.response(200, 'Success', cfi_info_response)
     @instruments_ns.response(400, 'Invalid CFI code', error_model)
     @instruments_ns.response(500, 'Internal server error', error_model)
     def get(self, cfi_code):
@@ -686,6 +664,89 @@ class CFIInfo(Resource):
             
             return cfi_info
             
+        except Exception as e:
+            return {
+                ResponseFields.STATUS: "error", 
+                ResponseFields.ERROR: {
+                    "code": str(HTTPStatus.INTERNAL_SERVER_ERROR), 
+                    ResponseFields.MESSAGE: str(e)
+                }
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@instruments_ns.route('/<string:isin>/cfi')
+class InstrumentCFIClassification(Resource):
+    @instruments_ns.doc(
+        description='Classify an existing instrument using its stored CFI code and check consistency with current type',
+        params={
+            'isin': 'The ISIN of the instrument to classify (e.g., US0378331005)'
+        }
+    )
+    @instruments_ns.response(200, 'Success', instrument_cfi_classification)
+    @instruments_ns.response(400, 'Invalid ISIN or missing CFI code', error_model)
+    @instruments_ns.response(404, 'Instrument not found', error_model)
+    @instruments_ns.response(500, 'Internal server error', error_model)
+    def get(self, isin):
+        """Classify instrument by its CFI code"""
+        try:
+            from ..models.utils.cfi_instrument_manager import validate_cfi_code, CFIInstrumentTypeManager
+            from ..models.sqlite import Instrument
+            from ..database.session import get_session
+            
+            isin = isin.upper()
+            
+            with get_session() as session:
+                # Find the instrument by ISIN
+                instrument = session.query(Instrument).filter(Instrument.isin == isin).first()
+                
+                if not instrument:
+                    return {
+                        ResponseFields.STATUS: "error",
+                        ResponseFields.ERROR: {
+                            "code": str(HTTPStatus.NOT_FOUND),
+                            ResponseFields.MESSAGE: f"Instrument with ISIN {isin} not found"
+                        }
+                    }, HTTPStatus.NOT_FOUND
+                
+                # Check if instrument has a CFI code
+                if not instrument.cfi_code:
+                    return {
+                        ResponseFields.STATUS: "error",
+                        ResponseFields.ERROR: {
+                            "code": str(HTTPStatus.BAD_REQUEST),
+                            ResponseFields.MESSAGE: f"Instrument {isin} does not have a CFI code"
+                        }
+                    }, HTTPStatus.BAD_REQUEST
+                    
+                # Validate and get comprehensive CFI information
+                is_valid, error_msg = validate_cfi_code(instrument.cfi_code)
+                
+                if not is_valid:
+                    return {
+                        ResponseFields.STATUS: "error",
+                        ResponseFields.ERROR: {
+                            "code": str(HTTPStatus.BAD_REQUEST),
+                            ResponseFields.MESSAGE: f"Invalid CFI code '{instrument.cfi_code}': {error_msg}"
+                        }
+                    }, HTTPStatus.BAD_REQUEST
+                    
+                # Get comprehensive CFI classification
+                cfi_info = CFIInstrumentTypeManager.get_cfi_info(instrument.cfi_code)
+                
+                # Add instrument context
+                result = {
+                    "isin": isin,
+                    "instrument_id": instrument.id,
+                    "current_instrument_type": instrument.instrument_type,
+                    "cfi_classification": cfi_info,
+                    "consistency_check": {
+                        "cfi_suggests_type": cfi_info.get('business_type'),
+                        "current_type": instrument.instrument_type,
+                        "is_consistent": cfi_info.get('business_type') == instrument.instrument_type
+                    }
+                }
+                
+                return result
+                
         except Exception as e:
             return {
                 ResponseFields.STATUS: "error", 

@@ -56,11 +56,8 @@ export const instrumentApi = {
     return apiRequest('/instruments/types');
   },
 
-  validateCfi: async (cfi_code: string): Promise<ApiResponse<{ valid: boolean, cfi_code: string, instrument_type: string, error?: string }>> => {
-    return apiRequest('/instruments/validate-cfi', {
-      method: 'POST',
-      body: JSON.stringify({ cfi_code }),
-    });
+  validateCfi: async (cfi_code: string): Promise<ApiResponse<any>> => {
+    return apiRequest(`/instruments/cfi/${encodeURIComponent(cfi_code)}`);
   },
 
   getAll: async (): Promise<ApiResponse<any[]>> => {

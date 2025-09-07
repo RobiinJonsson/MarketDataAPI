@@ -85,23 +85,6 @@
       }
     },
     {
-      "name": "Validate CFI code and return comprehensive information",
-      "request": {
-        "method": "POST",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/instruments/validate-cfi",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "instruments",
-            "validate-cfi"
-          ]
-        }
-      }
-    },
-    {
       "name": "Enrich an instrument with FIGI and LEI data",
       "request": {
         "method": "POST",
@@ -150,6 +133,24 @@
           "path": [
             "instruments",
             "{isin}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Classify instrument by its CFI code",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/instruments/{isin}/cfi",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "instruments",
+            "{isin}",
+            "cfi"
           ]
         }
       }
@@ -221,9 +222,9 @@
       }
     },
     {
-      "name": "Get all transparency calculations with optional filtering",
+      "name": "Create transparency calculations from FITRS data for a given ISIN",
       "request": {
-        "method": "GET",
+        "method": "POST",
         "header": [],
         "url": {
           "raw": "{{base_url}}/transparency",
@@ -237,9 +238,9 @@
       }
     },
     {
-      "name": "Create transparency calculations from FITRS data for a given ISIN",
+      "name": "Get all transparency calculations with optional filtering",
       "request": {
-        "method": "POST",
+        "method": "GET",
         "header": [],
         "url": {
           "raw": "{{base_url}}/transparency",
@@ -271,9 +272,9 @@
       }
     },
     {
-      "name": "Update an existing transparency calculation",
+      "name": "Get transparency calculation by ID",
       "request": {
-        "method": "PUT",
+        "method": "GET",
         "header": [],
         "url": {
           "raw": "{{base_url}}/transparency/{transparency_id}",
@@ -305,9 +306,9 @@
       }
     },
     {
-      "name": "Get transparency calculation by ID",
+      "name": "Update an existing transparency calculation",
       "request": {
-        "method": "GET",
+        "method": "PUT",
         "header": [],
         "url": {
           "raw": "{{base_url}}/transparency/{transparency_id}",

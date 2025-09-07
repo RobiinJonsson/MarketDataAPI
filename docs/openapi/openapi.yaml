@@ -103,7 +103,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CFIComprehensiveResponse'
+                $ref: '#/components/schemas/CFIInfoResponse'
   /instruments/types:
     get:
       summary: Get valid instrument types from CFI system
@@ -125,40 +125,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ValidTypesResponse'
-  /instruments/validate-cfi:
-    post:
-      summary: Validate CFI code and return comprehensive information
-      description: Validate a CFI code and return comprehensive instrument information
-        including business type, decoded attributes, and file patterns
-      operationId: post_cfi_validation
-      tags:
-      - instruments
-      parameters:
-      - name: payload
-        in: body
-        description: ''
-        required: true
-        schema:
-          type: string
-      responses:
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '400':
-          description: CFI code is invalid
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '200':
-          description: CFI code is valid
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CFIComprehensiveResponse'
   /instruments/{identifier}/enrich:
     post:
       summary: Enrich an instrument with FIGI and LEI data
@@ -215,6 +181,46 @@ paths:
           description: Instrument not found
         '401':
           description: Unauthorized
+  /instruments/{isin}/cfi:
+    get:
+      summary: Classify instrument by its CFI code
+      description: Classify an existing instrument using its stored CFI code and check
+        consistency with current type
+      operationId: get_instrument_cfi_classification
+      tags:
+      - instruments
+      parameters:
+      - name: isin
+        in: path
+        description: The ISIN of the instrument to classify (e.g., US0378331005)
+        required: true
+        schema:
+          type: string
+      responses:
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Instrument not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Invalid ISIN or missing CFI code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InstrumentCFIClassification'
   /legal-entities/:
     get:
       summary: Retrieves a paginated list of legal entities
@@ -390,6 +396,34 @@ paths:
         '401':
           description: Unauthorized
   /transparency:
+    post:
+      summary: Create transparency calculations from FITRS data for a given ISIN
+      description: ''
+      operationId: create_transparency_calculation
+      tags:
+      - transparency
+      parameters:
+      - name: payload
+        in: body
+        description: ''
+        required: true
+        schema:
+          type: string
+      responses:
+        '404':
+          description: No transparency data found in FITRS for the given ISIN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Bad request - missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '201':
+          description: Transparency calculations created from FITRS data
     get:
       summary: Get all transparency calculations with optional filtering
       description: ''
@@ -477,34 +511,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TransparencyListResponse'
-    post:
-      summary: Create transparency calculations from FITRS data for a given ISIN
-      description: ''
-      operationId: create_transparency_calculation
-      tags:
-      - transparency
-      parameters:
-      - name: payload
-        in: body
-        description: ''
-        required: true
-        schema:
-          type: string
-      responses:
-        '404':
-          description: No transparency data found in FITRS for the given ISIN
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '400':
-          description: Bad request - missing required fields
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '201':
-          description: Transparency calculations created from FITRS data
   /transparency/isin/{isin}:
     get:
       summary: Get transparency calculations for a specific ISIN
@@ -535,6 +541,36 @@ paths:
         '200':
           description: Success
   /transparency/{transparency_id}:
+    get:
+      summary: Get transparency calculation by ID
+      description: ''
+      operationId: get_transparency_calculation
+      tags:
+      - transparency
+      parameters: []
+      responses:
+        '404':
+          description: Transparency calculation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    delete:
+      summary: Delete a transparency calculation
+      description: ''
+      operationId: delete_transparency_calculation
+      tags:
+      - transparency
+      parameters: []
+      responses:
+        '404':
+          description: Transparency calculation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: Transparency calculation deleted
     put:
       summary: Update an existing transparency calculation
       description: ''
@@ -557,36 +593,6 @@ paths:
                 $ref: '#/components/schemas/Error'
         '200':
           description: Transparency calculation updated
-    delete:
-      summary: Delete a transparency calculation
-      description: ''
-      operationId: delete_transparency_calculation
-      tags:
-      - transparency
-      parameters: []
-      responses:
-        '404':
-          description: Transparency calculation not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '200':
-          description: Transparency calculation deleted
-    get:
-      summary: Get transparency calculation by ID
-      description: ''
-      operationId: get_transparency_calculation
-      tags:
-      - transparency
-      parameters: []
-      responses:
-        '404':
-          description: Transparency calculation not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
 components:
   schemas:
     InstrumentListResponse:
@@ -685,21 +691,9 @@ components:
       required:
       - message
       - valid_types
-    CFIValidationRequest:
+    CFIInfoResponse:
       type: object
       properties:
-        cfi_code:
-          type: string
-          description: 6-character CFI code to validate
-          example: ESVUFR
-      required:
-      - cfi_code
-    CFIComprehensiveResponse:
-      type: object
-      properties:
-        valid:
-          type: boolean
-          description: Whether CFI code is valid
         cfi_code:
           type: string
           description: The CFI code
@@ -740,15 +734,8 @@ components:
         is_derivative:
           type: boolean
           description: Whether this is a derivative
-        message:
-          type: string
-          description: Success message
-        error:
-          type: string
-          description: Error message if validation failed
       required:
       - cfi_code
-      - valid
     CFIDecodedAttributes:
       type: object
       properties:
@@ -764,6 +751,37 @@ components:
         form:
           type: string
           description: Form description
+    InstrumentCFIClassification:
+      type: object
+      properties:
+        isin:
+          type: string
+          description: Instrument ISIN
+        instrument_id:
+          type: integer
+          description: Internal instrument ID
+        current_instrument_type:
+          type: string
+          description: Current instrument type in database
+        cfi_classification:
+          description: Full CFI classification
+        consistency_check:
+          description: Consistency analysis between CFI and database
+      required:
+      - instrument_id
+      - isin
+    ConsistencyCheck:
+      type: object
+      properties:
+        cfi_suggests_type:
+          type: string
+          description: Type suggested by CFI code
+        current_type:
+          type: string
+          description: Current type in database
+        is_consistent:
+          type: boolean
+          description: Whether CFI and database types match
     LegalEntityListResponse:
       type: object
       properties:

@@ -122,19 +122,20 @@ async function validateCfiCode(
   try {
     const response = await instrumentApi.validateCfi(cfiCode);
     
-    if (response.status === 'success' && response.data?.valid) {
-      // CFI is valid
+    if (response.status === 'success' && response.data) {
+      // CFI is valid - new response format has business_type instead of instrument_type
       cfiInput.classList.add('border-green-500');
-      messageDiv.textContent = `Valid CFI. Instrument type: ${response.data.instrument_type}`;
+      const businessType = response.data.business_type || 'unknown';
+      messageDiv.textContent = `Valid CFI. Instrument type: ${businessType}`;
       messageDiv.className = 'text-sm mt-1 text-green-600';
       messageDiv.classList.remove('hidden');
       
       // Auto-select the corresponding instrument type
-      typeSelect.value = response.data.instrument_type;
+      typeSelect.value = businessType;
     } else {
       // CFI is invalid
       cfiInput.classList.add('border-red-500');
-      messageDiv.textContent = response.data?.error || 'Invalid CFI code';
+      messageDiv.textContent = response.error || 'Invalid CFI code';
       messageDiv.className = 'text-sm mt-1 text-red-600';
       messageDiv.classList.remove('hidden');
     }

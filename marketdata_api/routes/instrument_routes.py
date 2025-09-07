@@ -119,6 +119,61 @@ def get_instrument(identifier):
         logger.error(f"Error in get_instrument: {str(e)}")
         return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
+@instrument_bp.route(f"{Endpoints.INSTRUMENTS}/<string:isin>/cfi", methods=["GET"])
+def classify_instrument_by_cfi(isin):
+    """Classify an existing instrument using its CFI code"""
+    try:
+        isin = isin.upper()
+        
+        # Get the correct Instrument model
+        from ..models.sqlite import Instrument
+        
+        with get_session() as session:
+            # Find the instrument by ISIN
+            instrument = session.query(Instrument).filter(Instrument.isin == isin).first()
+            
+            if not instrument:
+                return jsonify({
+                    ResponseFields.ERROR: f"Instrument with ISIN {isin} not found"
+                }), HTTPStatus.NOT_FOUND
+            
+            # Check if instrument has a CFI code
+            if not instrument.cfi_code:
+                return jsonify({
+                    ResponseFields.ERROR: f"Instrument {isin} does not have a CFI code"
+                }), HTTPStatus.BAD_REQUEST
+                
+            # Validate and get comprehensive CFI information
+            is_valid, error_msg = validate_cfi_code(instrument.cfi_code)
+            
+            if not is_valid:
+                return jsonify({
+                    ResponseFields.ERROR: f"Invalid CFI code '{instrument.cfi_code}': {error_msg}"
+                }), HTTPStatus.BAD_REQUEST
+                
+            # Get comprehensive CFI classification
+            from ..models.utils.cfi_instrument_manager import CFIInstrumentTypeManager
+            cfi_info = CFIInstrumentTypeManager.get_cfi_info(instrument.cfi_code)
+            
+            # Add instrument context
+            result = {
+                "isin": isin,
+                "instrument_id": instrument.id,
+                "current_instrument_type": instrument.instrument_type,
+                "cfi_classification": cfi_info,
+                "consistency_check": {
+                    "cfi_suggests_type": cfi_info.get('business_type'),
+                    "current_type": instrument.instrument_type,
+                    "is_consistent": cfi_info.get('business_type') == instrument.instrument_type
+                }
+            }
+            
+            return jsonify(result), HTTPStatus.OK
+            
+    except Exception as e:
+        logger.error(f"Error in classify_instrument_by_cfi: {str(e)}")
+        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
+
 @instrument_bp.route(Endpoints.INSTRUMENTS, methods=["POST"])
 def create_instrument():
     """Create a new instrument from FIRDS data"""
@@ -189,38 +244,6 @@ def get_valid_instrument_types():
         
     except Exception as e:
         logger.error(f"Error in get_valid_instrument_types: {str(e)}")
-        return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
-
-@instrument_bp.route(f"{Endpoints.INSTRUMENTS}/validate-cfi", methods=["POST"])
-def validate_cfi_endpoint():
-    """Validate a CFI code and return comprehensive instrument information"""
-    try:
-        data = request.json
-        if not data or 'cfi_code' not in data:
-            return jsonify({ResponseFields.ERROR: "CFI code is required"}), HTTPStatus.BAD_REQUEST
-            
-        cfi_code = data['cfi_code']
-        is_valid, error_msg = validate_cfi_code(cfi_code)
-        
-        if not is_valid:
-            return jsonify({
-                "valid": False,
-                "error": error_msg,
-                "cfi_code": cfi_code
-            }), HTTPStatus.BAD_REQUEST
-            
-        # Get comprehensive CFI information from our instrument manager
-        from ..models.utils.cfi_instrument_manager import CFIInstrumentTypeManager
-        cfi_info = CFIInstrumentTypeManager.get_cfi_info(cfi_code)
-        
-        return jsonify({
-            "valid": True,
-            "message": "CFI code is valid",
-            **cfi_info  # Include all the comprehensive CFI information
-        }), HTTPStatus.OK
-        
-    except Exception as e:
-        logger.error(f"Error in validate_cfi_endpoint: {str(e)}")
         return jsonify({ResponseFields.ERROR: str(e)}), HTTPStatus.INTERNAL_SERVER_ERROR
 
 @instrument_bp.route(f"{Endpoints.INSTRUMENTS}/cfi/<string:cfi_code>", methods=["GET"])
