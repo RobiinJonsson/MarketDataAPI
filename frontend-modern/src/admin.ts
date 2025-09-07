@@ -38,9 +38,124 @@ function initializeTabs(): void {
   });
 }
 
+async function loadValidInstrumentTypes(): Promise<void> {
+  try {
+    const response = await instrumentApi.getValidTypes();
+    if (response.status === 'success' && response.data) {
+      populateInstrumentTypeSelect(response.data.valid_types);
+    } else {
+      console.warn('Failed to load valid instrument types, using fallback');
+      // Fallback to common types if API fails
+      populateInstrumentTypeSelect(['equity', 'debt', 'future', 'collective_investment', 'other']);
+    }
+  } catch (error) {
+    console.error('Error loading valid instrument types:', error);
+    // Fallback types
+    populateInstrumentTypeSelect(['equity', 'debt', 'future', 'collective_investment', 'other']);
+  }
+}
+
+function populateInstrumentTypeSelect(types: string[]): void {
+  const select = document.querySelector('select[name="instrument_type"]') as HTMLSelectElement;
+  if (!select) return;
+
+  // Clear existing options except the first placeholder
+  const placeholder = select.querySelector('option[value=""]');
+  select.innerHTML = '';
+  if (placeholder) {
+    select.appendChild(placeholder);
+  } else {
+    const placeholderOption = document.createElement('option');
+    placeholderOption.value = '';
+    placeholderOption.textContent = 'Select type...';
+    select.appendChild(placeholderOption);
+  }
+
+  // Add dynamic options
+  types.forEach(type => {
+    const option = document.createElement('option');
+    option.value = type;
+    option.textContent = type.charAt(0).toUpperCase() + type.slice(1).replace('_', ' ');
+    select.appendChild(option);
+  });
+}
+
+function initializeCfiValidation(): void {
+  const cfiInput = document.getElementById('cfi_code') as HTMLInputElement;
+  const typeSelect = document.querySelector('select[name="instrument_type"]') as HTMLSelectElement;
+  const messageDiv = document.getElementById('cfi-validation-message') as HTMLDivElement;
+
+  if (!cfiInput || !typeSelect || !messageDiv) return;
+
+  let validationTimeout: NodeJS.Timeout;
+
+  cfiInput.addEventListener('input', () => {
+    clearTimeout(validationTimeout);
+    
+    const cfiCode = cfiInput.value.trim().toUpperCase();
+    
+    // Clear previous validation state
+    messageDiv.classList.add('hidden');
+    cfiInput.classList.remove('border-green-500', 'border-red-500');
+    
+    if (cfiCode.length === 0) {
+      return; // No validation needed for empty input
+    }
+
+    if (cfiCode.length !== 6) {
+      return; // Wait for complete input
+    }
+
+    // Debounce validation
+    validationTimeout = setTimeout(async () => {
+      await validateCfiCode(cfiCode, typeSelect, messageDiv, cfiInput);
+    }, 500);
+  });
+}
+
+async function validateCfiCode(
+  cfiCode: string, 
+  typeSelect: HTMLSelectElement, 
+  messageDiv: HTMLDivElement, 
+  cfiInput: HTMLInputElement
+): Promise<void> {
+  try {
+    const response = await instrumentApi.validateCfi(cfiCode);
+    
+    if (response.status === 'success' && response.data?.valid) {
+      // CFI is valid
+      cfiInput.classList.add('border-green-500');
+      messageDiv.textContent = `Valid CFI. Instrument type: ${response.data.instrument_type}`;
+      messageDiv.className = 'text-sm mt-1 text-green-600';
+      messageDiv.classList.remove('hidden');
+      
+      // Auto-select the corresponding instrument type
+      typeSelect.value = response.data.instrument_type;
+    } else {
+      // CFI is invalid
+      cfiInput.classList.add('border-red-500');
+      messageDiv.textContent = response.data?.error || 'Invalid CFI code';
+      messageDiv.className = 'text-sm mt-1 text-red-600';
+      messageDiv.classList.remove('hidden');
+    }
+  } catch (error) {
+    console.error('CFI validation error:', error);
+    cfiInput.classList.add('border-red-500');
+    messageDiv.textContent = 'Failed to validate CFI code';
+    messageDiv.className = 'text-sm mt-1 text-red-600';
+    messageDiv.classList.remove('hidden');
+  }
+}
+
 function initializeInstrumentForm(): void {
   const form = document.getElementById('create-instrument-form') as HTMLFormElement;
   if (!form) return;
+
+  // Load valid instrument types when form is initialized
+  loadValidInstrumentTypes();
+
+  // Add CFI code validation
+  initializeCfiValidation();
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -48,6 +163,7 @@ function initializeInstrumentForm(): void {
     const formData = new FormData(form);
     const isin = formData.get('isin') as string;
     const type = formData.get('instrument_type') as string;
+    const cfiCode = formData.get('cfi_code') as string;
     const fetchAndEnrich = formData.get('fetch_and_enrich');
 
     // Build payload as in old frontend
@@ -55,6 +171,12 @@ function initializeInstrumentForm(): void {
       isin,
       type
     };
+    
+    // Include CFI code if provided
+    if (cfiCode && cfiCode.trim()) {
+      payload.cfi_code = cfiCode.trim().toUpperCase();
+    }
+    
     if (fetchAndEnrich) {
       payload.fetch_and_enrich = true;
     }

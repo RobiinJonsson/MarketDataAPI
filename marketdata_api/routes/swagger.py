@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, send_from_directory, send_file, current_app, jsonify
+from flask import Blueprint, render_template, send_from_directory, send_file, current_app, jsonify, request
 from flask import Blueprint
 from flask_restx import Api, Resource, fields
 
@@ -197,6 +197,42 @@ schema_detail_response = api.model('SchemaDetailResponse', {
     'data': fields.Nested(schema_detailed)
 })
 
+# CFI Models
+cfi_decoded_attributes = api.model('CFIDecodedAttributes', {
+    'voting_rights': fields.String(description="Voting rights description"),
+    'ownership_restrictions': fields.String(description="Ownership restrictions description"),
+    'payment_status': fields.String(description="Payment status description"), 
+    'form': fields.String(description="Form description")
+})
+
+cfi_validation_request = api.model('CFIValidationRequest', {
+    'cfi_code': fields.String(required=True, description="6-character CFI code to validate", example="ESVUFR")
+})
+
+cfi_comprehensive_response = api.model('CFIComprehensiveResponse', {
+    'valid': fields.Boolean(required=True, description="Whether CFI code is valid"),
+    'cfi_code': fields.String(required=True, description="The CFI code"),
+    'category': fields.String(description="CFI category letter"),
+    'category_description': fields.String(description="CFI category description"),
+    'group': fields.String(description="CFI group letter"),
+    'group_description': fields.String(description="CFI group description"),
+    'attributes': fields.String(description="CFI attributes (4 characters)"),
+    'decoded_attributes': fields.Nested(cfi_decoded_attributes, description="Decoded CFI attributes"),
+    'business_type': fields.String(description="Business instrument type"),
+    'fitrs_patterns': fields.List(fields.String, description="FITRS file patterns for this CFI"),
+    'is_equity': fields.Boolean(description="Whether this is an equity instrument"),
+    'is_debt': fields.Boolean(description="Whether this is a debt instrument"),
+    'is_collective_investment': fields.Boolean(description="Whether this is a collective investment"),
+    'is_derivative': fields.Boolean(description="Whether this is a derivative"),
+    'message': fields.String(description="Success message"),
+    'error': fields.String(description="Error message if validation failed")
+})
+
+valid_types_response = api.model('ValidTypesResponse', {
+    'valid_types': fields.List(fields.String, required=True, description="List of valid instrument types"),
+    'message': fields.String(required=True, description="Description message")
+})
+
 # Updated Transparency models for unified architecture
 transparency_base = api.model('TransparencyBase', {
     'id': fields.String(required=True, description="Unique identifier"),
@@ -229,7 +265,7 @@ transparency_base = api.model('TransparencyBase', {
 
 # Updated details models to match the actual response format
 transparency_details = api.model('TransparencyDetails', {
-    'type': fields.String(required=True, description="Type of transparency details", enum=['equity', 'debt', 'futures', 'non_equity', 'unknown']),
+    'type': fields.String(required=True, description="CFI-based instrument type", enum=['equity', 'debt', 'collective_investment', 'future', 'structured', 'index_linked', 'warrant', 'option', 'rights', 'swap', 'other']),
     'financial_instrument_classification': fields.String(description="Financial instrument classification (equity only)"),
     'methodology': fields.String(description="Methodology used (equity only)"),
     'average_daily_turnover': fields.Float(description="Average daily turnover (equity only)"),
@@ -258,10 +294,14 @@ transparency_list_response = api.model('TransparencyListResponse', {
     'meta': fields.Nested(pagination_meta)
 })
 
-# Update the transparency create request model
+# Update the transparency create request model to use CFI-based types
 transparency_create_request = api.model('TransparencyCreateRequest', {
     'isin': fields.String(required=True, description="International Securities Identification Number"),
-    'instrument_type': fields.String(required=True, description="Type of instrument", enum=['equity', 'debt', 'futures', 'fund', 'derivative'])
+    'instrument_type': fields.String(
+        required=True, 
+        description="CFI-based instrument type", 
+        enum=['equity', 'debt', 'collective_investment', 'future', 'structured', 'index_linked', 'warrant', 'option', 'rights', 'swap']
+    )
 })
 
 batch_transparency_request = api.model('BatchTransparencyRequest', {
@@ -533,6 +573,125 @@ class InstrumentEnrich(Resource):
                 ResponseFields.ERROR: {
                     "code": str(HTTPStatus.INTERNAL_SERVER_ERROR), 
                     ResponseFields.MESSAGE: f"Failed to enrich instrument: {str(e)}"
+                }
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@instruments_ns.route('/types')
+class InstrumentTypes(Resource):
+    @instruments_ns.doc(
+        description='Get list of valid instrument types supported by the CFI system'
+    )
+    @instruments_ns.response(200, 'Success', valid_types_response)
+    @instruments_ns.response(500, 'Internal server error', error_model)
+    def get(self):
+        """Get valid instrument types from CFI system"""
+        try:
+            from ..models.utils.cfi_instrument_manager import get_valid_instrument_types
+            valid_types = get_valid_instrument_types()
+            return {
+                "valid_types": valid_types,
+                "message": "Valid instrument types based on CFI standard"
+            }
+        except Exception as e:
+            return {
+                ResponseFields.STATUS: "error", 
+                ResponseFields.ERROR: {
+                    "code": str(HTTPStatus.INTERNAL_SERVER_ERROR), 
+                    ResponseFields.MESSAGE: str(e)
+                }
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@instruments_ns.route('/validate-cfi')
+class CFIValidation(Resource):
+    @instruments_ns.doc(
+        description='Validate a CFI code and return comprehensive instrument information including business type, decoded attributes, and file patterns'
+    )
+    @instruments_ns.expect(cfi_validation_request)
+    @instruments_ns.response(200, 'CFI code is valid', cfi_comprehensive_response)
+    @instruments_ns.response(400, 'CFI code is invalid', error_model)
+    @instruments_ns.response(500, 'Internal server error', error_model)
+    def post(self):
+        """Validate CFI code and return comprehensive information"""
+        try:
+            from ..models.utils.cfi_instrument_manager import validate_cfi_code, CFIInstrumentTypeManager
+            
+            data = request.json
+            if not data or 'cfi_code' not in data:
+                return {
+                    ResponseFields.STATUS: "error",
+                    ResponseFields.ERROR: {
+                        "code": str(HTTPStatus.BAD_REQUEST),
+                        ResponseFields.MESSAGE: "CFI code is required"
+                    }
+                }, HTTPStatus.BAD_REQUEST
+                
+            cfi_code = data['cfi_code']
+            is_valid, error_msg = validate_cfi_code(cfi_code)
+            
+            if not is_valid:
+                return {
+                    "valid": False,
+                    "error": error_msg,
+                    "cfi_code": cfi_code
+                }, HTTPStatus.BAD_REQUEST
+                
+            # Get comprehensive CFI information
+            cfi_info = CFIInstrumentTypeManager.get_cfi_info(cfi_code)
+            
+            return {
+                "valid": True,
+                "message": "CFI code is valid",
+                **cfi_info
+            }
+            
+        except Exception as e:
+            return {
+                ResponseFields.STATUS: "error", 
+                ResponseFields.ERROR: {
+                    "code": str(HTTPStatus.INTERNAL_SERVER_ERROR), 
+                    ResponseFields.MESSAGE: str(e)
+                }
+            }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+@instruments_ns.route('/cfi/<string:cfi_code>')
+class CFIInfo(Resource):
+    @instruments_ns.doc(
+        description='Get comprehensive CFI information for a specific CFI code (alternative to deprecated /cfi endpoint)',
+        params={
+            'cfi_code': 'The 6-character CFI code to decode (e.g., ESVUFR)'
+        }
+    )
+    @instruments_ns.response(200, 'Success', cfi_comprehensive_response)
+    @instruments_ns.response(400, 'Invalid CFI code', error_model)
+    @instruments_ns.response(500, 'Internal server error', error_model)
+    def get(self, cfi_code):
+        """Get comprehensive CFI information"""
+        try:
+            from ..models.utils.cfi_instrument_manager import validate_cfi_code, CFIInstrumentTypeManager
+            
+            cfi_code = cfi_code.upper()
+            is_valid, error_msg = validate_cfi_code(cfi_code)
+            
+            if not is_valid:
+                return {
+                    ResponseFields.STATUS: "error",
+                    ResponseFields.ERROR: {
+                        "code": str(HTTPStatus.BAD_REQUEST),
+                        ResponseFields.MESSAGE: error_msg
+                    }
+                }, HTTPStatus.BAD_REQUEST
+                
+            # Get comprehensive CFI information
+            cfi_info = CFIInstrumentTypeManager.get_cfi_info(cfi_code)
+            
+            return cfi_info
+            
+        except Exception as e:
+            return {
+                ResponseFields.STATUS: "error", 
+                ResponseFields.ERROR: {
+                    "code": str(HTTPStatus.INTERNAL_SERVER_ERROR), 
+                    ResponseFields.MESSAGE: str(e)
                 }
             }, HTTPStatus.INTERNAL_SERVER_ERROR
 
@@ -838,7 +997,7 @@ class TransparencyList(Resource):
     @api.param('has_transaction_data', 'Filter by records with transaction data (true/false)')
     @api.param('has_threshold_data', 'Filter by records with threshold data (true/false)')
     @api.param('calculation_type', 'Legacy filter - maps to file_type patterns', enum=['EQUITY', 'NON_EQUITY'])
-    @api.param('instrument_type', 'Filter by instrument type', enum=['equity', 'debt', 'futures'])
+    @api.param('instrument_type', 'Filter by CFI-based instrument type', enum=['equity', 'debt', 'collective_investment', 'future', 'structured', 'index_linked', 'warrant', 'option', 'rights', 'swap'])
     @api.param('isin', 'Filter by ISIN')
     @api.param('page', 'Page number', type='integer', default=1)
     @api.param('per_page', 'Items per page', type='integer', default=20)
@@ -968,9 +1127,11 @@ class TransparencyList(Resource):
                         'error': f'Failed to create instrument {isin} from FITRS data'
                     }, 400
             
-            # 2. Derive calculation_type from instrument_type
+            # 2. Derive calculation_type from CFI-based instrument_type
+            from marketdata_api.models.utils.cfi_instrument_manager import CFIInstrumentTypeManager
+            # Use CFI-based determination for calculation type
             calculation_type = "EQUITY" if instrument_type.lower() == "equity" else "NON_EQUITY"
-            logger.info(f"Derived calculation_type={calculation_type} from instrument_type={instrument_type}")
+            logger.info(f"Derived calculation_type={calculation_type} from CFI-based instrument_type={instrument_type}")
             
             # 3. Use TransparencyService to get transparency data
             service = ServicesFactory.get_transparency_service()

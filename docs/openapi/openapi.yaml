@@ -70,6 +70,95 @@ paths:
           description: Invalid request
         '401':
           description: Unauthorized
+  /instruments/cfi/{cfi_code}:
+    get:
+      summary: Get comprehensive CFI information
+      description: Get comprehensive CFI information for a specific CFI code (alternative
+        to deprecated /cfi endpoint)
+      operationId: get_cfi_info
+      tags:
+      - instruments
+      parameters:
+      - name: cfi_code
+        in: path
+        description: The 6-character CFI code to decode (e.g., ESVUFR)
+        required: true
+        schema:
+          type: string
+      responses:
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: Invalid CFI code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CFIComprehensiveResponse'
+  /instruments/types:
+    get:
+      summary: Get valid instrument types from CFI system
+      description: Get list of valid instrument types supported by the CFI system
+      operationId: get_instrument_types
+      tags:
+      - instruments
+      parameters: []
+      responses:
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidTypesResponse'
+  /instruments/validate-cfi:
+    post:
+      summary: Validate CFI code and return comprehensive information
+      description: Validate a CFI code and return comprehensive instrument information
+        including business type, decoded attributes, and file patterns
+      operationId: post_cfi_validation
+      tags:
+      - instruments
+      parameters:
+      - name: payload
+        in: body
+        description: ''
+        required: true
+        schema:
+          type: string
+      responses:
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '400':
+          description: CFI code is invalid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: CFI code is valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CFIComprehensiveResponse'
   /instruments/{identifier}/enrich:
     post:
       summary: Enrich an instrument with FIGI and LEI data
@@ -328,7 +417,7 @@ paths:
           type: string
       - name: instrument_type
         in: query
-        description: Filter by instrument type
+        description: Filter by CFI-based instrument type
         required: false
         schema:
           type: string
@@ -446,36 +535,6 @@ paths:
         '200':
           description: Success
   /transparency/{transparency_id}:
-    get:
-      summary: Get transparency calculation by ID
-      description: ''
-      operationId: get_transparency_calculation
-      tags:
-      - transparency
-      parameters: []
-      responses:
-        '404':
-          description: Transparency calculation not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-    delete:
-      summary: Delete a transparency calculation
-      description: ''
-      operationId: delete_transparency_calculation
-      tags:
-      - transparency
-      parameters: []
-      responses:
-        '404':
-          description: Transparency calculation not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '200':
-          description: Transparency calculation deleted
     put:
       summary: Update an existing transparency calculation
       description: ''
@@ -498,6 +557,36 @@ paths:
                 $ref: '#/components/schemas/Error'
         '200':
           description: Transparency calculation updated
+    delete:
+      summary: Delete a transparency calculation
+      description: ''
+      operationId: delete_transparency_calculation
+      tags:
+      - transparency
+      parameters: []
+      responses:
+        '404':
+          description: Transparency calculation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '200':
+          description: Transparency calculation deleted
+    get:
+      summary: Get transparency calculation by ID
+      description: ''
+      operationId: get_transparency_calculation
+      tags:
+      - transparency
+      parameters: []
+      responses:
+        '404':
+          description: Transparency calculation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   schemas:
     InstrumentListResponse:
@@ -557,6 +646,124 @@ components:
         total:
           type: integer
           description: Total number of items
+    Error:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Error status
+          example: error
+          enum:
+          - error
+        error:
+          $ref: '#/components/schemas/ErrorDetails'
+      required:
+      - status
+    ErrorDetails:
+      type: object
+      properties:
+        code:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Error message description
+      required:
+      - code
+      - message
+    ValidTypesResponse:
+      type: object
+      properties:
+        valid_types:
+          type: array
+          description: List of valid instrument types
+          items:
+            type: string
+        message:
+          type: string
+          description: Description message
+      required:
+      - message
+      - valid_types
+    CFIValidationRequest:
+      type: object
+      properties:
+        cfi_code:
+          type: string
+          description: 6-character CFI code to validate
+          example: ESVUFR
+      required:
+      - cfi_code
+    CFIComprehensiveResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+          description: Whether CFI code is valid
+        cfi_code:
+          type: string
+          description: The CFI code
+        category:
+          type: string
+          description: CFI category letter
+        category_description:
+          type: string
+          description: CFI category description
+        group:
+          type: string
+          description: CFI group letter
+        group_description:
+          type: string
+          description: CFI group description
+        attributes:
+          type: string
+          description: CFI attributes (4 characters)
+        decoded_attributes:
+          description: Decoded CFI attributes
+        business_type:
+          type: string
+          description: Business instrument type
+        fitrs_patterns:
+          type: array
+          description: FITRS file patterns for this CFI
+          items:
+            type: string
+        is_equity:
+          type: boolean
+          description: Whether this is an equity instrument
+        is_debt:
+          type: boolean
+          description: Whether this is a debt instrument
+        is_collective_investment:
+          type: boolean
+          description: Whether this is a collective investment
+        is_derivative:
+          type: boolean
+          description: Whether this is a derivative
+        message:
+          type: string
+          description: Success message
+        error:
+          type: string
+          description: Error message if validation failed
+      required:
+      - cfi_code
+      - valid
+    CFIDecodedAttributes:
+      type: object
+      properties:
+        voting_rights:
+          type: string
+          description: Voting rights description
+        ownership_restrictions:
+          type: string
+          description: Ownership restrictions description
+        payment_status:
+          type: string
+          description: Payment status description
+        form:
+          type: string
+          description: Form description
     LegalEntityListResponse:
       type: object
       properties:
@@ -653,14 +860,19 @@ components:
           description: International Securities Identification Number
         instrument_type:
           type: string
-          description: Type of instrument
+          description: CFI-based instrument type
           example: equity
           enum:
           - equity
           - debt
-          - futures
-          - fund
-          - derivative
+          - collective_investment
+          - future
+          - structured
+          - index_linked
+          - warrant
+          - option
+          - rights
+          - swap
       required:
       - instrument_type
       - isin
@@ -777,14 +989,20 @@ components:
       properties:
         type:
           type: string
-          description: Type of transparency details
+          description: CFI-based instrument type
           example: equity
           enum:
           - equity
           - debt
-          - futures
-          - non_equity
-          - unknown
+          - collective_investment
+          - future
+          - structured
+          - index_linked
+          - warrant
+          - option
+          - rights
+          - swap
+          - other
         financial_instrument_classification:
           type: string
           description: Financial instrument classification (equity only)
@@ -835,31 +1053,6 @@ components:
           description: Criterion value (non-equity)
       required:
       - type
-    Error:
-      type: object
-      properties:
-        status:
-          type: string
-          description: Error status
-          example: error
-          enum:
-          - error
-        error:
-          $ref: '#/components/schemas/ErrorDetails'
-      required:
-      - status
-    ErrorDetails:
-      type: object
-      properties:
-        code:
-          type: string
-          description: Error code
-        message:
-          type: string
-          description: Error message description
-      required:
-      - code
-      - message
   securitySchemes:
     ApiKeyAuth:
       type: apiKey

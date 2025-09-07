@@ -50,6 +50,58 @@
       }
     },
     {
+      "name": "Get comprehensive CFI information",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/instruments/cfi/{cfi_code}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "instruments",
+            "cfi",
+            "{cfi_code}"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get valid instrument types from CFI system",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/instruments/types",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "instruments",
+            "types"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Validate CFI code and return comprehensive information",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/instruments/validate-cfi",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "instruments",
+            "validate-cfi"
+          ]
+        }
+      }
+    },
+    {
       "name": "Enrich an instrument with FIGI and LEI data",
       "request": {
         "method": "POST",
@@ -219,9 +271,9 @@
       }
     },
     {
-      "name": "Get transparency calculation by ID",
+      "name": "Update an existing transparency calculation",
       "request": {
-        "method": "GET",
+        "method": "PUT",
         "header": [],
         "url": {
           "raw": "{{base_url}}/transparency/{transparency_id}",
@@ -253,9 +305,9 @@
       }
     },
     {
-      "name": "Update an existing transparency calculation",
+      "name": "Get transparency calculation by ID",
       "request": {
-        "method": "PUT",
+        "method": "GET",
         "header": [],
         "url": {
           "raw": "{{base_url}}/transparency/{transparency_id}",

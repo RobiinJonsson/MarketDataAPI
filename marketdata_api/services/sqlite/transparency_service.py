@@ -391,15 +391,22 @@ class TransparencyService(TransparencyServiceInterface):
         """
         Search for ISIN in stored FITRS files and create transparency calculations.
         
-        Uses instrument type to determine which specific files to search for optimal performance:
-        - equity/share -> FULECR_E files (equity files)
-        - bond/debt -> FULNCR_D files (debt files) 
-        - fund/etf -> FULNCR_F files (funds files)
-        - other -> FULNCR_C files (corporate files)
+        Uses CFI code-based file selection when possible for optimal performance:
+        - C -> FULNCR_C/FULECR_C files (Collective investment vehicles)
+        - D -> FULNCR_D files (Debt instruments)
+        - E -> FULECR_E/FULNCR_E files (Equities)
+        - F -> FULNCR_F files (Futures)
+        - H -> FULNCR_H files (Structured products)
+        - I -> FULNCR_I files (Index-linked)
+        - J -> FULNCR_J files (Warrants)
+        - O -> FULNCR_O files (Options)
+        - R -> FULECR_R files (Rights)
+        
+        Falls back to instrument_type-based mapping when CFI code is not available.
         
         Args:
             isin: The ISIN to search for
-            instrument_type: The instrument type to determine file search strategy
+            instrument_type: The instrument type (fallback for CFI detection)
             
         Returns:
             List of created TransparencyCalculation instances
@@ -417,14 +424,32 @@ class TransparencyService(TransparencyServiceInterface):
         # Get all FITRS CSV files
         all_fitrs_files = [f for f in os.listdir(fitrs_directory) if f.endswith('.csv')]
         
-        # Determine which specific files to search based on instrument type
-        search_patterns = self._get_fitrs_file_patterns(instrument_type)
+        # First try CFI-based file pattern detection for optimal accuracy
+        cfi_based_patterns = self._get_cfi_based_file_patterns(isin)
+        search_method = "CFI-based"
         
-        # Filter files to only those matching our patterns
-        target_files = [f for f in all_fitrs_files if any(pattern in f for pattern in search_patterns)]
+        # Check if CFI-based returned actual file patterns or fallback
+        if cfi_based_patterns == ['FULNCR_', 'FULECR_']:  # General fallback patterns
+            # Fall back to instrument type-based letter patterns
+            target_letters = self._get_fitrs_file_patterns(instrument_type)
+            search_method = "instrument-type-based"
+        else:
+            # CFI-based returned specific patterns, but we need to convert them to letters
+            # Extract letters from instrument database lookup
+            try:
+                instrument = self.session.query(Instrument).filter(Instrument.isin == isin).first()
+                if instrument and instrument.cfi_code:
+                    target_letters = [instrument.cfi_code[0].upper()]
+                else:
+                    target_letters = self._get_fitrs_file_patterns(instrument_type)
+            except:
+                target_letters = self._get_fitrs_file_patterns(instrument_type)
         
-        self.logger.info(f"Searching {len(target_files)} {instrument_type} FITRS files for ISIN {isin}")
-        self.logger.debug(f"Target file patterns: {search_patterns}")
+        # Filter files using precise letter matching
+        target_files = self._filter_fitrs_files_by_letter(all_fitrs_files, target_letters)
+        
+        self.logger.info(f"Using {search_method} search: {len(target_files)} FITRS files for ISIN {isin}")
+        self.logger.debug(f"Target letters: {target_letters}")
         self.logger.debug(f"Target files: {target_files}")
         
         for filename in target_files:
@@ -432,8 +457,9 @@ class TransparencyService(TransparencyServiceInterface):
             self.logger.debug(f"Searching file {filename} for ISIN {isin}")
             
             try:
-                # Read the CSV file
-                df = pd.read_csv(filepath)
+                # Read the CSV file with dtype specification to avoid warnings
+                # Most FITRS columns are mixed text/numeric, so read as string first
+                df = pd.read_csv(filepath, dtype=str, low_memory=False)
                 
                 # Search for the ISIN in both 'ISIN' and 'Id' columns (FULECR uses 'Id')
                 # Fixed pandas alignment issue by using proper column checks
@@ -476,22 +502,118 @@ class TransparencyService(TransparencyServiceInterface):
         self.logger.info(f"Created {len(created_calculations)} transparency calculations for {isin} from FITRS files")
         return created_calculations
 
-    def _get_fitrs_file_patterns(self, instrument_type: str) -> List[str]:
+    def _get_fitrs_file_patterns(self, instrument_type_or_cfi: str) -> List[str]:
         """
-        Get FITRS file patterns to search based on instrument type.
+        Get FITRS file patterns using CFI manager for consistency.
         
-        Returns specific file patterns to optimize search performance.
+        Returns specific letter patterns to match in FITRS filenames.
+        FITRS format: FUL{ECR|NCR}_{date}_{letter}_{part}_fitrs_data.csv
+        
+        Args:
+            instrument_type_or_cfi: Instrument type or CFI first letter
+            
+        Returns:
+            List of single letters to match in FITRS filenames
         """
-        instrument_type_lower = instrument_type.lower()
+        from marketdata_api.models.utils.cfi_instrument_manager import CFIInstrumentTypeManager
         
-        if instrument_type_lower in ['equity', 'share', 'stock']:
-            return ['FULECR_', '_E_']  # Equity files
-        elif instrument_type_lower in ['bond', 'debt', 'note', 'debenture']:
-            return ['FULNCR_', '_D_']  # Debt files
-        elif instrument_type_lower in ['fund', 'etf', 'future', 'derivative']:
-            return ['FULNCR_', '_F_']  # Funds/Futures files
-        else:
-            return ['FULNCR_', '_C_']  # Corporate/Other files
+        # If it's a single letter, treat as CFI category
+        if len(instrument_type_or_cfi) == 1:
+            letter = instrument_type_or_cfi.upper()
+            self.logger.info(f"CFI-based mapping: '{instrument_type_or_cfi}' -> ['{letter}']")
+            return [letter]
+        
+        # For longer strings, map to CFI letters
+        legacy_to_cfi_mapping = {
+            'equity': 'E',
+            'share': 'E', 
+            'stock': 'E',
+            'debt': 'D',
+            'bond': 'D',
+            'note': 'D',
+            'debenture': 'D',
+            'collective_investment': 'C',
+            'fund': 'C',
+            'etf': 'C',
+            'future': 'F',
+            'futures': 'F',
+            'structured': 'H',
+            'structured_product': 'H',
+            'index_linked': 'I',
+            'warrant': 'J',
+            'warrants': 'J',
+            'option': 'O',
+            'options': 'O',
+            'rights': 'R'
+        }
+        
+        # Map legacy type to CFI letter
+        cfi_letter = legacy_to_cfi_mapping.get(instrument_type_or_cfi.lower(), 'C')
+        
+        self.logger.info(f"Legacy type '{instrument_type_or_cfi}' mapped to CFI letter '{cfi_letter}'")
+        return [cfi_letter]
+    
+    def _filter_fitrs_files_by_letter(self, all_files: List[str], target_letters: List[str]) -> List[str]:
+        """
+        Filter FITRS files by letter using precise filename parsing.
+        
+        Args:
+            all_files: List of all FITRS filenames
+            target_letters: List of letters to match (e.g., ['E', 'D'])
+            
+        Returns:
+            List of matching filenames
+        """
+        import re
+        
+        matching_files = []
+        
+        for filename in all_files:
+            # Parse filename format: FUL{ECR|NCR}_{date}_{letter}_{part}_fitrs_data.csv
+            match = re.match(r'^FUL(ECR|NCR)_\d{8}_([A-Z])_\d+of\d+_fitrs_data\.csv$', filename)
+            if match:
+                file_type = match.group(1)  # ECR or NCR
+                file_letter = match.group(2)  # C, D, E, F, H, I, J, O, R, S
+                
+                # Check if this file letter matches our target
+                if file_letter in target_letters:
+                    matching_files.append(filename)
+        
+        return matching_files
+
+    def _get_cfi_based_file_patterns(self, isin: str) -> List[str]:
+        """
+        Get FITRS file patterns based on the instrument's CFI code using CFI manager.
+        
+        This method uses the CFI model as the single source of truth for file pattern determination.
+        
+        Args:
+            isin: The ISIN to look up
+            
+        Returns:
+            List of FITRS filename patterns optimized for this instrument type
+        """
+        from marketdata_api.models.utils.cfi_instrument_manager import CFIInstrumentTypeManager
+        
+        try:
+            # Get the instrument's CFI code from the database
+            instrument = self.session.query(Instrument).filter(
+                Instrument.isin == isin
+            ).first()
+            
+            if instrument and instrument.cfi_code:
+                # Use CFI manager for consistent pattern determination
+                patterns = CFIInstrumentTypeManager.get_fitrs_patterns_from_cfi(instrument.cfi_code)
+                self.logger.info(f"CFI-based file pattern for ISIN {isin}: CFI {instrument.cfi_code} -> {patterns}")
+                return patterns
+            else:
+                # Fallback to general search if no CFI code available
+                self.logger.info(f"No CFI code found for ISIN {isin}, using general pattern")
+                return ['FULNCR_', 'FULECR_']
+                
+        except Exception as e:
+            self.logger.warning(f"Error getting CFI-based patterns for {isin}: {str(e)}")
+            return ['FULNCR_', 'FULECR_']  # Safe fallback
 
     def _parse_date(self, date_str: Union[str, date, None]) -> Optional[date]:
         """Parse date string to date object"""

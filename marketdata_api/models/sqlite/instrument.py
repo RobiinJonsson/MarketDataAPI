@@ -335,51 +335,35 @@ class Instrument(Base):
     
     @classmethod
     def map_firds_type_to_instrument_type(cls, firds_type: str, cfi_code: Optional[str] = None) -> str:
-        """Map FIRDS instrument type letter to business instrument type.
+        """Map FIRDS instrument type letter to business instrument type using CFI standards.
+        
+        This method now uses the CFI model as the single source of truth.
+        FIRDS file letters directly map to CFI categories following ISO 10962.
         
         Args:
             firds_type: Single letter FIRDS type (C, D, E, F, H, I, J, O, R, S)
-            cfi_code: Optional CFI code for additional classification context
+            cfi_code: Optional CFI code for validation and refinement
             
         Returns:
             String representing the business instrument type
         """
-        firds_mapping = {
-            'C': 'collective_investment',  # Collective Investment Vehicles
-            'D': 'debt',                  # Debt Securities  
-            'E': 'equity',                # Equities
-            'F': 'future',                # Futures
-            'H': 'hybrid',                # Hybrid/Structured instruments
-            'I': 'interest_rate',         # Interest Rate derivatives
-            'J': 'convertible',           # Convertible instruments
-            'O': 'option',                # Options
-            'R': 'rights',                # Rights/Warrants
-            'S': 'structured',            # Structured Products/Swaps
-        }
+        from marketdata_api.models.utils.cfi_instrument_manager import CFIInstrumentTypeManager
         
-        base_type = firds_mapping.get(firds_type, 'other')
-        
-        # Refine based on CFI code if available
-        if cfi_code and len(cfi_code) >= 1:
-            cfi_category = cfi_code[0].upper()
+        # Use CFI code if available (primary source of truth)
+        if cfi_code:
+            # Validate consistency between FIRDS type and CFI code
+            is_consistent, error_msg = CFIInstrumentTypeManager.validate_cfi_consistency(cfi_code, firds_type)
+            if not is_consistent:
+                # Log warning but continue - data might have inconsistencies
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"CFI-FIRDS inconsistency for {firds_type}/{cfi_code}: {error_msg}")
             
-            # Override FIRDS mapping with CFI-based classification if they differ
-            if cfi_category == 'E' and base_type != 'equity':
-                return 'equity'
-            elif cfi_category == 'D' and base_type != 'debt':
-                return 'debt'
-            elif cfi_category == 'C' and base_type != 'collective_investment':
-                return 'collective_investment'
-            elif cfi_category in ['F', 'H', 'J', 'K', 'L', 'M', 'N', 'O', 'S', 'T'] and base_type not in ['future', 'option', 'structured']:
-                # These are various derivative types
-                if firds_type == 'F':
-                    return 'future'
-                elif firds_type == 'O':
-                    return 'option'
-                else:
-                    return 'structured'
+            # Use CFI-based type determination
+            return CFIInstrumentTypeManager.get_business_type_from_cfi(cfi_code)
         
-        return base_type
+        # Fallback to FIRDS-based determination (still CFI-compliant)
+        return CFIInstrumentTypeManager.get_business_type_from_firds_file(firds_type)
     
     def _clean_json_attributes(self, attributes: Dict[str, Any]) -> Dict[str, Any]:
         """Clean JSON attributes, removing NaN values and empty objects."""

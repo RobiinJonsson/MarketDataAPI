@@ -14,7 +14,12 @@ cfi_bp = Blueprint("cfi", __name__, url_prefix=API.PREFIX)
 
 @cfi_bp.route(f"{Endpoints.CFI}/<string:cfi_code>", methods=["GET"])
 def decode_cfi(cfi_code):
-    """Decode a CFI code and return human-readable attributes"""
+    """
+    Decode a CFI code and return human-readable attributes
+    
+    DEPRECATED: Use /api/v1/instruments/cfi/<cfi_code> instead for comprehensive CFI information
+    including business types and instrument categorization.
+    """
     try:
         cfi_code = cfi_code.upper()
         
@@ -23,6 +28,13 @@ def decode_cfi(cfi_code):
             
         cfi = CFI(cfi_code)
         result = cfi.describe()
+        
+        # Add deprecation warning to response
+        result['_deprecated'] = {
+            'warning': 'This endpoint is deprecated',
+            'replacement': f'/api/v1/instruments/cfi/{cfi_code}',
+            'message': 'Use the new endpoint for comprehensive CFI information including business types'
+        }
         
         return jsonify(result)
         

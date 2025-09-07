@@ -2,6 +2,73 @@
 
 All notable changes to the MarketDataAPI project will be documented in this file.
 
+## [2025-09-07] - CFI-BASED API VALIDATION: Complete Implementation of Single Source of Truth
+
+### ✅ CFI INSTRUMENT TYPE MANAGER - CENTRALIZED VALIDATION SYSTEM
+- **SINGLE SOURCE OF TRUTH**: Implemented comprehensive CFI-based instrument type management system
+  - **UNIFIED VALIDATION**: All API endpoints now use CFI codes as the authoritative source for instrument type determination
+  - **CONSISTENT MAPPING**: CFI first character directly maps to FIRDS/FITRS file types for optimal performance
+  - **COMPREHENSIVE VALIDATION**: Validates CFI codes, instrument types, and ensures consistency between them
+
+### 🔧 ENHANCED CFI INSTRUMENT MANAGER (`cfi_instrument_manager.py`)
+- **VALIDATION METHODS**:
+  - `validate_instrument_type()` - Validates instrument types against CFI standards
+  - `validate_cfi_code()` - Validates CFI code format and ISO 10962 compliance
+  - `get_valid_instrument_types()` - Returns all supported instrument types from CFI system
+  - `normalize_instrument_type_from_cfi()` - Ensures consistency between CFI codes and business types
+- **FILE PATTERN OPTIMIZATION**:
+  - `filter_firds_files_by_cfi()` - Precise FIRDS filename matching using regex patterns
+  - `filter_fitrs_files_by_cfi()` - Precise FITRS filename matching with ECR/NCR logic
+  - **PERFORMANCE**: Letter-based filtering replaces substring matching, eliminating false positives
+
+### 🌐 API ENDPOINTS TRANSFORMATION
+- **ENHANCED EXISTING ENDPOINTS**:
+  - **POST** `/api/v1/instruments` - Now validates instrument types using CFI system, supports CFI code input
+  - **POST** `/api/v1/transparency` - Validates both instrument types and CFI codes, auto-derives types from CFI
+- **NEW CFI ENDPOINTS**:
+  - **GET** `/api/v1/instruments/types` - Returns dynamically generated list of valid instrument types
+  - **POST** `/api/v1/instruments/validate-cfi` - Comprehensive CFI validation with full decoded attributes
+  - **GET** `/api/v1/instruments/cfi/<cfi_code>` - Enhanced CFI decoder combining business and technical information
+- **MIGRATION STRATEGY**:
+  - **DEPRECATED**: Old `/api/v1/cfi/<cfi_code>` endpoint marked for deprecation with migration guidance
+  - **ENHANCED**: New endpoints provide both detailed CFI decoding AND business-oriented information
+
+### 🖥️ FRONTEND INTEGRATION - DYNAMIC VALIDATION
+- **DYNAMIC TYPE LOADING**: Admin interface now loads valid instrument types from API instead of hardcoded lists
+- **REAL-TIME CFI VALIDATION**: 
+  - Live CFI code validation with visual feedback (green/red borders)
+  - Auto-selection of instrument type when valid CFI code is entered
+  - Comprehensive error messages for invalid CFI codes
+- **ENHANCED USER EXPERIENCE**:
+  - CFI code field added to instrument creation form
+  - Debounced validation prevents excessive API calls
+  - Clear validation messages guide users to correct input
+
+### 📊 COMPREHENSIVE CFI INFORMATION
+- **COMPLETE CFI DECODING**: New endpoints provide:
+  - **Technical Details**: Category, group, attributes, decoded attributes (voting rights, ownership restrictions, etc.)
+  - **Business Information**: Instrument type mapping, FITRS patterns for file filtering
+  - **Classification Flags**: is_equity, is_debt, is_collective_investment, is_derivative
+  - **File Operations**: Optimized file search patterns for both FIRDS and FITRS data
+
+### 🔍 PATTERN MATCHING PRECISION FIXES
+- **REGEX-BASED FILTERING**: Replaced error-prone substring matching with precise regex patterns
+  - **BEFORE**: `'_E_' in filename` caused false matches with `'_1of1_'` patterns
+  - **AFTER**: `^FUL(ECR|NCR)_\d{8}_([A-Z])_\d+of\d+_fitrs_data\.csv$` for exact filename parsing
+- **FITRS FILES**: Enhanced support for both ECR (equity-focused) and NCR (non-equity) file types
+- **FIRDS FILES**: Added consistent pattern matching for `FULINS_{letter}_{date}_{part}_firds_data.csv` format
+
+### 🧪 COMPREHENSIVE TESTING FRAMEWORK
+- **VALIDATION TESTING**: Created `test_firds_fitrs_patterns.py` with extensive test cases
+- **REAL-WORLD VALIDATION**: Tested with actual FIRDS/FITRS filenames from production environment
+- **CFI CODE VERIFICATION**: Validated with real CFI codes (ESVUFR→equity, DBVTFR→debt, etc.)
+
+### 🎯 ARCHITECTURE BENEFITS
+- **PERFORMANCE**: CFI-based file filtering reduces I/O operations by targeting specific file types
+- **CONSISTENCY**: Single validation source eliminates discrepancies between frontend and backend
+- **MAINTAINABILITY**: Centralized CFI logic simplifies updates and ensures standard compliance
+- **USER EXPERIENCE**: Real-time validation prevents invalid data submission and provides immediate feedback
+
 ## [2025-09-02] - FIRDS REFERENCE DATA EXPANSION: Complete Model Support for All 10 FIRDS Types
 
 ### ✅ COMPREHENSIVE FIRDS EXPANSION COMPLETED

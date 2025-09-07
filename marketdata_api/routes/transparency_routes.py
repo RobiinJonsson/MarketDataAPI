@@ -9,6 +9,12 @@ import logging
 from flask import Blueprint, jsonify, request
 from ..services.sqlite.transparency_service import TransparencyService
 from ..models.sqlite.transparency import TransparencyCalculation, TransparencyThreshold
+from ..models.utils.cfi_instrument_manager import (
+    validate_instrument_type, 
+    validate_cfi_code, 
+    get_valid_instrument_types,
+    normalize_instrument_type_from_cfi
+)
 from ..constants import (
     HTTPStatus, Pagination, API, ErrorMessages, SuccessMessages,
     ResponseFields, Endpoints, QueryParams, FormFields, DbFields
@@ -293,9 +299,34 @@ def create_transparency_calculation():
         # Extract required fields
         isin = data.get('isin')
         instrument_type = data.get('instrument_type')
+        cfi_code = data.get('cfi_code')
         
         if not isin:
             return jsonify({ResponseFields.ERROR: "ISIN is required"}), HTTPStatus.BAD_REQUEST
+        
+        # Validate instrument type if provided
+        if instrument_type and not validate_instrument_type(instrument_type):
+            valid_types = get_valid_instrument_types()
+            return jsonify({
+                ResponseFields.ERROR: f"Invalid instrument type '{instrument_type}'. Must be one of: {', '.join(valid_types)}"
+            }), HTTPStatus.BAD_REQUEST
+        
+        # Validate CFI code if provided and ensure consistency
+        if cfi_code:
+            is_valid, error_msg = validate_cfi_code(cfi_code)
+            if not is_valid:
+                return jsonify({ResponseFields.ERROR: f"Invalid CFI code: {error_msg}"}), HTTPStatus.BAD_REQUEST
+                
+            # If both CFI code and instrument type are provided, ensure consistency
+            if instrument_type:
+                normalized_type = normalize_instrument_type_from_cfi(cfi_code)
+                if normalized_type != instrument_type:
+                    return jsonify({
+                        ResponseFields.ERROR: f"CFI code '{cfi_code}' indicates type '{normalized_type}' but '{instrument_type}' was specified"
+                    }), HTTPStatus.BAD_REQUEST
+            else:
+                # If only CFI code provided, derive the instrument type
+                instrument_type = normalize_instrument_type_from_cfi(cfi_code)
         
         # Use the unified transparency service
         service = TransparencyService()
