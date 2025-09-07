@@ -5,6 +5,7 @@ from .base_model import Base
 from .legal_entity import LegalEntity, EntityAddress, EntityRegistration, EntityRelationship, EntityRelationshipException
 from .figi import FigiMapping
 from .transparency import TransparencyCalculation
+from .market_identification_code import MarketIdentificationCode
 from .instrument import Instrument, TradingVenue
 
 # Export all models
@@ -17,6 +18,7 @@ __all__ = [
     'EntityRelationshipException',
     'FigiMapping',
     'TransparencyCalculation',
+    'MarketIdentificationCode',
     'Instrument',
     'TradingVenue'
 ]

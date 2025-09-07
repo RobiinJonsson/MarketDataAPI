@@ -402,6 +402,9 @@ class TradingVenue(Base):
     venue_id = Column(String(100), nullable=False)  # TradgVnRltdAttrbts_Id
     isin = Column(String(12), nullable=False)  # Denormalized for easier querying
     
+    # MIC integration (ISO 10383 Market Identification Code)
+    mic_code = Column(String(4), ForeignKey('market_identification_codes.mic', ondelete='SET NULL'))  # Link to MIC registry
+    
     # Trading dates and status (common FIRDS fields promoted)
     first_trade_date = Column(DateTime)  # TradgVnRltdAttrbts_FrstTradDt
     termination_date = Column(DateTime)  # TradgVnRltdAttrbts_TermntnDt
@@ -431,6 +434,7 @@ class TradingVenue(Base):
     
     # Relationships
     instrument = relationship("Instrument", back_populates="trading_venues")
+    market_identification_code = relationship("MarketIdentificationCode", back_populates="trading_venues")
     
     # Indexes for performance
     __table_args__ = (
@@ -439,6 +443,7 @@ class TradingVenue(Base):
         Index('idx_trading_venues_unified_isin', 'isin'),
         Index('idx_trading_venues_unified_isin_venue', 'isin', 'venue_id'),
         Index('idx_trading_venues_unified_dates', 'first_trade_date', 'termination_date'),
+        Index('idx_trading_venues_unified_mic_code', 'mic_code'),
     )
     
     def to_dict(self) -> Dict[str, Any]:

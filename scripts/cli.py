@@ -6,12 +6,14 @@ from datetime import datetime
 # Add the parent directory of 'marketdata_api' to sys.path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from marketdata_api.services.instrument_service import InstrumentService
-from marketdata_api.services.legal_entity_service import LegalEntityService
+from marketdata_api.services.sqlite.instrument_service import InstrumentService
+from marketdata_api.services.sqlite.legal_entity_service import LegalEntityService
+from marketdata_api.services.mic_data_loader import load_mic_data_from_csv, MICDataLoader
 from marketdata_api.database.session import get_session
 from marketdata_api.database.base import Base
 from sqlalchemy import inspect
 from marketdata_api.models.utils.cfi import CFI
+from marketdata_api.models.sqlite.market_identification_code import MarketIdentificationCode
 
 def list_tables():
     """List all tables in the database with their columns."""
@@ -192,7 +194,7 @@ def instrument_operations():
             session.close()
             
         elif command == "list":
-            from marketdata_api.models.instrument import Instrument
+            from marketdata_api.models.sqlite.instrument import Instrument
             with get_session() as session:
                 instruments = session.query(Instrument).all()
                 for inst in instruments:
@@ -247,6 +249,147 @@ def entity_operations():
                 print(f"{entity.lei}: {entity.name}")
             session.close()
             
+    except Exception as e:
+        print(f"Error: {str(e)}")
+
+def mic_operations():
+    """Handle MIC (Market Identification Code) operations."""
+    if len(sys.argv) < 3:
+        print("Usage: python scripts/cli.py mic <command> [args]")
+        print("Commands:")
+        print("  load <csv_path>                   - Load MIC data from CSV file")
+        print("  list [country]                    - List MICs (optionally by country)")
+        print("  search <query>                    - Search MICs by name or code")
+        print("  get <mic_code>                    - Get specific MIC details")
+        print("  stats                             - Show MIC registry statistics")
+        print("  segments <operating_mic>          - List segments for operating MIC")
+        print("  countries                         - List countries with MIC counts")
+        return
+    
+    command = sys.argv[2]
+    
+    try:
+        with get_session() as session:
+            if command == "load" and len(sys.argv) == 4:
+                csv_path = sys.argv[3]
+                print(f"Loading MIC data from {csv_path}...")
+                result = load_mic_data_from_csv(session, csv_path)
+                
+                if result['success']:
+                    print(f"✅ Successfully loaded MIC data:")
+                    print(f"   Created: {result['created_count']} records")
+                    print(f"   Updated: {result['updated_count']} records")
+                    print(f"   Errors: {result['error_count']} records")
+                    
+                    if result['validation_issues']:
+                        print(f"\n⚠️  Validation Issues:")
+                        for issue in result['validation_issues'][:5]:  # Show first 5
+                            print(f"   - {issue}")
+                        if len(result['validation_issues']) > 5:
+                            print(f"   ... and {len(result['validation_issues']) - 5} more")
+                    
+                    stats = result['statistics']
+                    print(f"\n📊 Registry Statistics:")
+                    print(f"   Total MICs: {stats['total_mics']}")
+                    print(f"   Active: {stats['active_mics']}")
+                    print(f"   Operating: {stats['operating_mics']}")
+                    print(f"   Segments: {stats['segment_mics']}")
+                    print(f"   Countries: {stats['countries']}")
+                else:
+                    print(f"❌ Failed to load MIC data: {result['error']}")
+                    
+            elif command == "list":
+                country = sys.argv[3] if len(sys.argv) > 3 else None
+                
+                if country:
+                    mics = MarketIdentificationCode.get_by_country(session, country)
+                    print(f"MICs for {country.upper()}:")
+                else:
+                    mics = session.query(MarketIdentificationCode).filter_by(
+                        status=MarketIdentificationCode.MICStatus.ACTIVE
+                    ).limit(50).all()
+                    print("Active MICs (first 50):")
+                
+                for mic in mics:
+                    print(f"  {mic.mic:<4} - {mic.market_name} ({mic.iso_country_code})")
+                    
+            elif command == "search" and len(sys.argv) == 4:
+                query = sys.argv[3]
+                mics = MarketIdentificationCode.search_by_name(session, query)
+                
+                print(f"Search results for '{query}':")
+                for mic in mics:
+                    print(f"  {mic.mic:<4} - {mic.market_name} ({mic.iso_country_code})")
+                    
+            elif command == "get" and len(sys.argv) == 4:
+                mic_code = sys.argv[3].upper()
+                mic = session.query(MarketIdentificationCode).filter_by(mic=mic_code).first()
+                
+                if mic:
+                    print(f"MIC Details for {mic_code}:")
+                    print(f"  Market Name: {mic.market_name}")
+                    print(f"  Legal Entity: {mic.legal_entity_name}")
+                    print(f"  Country: {mic.iso_country_code}")
+                    print(f"  City: {mic.city}")
+                    print(f"  Status: {mic.status.value}")
+                    print(f"  Type: {mic.operation_type.value if mic.operation_type else 'N/A'}")
+                    print(f"  Category: {mic.market_category_code.value if mic.market_category_code else 'N/A'}")
+                    print(f"  Operating MIC: {mic.operating_mic}")
+                    print(f"  LEI: {mic.lei or 'N/A'}")
+                    print(f"  Website: {mic.website or 'N/A'}")
+                else:
+                    print(f"MIC {mic_code} not found")
+                    
+            elif command == "stats":
+                loader = MICDataLoader(session)
+                stats = loader.get_load_statistics()
+                issues = loader.validate_mic_relationships()
+                
+                print("📊 MIC Registry Statistics:")
+                print(f"  Total MICs: {stats['total_mics']}")
+                print(f"  Active MICs: {stats['active_mics']}")
+                print(f"  Operating MICs: {stats['operating_mics']}")
+                print(f"  Segment MICs: {stats['segment_mics']}")
+                print(f"  Countries: {stats['countries']}")
+                
+                print(f"\n🌍 Top Countries by MIC Count:")
+                for country, count in stats['top_countries']:
+                    print(f"  {country}: {count}")
+                
+                if issues:
+                    print(f"\n⚠️  Data Quality Issues ({len(issues)}):")
+                    for issue in issues[:3]:
+                        print(f"  - {issue}")
+                    if len(issues) > 3:
+                        print(f"  ... and {len(issues) - 3} more")
+                        
+            elif command == "segments" and len(sys.argv) == 4:
+                operating_mic = sys.argv[3].upper()
+                segments = MarketIdentificationCode.get_segments_for_operating_mic(session, operating_mic)
+                
+                print(f"Segments for Operating MIC {operating_mic}:")
+                for segment in segments:
+                    print(f"  {segment.mic:<4} - {segment.market_name}")
+                    
+            elif command == "countries":
+                from sqlalchemy import func
+                country_stats = session.query(
+                    MarketIdentificationCode.iso_country_code,
+                    func.count(MarketIdentificationCode.mic).label('count')
+                ).filter(
+                    MarketIdentificationCode.status == MarketIdentificationCode.MICStatus.ACTIVE
+                ).group_by(
+                    MarketIdentificationCode.iso_country_code
+                ).order_by(func.count(MarketIdentificationCode.mic).desc()).all()
+                
+                print("Countries with MIC codes:")
+                for country, count in country_stats:
+                    print(f"  {country}: {count} MICs")
+                    
+            else:
+                print("Invalid MIC command")
+                mic_operations()
+                
     except Exception as e:
         print(f"Error: {str(e)}")
 
@@ -324,7 +467,7 @@ def batch_operations():
 
 def filter_instruments():
     """Filter and list instruments based on criteria."""
-    from marketdata_api.models.instrument import Instrument
+    from marketdata_api.models.sqlite.instrument import Instrument
     
     if len(sys.argv) < 4:
         print("Usage: python scripts/cli.py filter <field> <value>")
@@ -347,7 +490,7 @@ def export_data():
     """Export data to CSV/JSON format."""
     import json
     import csv
-    from marketdata_api.models.instrument import Instrument
+    from marketdata_api.models.sqlite.instrument import Instrument
     
     if len(sys.argv) < 4:
         print("Usage: python scripts/cli.py export <format> <table>")
@@ -411,6 +554,7 @@ Basic Commands:
     tables                              - List all database tables with schema
     instrument <command>                - Instrument operations
     entity <command>                    - Legal entity operations
+    mic <command>                       - Market Identification Code operations
     batch <command> <file>             - Batch process instruments
     batch batch-source <type> [prefix] [mic] [limit] - Batch source from FIRDS (e.g. equity SE)
     batch batch-enrich [limit]          - Batch enrich all instruments in DB
@@ -448,6 +592,9 @@ Examples:
     python scripts/cli.py instrument detail DE000A1EWWW0
     python scripts/cli.py batch create futures.txt future
     python scripts/cli.py entity create 549300PPETP6IPXYTE40
+    python scripts/cli.py mic load downloads/ISO10383_MIC.csv
+    python scripts/cli.py mic search "NASDAQ"
+    python scripts/cli.py mic get XNYS
     python scripts/cli.py filter type equity
     python scripts/cli.py cfi ESVUFR
     python scripts/cli.py batch batch-source equity SE
@@ -467,6 +614,8 @@ def main():
         instrument_operations()
     elif command == "entity":
         entity_operations()
+    elif command == "mic":
+        mic_operations()
     elif command == "batch":
         batch_operations()
     elif command == "filter":

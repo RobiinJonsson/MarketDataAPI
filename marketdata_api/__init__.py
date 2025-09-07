@@ -56,6 +56,7 @@ def create_app():
     from marketdata_api.routes.docs import docs_bp  # Import the Docs API blueprint
     from marketdata_api.routes.common_routes import frontend_bp  # Import the frontend blueprint
     from marketdata_api.routes.file_management import file_management_bp  # Import file management blueprint
+    from marketdata_api.routes.mic_routes import mic_bp  # Import MIC routes blueprint
     # Import the new refactored routes registration function
     from marketdata_api.routes import register_routes
     
@@ -64,6 +65,7 @@ def create_app():
     app.register_blueprint(docs_bp)  # Register the Docs API blueprint
     app.register_blueprint(frontend_bp)  # Register the frontend blueprint
     app.register_blueprint(file_management_bp)  # Register file management blueprint
+    app.register_blueprint(mic_bp)  # Register MIC routes blueprint
     
     # Register all the refactored CRUD routes
     register_routes(app)
