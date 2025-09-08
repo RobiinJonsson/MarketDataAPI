@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate comprehensive API documentation from swagger.py definitions.
+Generate comprehensive API documentation from the modular swagger structure.
 
 This script creates:
 1. Clean OpenAPI 3.0 YAML specification
@@ -8,6 +8,7 @@ This script creates:
 3. Validation of generated documentation
 
 The script handles encoding issues on Windows and provides fallback mechanisms.
+Uses the new modular swagger architecture from marketdata_api.swagger.
 """
 
 import sys
@@ -41,7 +42,7 @@ def generate_openapi_yaml():
     try:
         # We need to create a minimal Flask app to generate the schema
         from flask import Flask
-        from marketdata_api.routes.swagger import swagger_bp
+        from marketdata_api.swagger import create_swagger_blueprint
         
         # Create a minimal Flask app with proper configuration
         app = Flask(__name__)
@@ -50,14 +51,16 @@ def generate_openapi_yaml():
         app.config['APPLICATION_ROOT'] = '/api/v1'
         app.config['PREFERRED_URL_SCHEME'] = 'http'
         
-        # Register the swagger blueprint
-        app.register_blueprint(swagger_bp)
+        # Create and register the modular swagger blueprint
+        swagger_bp = create_swagger_blueprint()
+        app.register_blueprint(swagger_bp, url_prefix='/api/v1')
         
         # Generate the schema within app and request context
         with app.app_context():
             with app.test_request_context('/api/v1/'):
-                # Get the API object from the blueprint
-                from marketdata_api.routes.swagger import api
+                # Get the API object from the modular swagger structure
+                from marketdata_api.swagger.config import create_swagger_api
+                api = create_swagger_api(swagger_bp)
                 
                 # Force Flask-RESTx to generate the schema
                 try:

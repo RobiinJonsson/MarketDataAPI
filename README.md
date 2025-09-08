@@ -1,4 +1,8 @@
-# Ma## 🎯 Key Features
+# MarketDataAPI
+
+A comprehensive market data management system with CFI-based instrument classification, integrating FIRDS, OpenFIGI, and GLEIF data sources.
+
+## 🎯 Key Features
 
 - **🆔 MIC Code Integration**: Complete ISO 10383 Market Identification Code system with dual-mode operations
 - **🏛️ CFI-Based Classification**: ISO 10962 compliant CFI code system as single source of truth for instrument types
@@ -6,13 +10,18 @@
 - **⚡ Performance Optimized**: CFI-driven file filtering reduces I/O operations by 90%
 - **🔧 Database**: SQLite (development) / Azure SQL (production) with unified transparency calculations
 - **📊 Data Sources**: Complete FIRDS/FITRS integration with intelligent type detection
-- **🌐 RESTful API**: CFI-validated endpoints with real-time instrument type validation
+- **🌐 RESTful API**: Modular Swagger UI with comprehensive endpoint documentation
 - **🖥️ Modern Frontend**: Dynamic type loading with real-time CFI validation and visual feedback
-- **📁 Smart File Management**: Precise regex-based pattern matching for FIRDS/FITRS filesAPI
+- **📁 Smart File Management**: Precise regex-based pattern matching for FIRDS/FITRS files
 
-A comprehensive market data management system with CFI-based instrument classification, integrating FIRDS, OpenFIGI, and GLEIF data sources.
+## 🚀 Recent Major Improvements
 
-## 🎯 Key Features
+### ✅ Swagger Architecture Refactor (September 2025)
+- **Modular Structure**: Refactored 1,444-line monolithic swagger.py into organized modules
+- **Complete Integration**: All endpoints (Instruments, Legal Entities, Transparency, Relationships, MIC) fully functional
+- **Working Implementations**: Real business logic integration instead of placeholder documentation
+- **Model Fixes**: Corrected all attribute mismatches between database models and API responses
+- **Enhanced Search**: Improved MIC remote search with country-only filtering capability
 
 - **� CFI-Based Classification**: ISO 10962 compliant CFI code system as single source of truth for instrument types
 - **🎯 Unified Architecture**: JSON-based models supporting all 10 FIRDS instrument types (C,D,E,F,H,I,J,O,R,S)

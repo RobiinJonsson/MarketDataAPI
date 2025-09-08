@@ -1,1076 +1,441 @@
 openapi: 3.0.0
 info:
   title: MarketDataAPI
-  version: '1.0'
+  version: 1.0.0
   description: API for financial market data, instrument details, and legal entity
     information
 servers:
 - url: http://127.0.0.1:5000/api/v1
   description: Development server
 paths:
-  /instruments/:
+  /instruments:
     get:
-      summary: Retrieves a paginated list of instruments
-      description: Retrieves a paginated list of instruments
-      operationId: get_instrument_list
+      summary: Get All Instruments
       tags:
-      - instruments
+      - Instruments
       parameters:
       - name: type
         in: query
-        description: Filter by instrument type (e.g., "equity", "debt", "future")
-        required: false
+        description: Filter by instrument type
         schema:
           type: string
-      - name: currency
-        in: query
-        description: Filter by currency code
-        required: false
-        schema:
-          type: string
-      - name: page
-        in: query
-        description: 'Page number for paginated results (default: 1)'
-        required: false
-        schema:
-          type: string
-      - name: per_page
-        in: query
-        description: 'Number of records per page (default: 20, max: 100)'
-        required: false
-        schema:
-          type: string
-      - name: limit
-        in: query
-        description: Maximum number of records to return
-        required: false
-        schema:
-          type: string
-      - name: offset
-        in: query
-        description: Number of records to skip
-        required: false
-        schema:
-          type: string
-      - name: X-Fields
-        in: header
-        description: An optional fields mask
-        required: false
-        schema:
-          type: string
-          format: mask
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/InstrumentListResponse'
-        '400':
-          description: Invalid request
-        '401':
-          description: Unauthorized
-  /instruments/cfi/{cfi_code}:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+  /instruments/{identifier}:
     get:
-      summary: Get comprehensive CFI information
-      description: Get comprehensive CFI information for a specific CFI code (alternative
-        to deprecated /cfi endpoint)
-      operationId: get_cfi_info
+      summary: Get Instrument by ID or ISIN
       tags:
-      - instruments
+      - Instruments
       parameters:
-      - name: cfi_code
+      - name: identifier
         in: path
-        description: The 6-character CFI code to decode (e.g., ESVUFR)
         required: true
+        description: Instrument ID or ISIN
         schema:
           type: string
-      responses:
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '400':
-          description: Invalid CFI code
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CFIInfoResponse'
-  /instruments/types:
-    get:
-      summary: Get valid instrument types from CFI system
-      description: Get list of valid instrument types supported by the CFI system
-      operationId: get_instrument_types
-      tags:
-      - instruments
-      parameters: []
-      responses:
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ValidTypesResponse'
-  /instruments/{identifier}/enrich:
-    post:
-      summary: Enrich an instrument with FIGI and LEI data
-      description: Enrich an existing instrument by fetching FIGI data from OpenFIGI
-        API and LEI data from GLEIF API. Uses venue-aware strategy for optimal OpenFIGI
-        results and validates LEI relationships.
-      operationId: post_instrument_enrich
-      tags:
-      - instruments
-      parameters: []
-      responses:
-        '200':
-          description: Successfully enriched instrument
-        '404':
-          description: Instrument not found
-        '500':
-          description: Enrichment failed due to external API errors or internal issues
-  /instruments/{identifier}/venues:
-    get:
-      summary: Get all venue records for a specific instrument
-      description: Get all venue records where this instrument trades. Shows venue
-        count and detailed venue information for trading optimization and venue-aware
-        enrichment strategies.
-      operationId: get_instrument_venues
-      tags:
-      - instruments
-      parameters:
-      - name: type
-        in: query
-        description: 'Instrument type for venue lookup (default: equity)'
-        required: false
-        schema:
-          type: string
-      responses:
-        '200':
-          description: Successfully retrieved venue information
-        '404':
-          description: No venue records found for the specified instrument
-        '500':
-          description: Internal server error
-  /instruments/{isin}:
-    get:
-      summary: Retrieves detailed information about a specific instrument by its ISIN
-      description: Retrieves detailed information about a specific instrument by its
-        ISIN
-      operationId: get_instrument_detail
-      tags:
-      - instruments
-      parameters: []
       responses:
         '200':
           description: Success
         '404':
           description: Instrument not found
-        '401':
-          description: Unauthorized
-  /instruments/{isin}/cfi:
+  /legal-entities:
     get:
-      summary: Classify instrument by its CFI code
-      description: Classify an existing instrument using its stored CFI code and check
-        consistency with current type
-      operationId: get_instrument_cfi_classification
+      summary: Get All Legal Entities
       tags:
-      - instruments
-      parameters:
-      - name: isin
-        in: path
-        description: The ISIN of the instrument to classify (e.g., US0378331005)
-        required: true
-        schema:
-          type: string
-      responses:
-        '500':
-          description: Internal server error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '404':
-          description: Instrument not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '400':
-          description: Invalid ISIN or missing CFI code
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/InstrumentCFIClassification'
-  /legal-entities/:
-    get:
-      summary: Retrieves a paginated list of legal entities
-      description: Retrieves a paginated list of legal entities
-      operationId: get_legal_entity_list
-      tags:
-      - legal-entities
-      parameters:
-      - name: status
-        in: query
-        description: Filter by entity status (e.g., "ACTIVE", "INACTIVE", "PENDING")
-        required: false
-        schema:
-          type: string
-      - name: jurisdiction
-        in: query
-        description: Filter by jurisdiction code (ISO 3166-1)
-        required: false
-        schema:
-          type: string
-      - name: page
-        in: query
-        description: 'Page number for paginated results (default: 1)'
-        required: false
-        schema:
-          type: string
-      - name: per_page
-        in: query
-        description: 'Number of records per page (default: 20, max: 100)'
-        required: false
-        schema:
-          type: string
-      - name: limit
-        in: query
-        description: Maximum number of records to return
-        required: false
-        schema:
-          type: string
-      - name: offset
-        in: query
-        description: Number of records to skip
-        required: false
-        schema:
-          type: string
-      - name: X-Fields
-        in: header
-        description: An optional fields mask
-        required: false
-        schema:
-          type: string
-          format: mask
+      - Legal Entities
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LegalEntityListResponse'
-        '400':
-          description: Invalid request
-        '401':
-          description: Unauthorized
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
   /legal-entities/{lei}:
     get:
-      summary: Retrieves detailed information about a specific legal entity by its
-        LEI
-      description: Retrieves detailed information about a specific legal entity by
-        its LEI
-      operationId: get_legal_entity_detail
+      summary: Get Legal Entity by LEI
       tags:
-      - legal-entities
-      parameters: []
-      responses:
-        '200':
-          description: Success
-        '404':
-          description: Legal entity not found
-        '401':
-          description: Unauthorized
-  /relationships/{lei}:
-    get:
-      summary: Retrieves all relationships for a specific legal entity
-      description: Retrieves all relationships for a specific legal entity
-      operationId: get_entity_relationships
-      tags:
-      - relationships
+      - Legal Entities
       parameters:
-      - name: relationship_type
-        in: query
-        description: Filter by relationship type ("DIRECT", "ULTIMATE")
-        required: false
-        schema:
-          type: string
-      - name: relationship_status
-        in: query
-        description: Filter by relationship status ("ACTIVE", "INACTIVE")
-        required: false
-        schema:
-          type: string
-      - name: direction
-        in: query
-        description: Filter by relationship direction ("PARENT", "CHILD")
-        required: false
-        schema:
-          type: string
-      - name: page
-        in: query
-        description: 'Page number for paginated results (default: 1)'
-        required: false
-        schema:
-          type: string
-      - name: per_page
-        in: query
-        description: 'Number of records per page (default: 20, max: 100)'
-        required: false
-        schema:
-          type: string
-      responses:
-        '200':
-          description: Success
-        '404':
-          description: Legal entity not found
-        '401':
-          description: Unauthorized
-  /schemas/:
-    get:
-      summary: Retrieves a list of all available schemas
-      description: Retrieves a list of all available schemas
-      operationId: get_schema_list
-      tags:
-      - schemas
-      parameters:
-      - name: type
-        in: query
-        description: Filter by schema type ("instrument", "legal_entity", "relationship")
-        required: false
-        schema:
-          type: string
-      - name: status
-        in: query
-        description: Filter by schema status ("active", "draft", "deprecated")
-        required: false
-        schema:
-          type: string
-      - name: page
-        in: query
-        description: 'Page number for paginated results (default: 1)'
-        required: false
-        schema:
-          type: string
-      - name: per_page
-        in: query
-        description: 'Number of records per page (default: 20, max: 100)'
-        required: false
-        schema:
-          type: string
-      - name: X-Fields
-        in: header
-        description: An optional fields mask
-        required: false
-        schema:
-          type: string
-          format: mask
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SchemaListResponse'
-        '400':
-          description: Invalid request
-        '401':
-          description: Unauthorized
-  /transparency:
-    post:
-      summary: Create transparency calculations from FITRS data for a given ISIN
-      description: ''
-      operationId: create_transparency_calculation
-      tags:
-      - transparency
-      parameters:
-      - name: payload
-        in: body
-        description: ''
+      - name: lei
+        in: path
         required: true
+        description: Legal Entity Identifier
         schema:
           type: string
       responses:
+        '200':
+          description: Success
         '404':
-          description: No transparency data found in FITRS for the given ISIN
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '400':
-          description: Bad request - missing required fields
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '201':
-          description: Transparency calculations created from FITRS data
+          description: Entity not found
+  /transparency:
     get:
-      summary: Get all transparency calculations with optional filtering
-      description: ''
-      operationId: list_transparency_calculations
+      summary: Get All Transparency Calculations
+      description: Retrieves a list of transparency calculations with optional filtering
+        by calculation type, instrument type, or ISIN
       tags:
-      - transparency
+      - Transparency
       parameters:
-      - name: per_page
+      - name: calculation_type
         in: query
-        description: Items per page
-        required: false
+        description: Filter by calculation type
         schema:
-          type: integer
-      - name: page
+          type: string
+          enum:
+          - EQUITY
+          - NON_EQUITY
+      - name: instrument_type
         in: query
-        description: Page number
-        required: false
+        description: Filter by instrument type
         schema:
-          type: integer
+          type: string
+          enum:
+          - equity
+          - debt
+          - futures
       - name: isin
         in: query
         description: Filter by ISIN
-        required: false
         schema:
           type: string
-      - name: instrument_type
+      - name: page
         in: query
-        description: Filter by CFI-based instrument type
-        required: false
+        description: Page number
         schema:
-          type: string
-      - name: calculation_type
+          type: integer
+          default: 1
+      - name: per_page
         in: query
-        description: Legacy filter - maps to file_type patterns
-        required: false
+        description: Items per page
         schema:
-          type: string
-      - name: has_threshold_data
-        in: query
-        description: Filter by records with threshold data (true/false)
-        required: false
-        schema:
-          type: string
-      - name: has_transaction_data
-        in: query
-        description: Filter by records with transaction data (true/false)
-        required: false
-        schema:
-          type: string
-      - name: is_debt
-        in: query
-        description: Filter by debt instruments (true/false)
-        required: false
-        schema:
-          type: string
-      - name: is_equity
-        in: query
-        description: Filter by equity instruments (true/false)
-        required: false
-        schema:
-          type: string
-      - name: instrument_category
-        in: query
-        description: Filter by instrument category (C, D, E, F, H, I, J, O, R)
-        required: false
-        schema:
-          type: string
-      - name: file_type
-        in: query
-        description: Filter by FITRS file type
-        required: false
-        schema:
-          type: string
-      - name: X-Fields
-        in: header
-        description: An optional fields mask
-        required: false
-        schema:
-          type: string
-          format: mask
+          type: integer
+          default: 20
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/TransparencyListResponse'
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        isin:
+                          type: string
+                        calculation_type:
+                          type: string
+                        liquidity:
+                          type: boolean
+                        total_transactions_executed:
+                          type: integer
+                        total_volume_executed:
+                          type: number
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      per_page:
+                        type: integer
+                      total:
+                        type: integer
+    post:
+      summary: Create Transparency Calculation
+      description: Creates a new transparency calculation with the provided data
+      tags:
+      - Transparency
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - ISIN
+              - TechRcrdId
+              properties:
+                ISIN:
+                  type: string
+                  description: International Securities Identification Number
+                TechRcrdId:
+                  type: string
+                  description: Technical record identifier
+                calculation_type:
+                  type: string
+                  enum:
+                  - EQUITY
+                  - NON_EQUITY
+                  default: NON_EQUITY
+                FrDt:
+                  type: string
+                  format: date
+                  description: From date (YYYY-MM-DD)
+                ToDt:
+                  type: string
+                  format: date
+                  description: To date (YYYY-MM-DD)
+                Lqdty:
+                  type: string
+                  description: Liquidity indicator (true/false)
+                TtlNbOfTxsExctd:
+                  type: integer
+                  description: Total number of transactions executed
+                TtlVolOfTxsExctd:
+                  type: number
+                  description: Total volume of transactions executed
+      responses:
+        '201':
+          description: Transparency calculation created successfully
+        '400':
+          description: Bad request - invalid data provided
+  /transparency/{transparency_id}:
+    get:
+      summary: Get Transparency Calculation by ID
+      description: Retrieves detailed information about a specific transparency calculation
+      tags:
+      - Transparency
+      parameters:
+      - name: transparency_id
+        in: path
+        required: true
+        description: Transparency calculation ID
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  isin:
+                    type: string
+                  calculation_type:
+                    type: string
+                  tech_record_id:
+                    type: string
+                  from_date:
+                    type: string
+                    format: date
+                  to_date:
+                    type: string
+                    format: date
+                  liquidity:
+                    type: boolean
+                  total_transactions_executed:
+                    type: integer
+                  total_volume_executed:
+                    type: number
+                  created_at:
+                    type: string
+                    format: date-time
+                  updated_at:
+                    type: string
+                    format: date-time
+        '404':
+          description: Transparency calculation not found
   /transparency/isin/{isin}:
     get:
-      summary: Get transparency calculations for a specific ISIN
-      description: ''
-      operationId: get_transparency_by_isin
+      summary: Get Transparency by ISIN
+      description: Retrieves transparency calculations for a specific ISIN, optionally
+        creating them if they do not exist
       tags:
-      - transparency
+      - Transparency
       parameters:
+      - name: isin
+        in: path
+        required: true
+        description: ISIN to search for
+        schema:
+          type: string
+      - name: calculation_type
+        in: query
+        description: Calculation type to get/create
+        schema:
+          type: string
+          enum:
+          - EQUITY
+          - NON_EQUITY
       - name: ensure_instrument
         in: query
         description: Ensure instrument exists before creating transparency data
-        required: false
         schema:
           type: boolean
-      - name: calculation_type
-        in: query
-        description: Legacy filter - maps to equity/non-equity patterns
-        required: false
-        schema:
-          type: string
-      - name: file_type
-        in: query
-        description: Filter by specific FITRS file type
-        required: false
-        schema:
-          type: string
+          default: true
       responses:
         '200':
           description: Success
-  /transparency/{transparency_id}:
+        '404':
+          description: No calculations found for this ISIN
+  /transparency/batch:
+    post:
+      summary: Batch Source Transparency from FITRS
+      description: Batch source transparency calculations from FITRS data based on
+        specified criteria
+      tags:
+      - Transparency
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - calculation_type
+              properties:
+                calculation_type:
+                  type: string
+                  enum:
+                  - EQUITY
+                  - NON_EQUITY
+                isin_prefix:
+                  type: string
+                  description: ISIN prefix filter (e.g., NL for Netherlands)
+                limit:
+                  type: integer
+                  default: 10
+                  description: Maximum number of calculations to create
+                cfi_type:
+                  type: string
+                  enum:
+                  - D
+                  - F
+                  - E
+                  description: CFI type filter
+      responses:
+        '201':
+          description: Batch transparency calculations created successfully
+        '400':
+          description: Bad request - invalid parameters
+  /transparency/batch-create:
+    post:
+      summary: Batch Create Transparency Calculations
+      description: Create multiple transparency calculations from provided data array
+      tags:
+      - Transparency
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - records
+              properties:
+                records:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      ISIN:
+                        type: string
+                      TechRcrdId:
+                        type: string
+                      calculation_type:
+                        type: string
+                        enum:
+                        - EQUITY
+                        - NON_EQUITY
+                      FrDt:
+                        type: string
+                        format: date
+                      ToDt:
+                        type: string
+                        format: date
+                      Lqdty:
+                        type: string
+                      TtlNbOfTxsExctd:
+                        type: integer
+                      TtlVolOfTxsExctd:
+                        type: number
+      responses:
+        '201':
+          description: Batch creation completed
+        '400':
+          description: Bad request - invalid records provided
+  /schemas:
     get:
-      summary: Get transparency calculation by ID
-      description: ''
-      operationId: get_transparency_calculation
+      summary: Get All Schemas
       tags:
-      - transparency
-      parameters: []
+      - Schemas
       responses:
-        '404':
-          description: Transparency calculation not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-    delete:
-      summary: Delete a transparency calculation
-      description: ''
-      operationId: delete_transparency_calculation
-      tags:
-      - transparency
-      parameters: []
-      responses:
-        '404':
-          description: Transparency calculation not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
         '200':
-          description: Transparency calculation deleted
-    put:
-      summary: Update an existing transparency calculation
-      description: ''
-      operationId: update_transparency_calculation
-      tags:
-      - transparency
-      parameters:
-      - name: payload
-        in: body
-        description: ''
-        required: true
-        schema:
-          type: string
-      responses:
-        '404':
-          description: Transparency calculation not found
+          description: Success
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-        '200':
-          description: Transparency calculation updated
+                type: object
+                properties:
+                  status:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
 components:
   schemas:
-    InstrumentListResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          description: Response status
-          example: success
-          enum:
-          - success
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/InstrumentBase'
-        meta:
-          $ref: '#/components/schemas/PaginationMeta'
-      required:
-      - status
-    InstrumentBase:
-      type: object
-      properties:
-        id:
-          type: string
-          description: Unique identifier
-        isin:
-          type: string
-          description: International Securities Identification Number
-        type:
-          type: string
-          description: Instrument type (equity, debt, future, etc.)
-        full_name:
-          type: string
-          description: Full name of the instrument
-        symbol:
-          type: string
-          description: Symbol or short name
-        currency:
-          type: string
-          description: Currency code (ISO 4217)
-        cfi_code:
-          type: string
-          description: CFI code
-      required:
-      - full_name
-      - id
-      - isin
-    PaginationMeta:
-      type: object
-      properties:
-        page:
-          type: integer
-          description: Current page number
-        per_page:
-          type: integer
-          description: Items per page
-        total:
-          type: integer
-          description: Total number of items
     Error:
       type: object
       properties:
-        status:
-          type: string
-          description: Error status
-          example: error
-          enum:
-          - error
         error:
-          $ref: '#/components/schemas/ErrorDetails'
-      required:
-      - status
-    ErrorDetails:
-      type: object
-      properties:
-        code:
           type: string
-          description: Error code
-        message:
-          type: string
-          description: Error message description
-      required:
-      - code
-      - message
-    ValidTypesResponse:
-      type: object
-      properties:
-        valid_types:
-          type: array
-          description: List of valid instrument types
-          items:
-            type: string
-        message:
-          type: string
-          description: Description message
-      required:
-      - message
-      - valid_types
-    CFIInfoResponse:
-      type: object
-      properties:
-        cfi_code:
-          type: string
-          description: The CFI code
-        category:
-          type: string
-          description: CFI category letter
-        category_description:
-          type: string
-          description: CFI category description
-        group:
-          type: string
-          description: CFI group letter
-        group_description:
-          type: string
-          description: CFI group description
-        attributes:
-          type: string
-          description: CFI attributes (4 characters)
-        decoded_attributes:
-          description: Decoded CFI attributes
-        business_type:
-          type: string
-          description: Business instrument type
-        fitrs_patterns:
-          type: array
-          description: FITRS file patterns for this CFI
-          items:
-            type: string
-        is_equity:
-          type: boolean
-          description: Whether this is an equity instrument
-        is_debt:
-          type: boolean
-          description: Whether this is a debt instrument
-        is_collective_investment:
-          type: boolean
-          description: Whether this is a collective investment
-        is_derivative:
-          type: boolean
-          description: Whether this is a derivative
-      required:
-      - cfi_code
-    CFIDecodedAttributes:
-      type: object
-      properties:
-        voting_rights:
-          type: string
-          description: Voting rights description
-        ownership_restrictions:
-          type: string
-          description: Ownership restrictions description
-        payment_status:
-          type: string
-          description: Payment status description
-        form:
-          type: string
-          description: Form description
-    InstrumentCFIClassification:
-      type: object
-      properties:
-        isin:
-          type: string
-          description: Instrument ISIN
-        instrument_id:
-          type: integer
-          description: Internal instrument ID
-        current_instrument_type:
-          type: string
-          description: Current instrument type in database
-        cfi_classification:
-          description: Full CFI classification
-        consistency_check:
-          description: Consistency analysis between CFI and database
-      required:
-      - instrument_id
-      - isin
-    ConsistencyCheck:
-      type: object
-      properties:
-        cfi_suggests_type:
-          type: string
-          description: Type suggested by CFI code
-        current_type:
-          type: string
-          description: Current type in database
-        is_consistent:
-          type: boolean
-          description: Whether CFI and database types match
-    LegalEntityListResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          description: Response status
-          example: success
-          enum:
-          - success
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/LegalEntityBase'
-        meta:
-          $ref: '#/components/schemas/PaginationMeta'
-      required:
-      - status
-    LegalEntityBase:
-      type: object
-      properties:
-        lei:
-          type: string
-          description: Legal Entity Identifier (20 characters)
-        name:
-          type: string
-          description: Legal name of the entity
-        jurisdiction:
-          type: string
-          description: Jurisdiction code (ISO 3166-1)
-        legal_form:
-          type: string
-          description: Legal form of the entity
-        status:
-          type: string
-          description: Current status (Active, Inactive, Pending)
-      required:
-      - lei
-      - name
-    SchemaListResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          description: Response status
-          example: success
-          enum:
-          - success
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/SchemaBase'
-        meta:
-          $ref: '#/components/schemas/PaginationMeta'
-      required:
-      - status
-    SchemaBase:
+    TransparencyCalculation:
       type: object
       properties:
         id:
           type: string
-          description: Unique identifier for the schema
-        name:
-          type: string
-          description: Display name for the schema
-        description:
-          type: string
-          description: Description of the schema and its purpose
-        type:
-          type: string
-          description: Type of the schema (instrument, legal_entity, relationship)
-        status:
-          type: string
-          description: Status of the schema (active, draft, deprecated)
-        version:
-          type: string
-          description: Version of the schema
-        created_at:
-          type: string
-          description: Creation date
-          format: date-time
-        updated_at:
-          type: string
-          description: Last update date
-          format: date-time
-      required:
-      - id
-      - name
-      - type
-    TransparencyCreateRequest:
-      type: object
-      properties:
         isin:
           type: string
-          description: International Securities Identification Number
-        instrument_type:
+        calculation_type:
           type: string
-          description: CFI-based instrument type
-          example: equity
           enum:
-          - equity
-          - debt
-          - collective_investment
-          - future
-          - structured
-          - index_linked
-          - warrant
-          - option
-          - rights
-          - swap
-      required:
-      - instrument_type
-      - isin
-    TransparencyListResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          description: Response status
-          example: success
-          enum:
-          - success
-        data:
-          type: array
-          items:
-            $ref: '#/components/schemas/TransparencyDetailed'
-        meta:
-          $ref: '#/components/schemas/PaginationMeta'
-      required:
-      - status
-    TransparencyDetailed: {}
-    TransparencyBase:
-      type: object
-      properties:
-        id:
-          type: string
-          description: Unique identifier
-        isin:
-          type: string
-          description: International Securities Identification Number
-        file_type:
-          type: string
-          description: FITRS file type
-          example: FULECR_C
-          enum:
-          - FULECR_C
-          - FULECR_E
-          - FULECR_R
-          - FULNCR_C
-          - FULNCR_D
-          - FULNCR_E
-          - FULNCR_F
-          - FULNCR_H
-          - FULNCR_I
-          - FULNCR_J
-          - FULNCR_O
-        instrument_category:
-          type: string
-          description: Instrument category (C, D, E, F, H, I, J, O, R)
-        is_equity:
-          type: boolean
-          description: Whether this is equity transparency data
-        is_non_equity:
-          type: boolean
-          description: Whether this is non-equity transparency data
-        is_debt_instrument:
-          type: boolean
-          description: Whether this is specifically a debt instrument
-        is_derivatives_or_complex:
-          type: boolean
-          description: Whether this is derivatives or complex instruments
-        instrument_classification:
-          type: string
-          description: Financial instrument classification
-        description:
-          type: string
-          description: Instrument description
+          - EQUITY
+          - NON_EQUITY
         tech_record_id:
-          type: integer
-          description: Technical record identifier
+          type: string
         from_date:
           type: string
-          description: From date
           format: date
         to_date:
           type: string
-          description: To date
           format: date
         liquidity:
           type: boolean
-          description: Liquidity indicator
         total_transactions_executed:
           type: integer
-          description: Total number of transactions executed
         total_volume_executed:
           type: number
-          description: Total volume of transactions executed
-        has_transaction_data:
-          type: boolean
-          description: Whether record has transaction data
-        has_threshold_data:
-          type: boolean
-          description: Whether record has threshold data
-        source_file:
-          type: string
-          description: Source FITRS filename
         created_at:
           type: string
-          description: Creation timestamp
           format: date-time
         updated_at:
           type: string
-          description: Last update timestamp
           format: date-time
-        raw_data:
-          type: object
-          description: Raw FITRS data in JSON format
-      required:
-      - file_type
-      - id
-      - isin
-    TransparencyDetails:
-      type: object
-      properties:
-        type:
-          type: string
-          description: CFI-based instrument type
-          example: equity
-          enum:
-          - equity
-          - debt
-          - collective_investment
-          - future
-          - structured
-          - index_linked
-          - warrant
-          - option
-          - rights
-          - swap
-          - other
-        financial_instrument_classification:
-          type: string
-          description: Financial instrument classification (equity only)
-        methodology:
-          type: string
-          description: Methodology used (equity only)
-        average_daily_turnover:
-          type: number
-          description: Average daily turnover (equity only)
-        large_in_scale:
-          type: number
-          description: Large in scale threshold (equity only)
-        average_daily_number_of_transactions:
-          type: number
-          description: Average daily number of transactions (equity only)
-        average_transaction_value:
-          type: number
-          description: Average transaction value (equity only)
-        standard_market_size:
-          type: number
-          description: Standard market size (equity only)
-        description:
-          type: string
-          description: Description (non-equity only)
-        bond_type:
-          type: string
-          description: Bond type (debt only)
-        is_liquid:
-          type: boolean
-          description: Liquidity indicator (debt only)
-        underlying_isin:
-          type: string
-          description: Underlying instrument ISIN (futures only)
-        is_stock_dividend_future:
-          type: boolean
-          description: Stock dividend future indicator (futures only)
-        pre_trade_large_in_scale_threshold:
-          type: number
-          description: Pre-trade large in scale threshold (non-equity)
-        post_trade_large_in_scale_threshold:
-          type: number
-          description: Post-trade large in scale threshold (non-equity)
-        criterion_name:
-          type: string
-          description: Criterion name (non-equity)
-        criterion_value:
-          type: string
-          description: Criterion value (non-equity)
-      required:
-      - type
   securitySchemes:
     ApiKeyAuth:
       type: apiKey

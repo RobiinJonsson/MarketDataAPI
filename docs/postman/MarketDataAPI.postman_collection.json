@@ -3,7 +3,7 @@
     "name": "MarketDataAPI",
     "description": "Generated from OpenAPI specification",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "version": "1.0"
+    "version": "1.0.0"
   },
   "auth": {
     "type": "apikey",
@@ -34,12 +34,12 @@
   ],
   "item": [
     {
-      "name": "Retrieves a paginated list of instruments",
+      "name": "Get All Instruments",
       "request": {
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{base_url}}/instruments/",
+          "raw": "{{base_url}}/instruments",
           "host": [
             "{{base_url}}"
           ],
@@ -50,118 +50,29 @@
       }
     },
     {
-      "name": "Get comprehensive CFI information",
+      "name": "Get Instrument by ID or ISIN",
       "request": {
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{base_url}}/instruments/cfi/{cfi_code}",
+          "raw": "{{base_url}}/instruments/{identifier}",
           "host": [
             "{{base_url}}"
           ],
           "path": [
             "instruments",
-            "cfi",
-            "{cfi_code}"
+            "{identifier}"
           ]
         }
       }
     },
     {
-      "name": "Get valid instrument types from CFI system",
+      "name": "Get All Legal Entities",
       "request": {
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{base_url}}/instruments/types",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "instruments",
-            "types"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Enrich an instrument with FIGI and LEI data",
-      "request": {
-        "method": "POST",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/instruments/{identifier}/enrich",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "instruments",
-            "{identifier}",
-            "enrich"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Get all venue records for a specific instrument",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/instruments/{identifier}/venues",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "instruments",
-            "{identifier}",
-            "venues"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Retrieves detailed information about a specific instrument by its ISIN",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/instruments/{isin}",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "instruments",
-            "{isin}"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Classify instrument by its CFI code",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/instruments/{isin}/cfi",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "instruments",
-            "{isin}",
-            "cfi"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Retrieves a paginated list of legal entities",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/legal-entities/",
+          "raw": "{{base_url}}/legal-entities",
           "host": [
             "{{base_url}}"
           ],
@@ -172,7 +83,7 @@
       }
     },
     {
-      "name": "Retrieves detailed information about a specific legal entity by its LEI",
+      "name": "Get Legal Entity by LEI",
       "request": {
         "method": "GET",
         "header": [],
@@ -189,40 +100,23 @@
       }
     },
     {
-      "name": "Retrieves all relationships for a specific legal entity",
+      "name": "Get All Transparency Calculations",
       "request": {
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{base_url}}/relationships/{lei}",
+          "raw": "{{base_url}}/transparency",
           "host": [
             "{{base_url}}"
           ],
           "path": [
-            "relationships",
-            "{lei}"
+            "transparency"
           ]
         }
       }
     },
     {
-      "name": "Retrieves a list of all available schemas",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/schemas/",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "schemas"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Create transparency calculations from FITRS data for a given ISIN",
+      "name": "Create Transparency Calculation",
       "request": {
         "method": "POST",
         "header": [],
@@ -238,23 +132,24 @@
       }
     },
     {
-      "name": "Get all transparency calculations with optional filtering",
+      "name": "Get Transparency Calculation by ID",
       "request": {
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{base_url}}/transparency",
+          "raw": "{{base_url}}/transparency/{transparency_id}",
           "host": [
             "{{base_url}}"
           ],
           "path": [
-            "transparency"
+            "transparency",
+            "{transparency_id}"
           ]
         }
       }
     },
     {
-      "name": "Get transparency calculations for a specific ISIN",
+      "name": "Get Transparency by ISIN",
       "request": {
         "method": "GET",
         "header": [],
@@ -272,52 +167,51 @@
       }
     },
     {
-      "name": "Get transparency calculation by ID",
+      "name": "Batch Source Transparency from FITRS",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/transparency/batch",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "transparency",
+            "batch"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Batch Create Transparency Calculations",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/transparency/batch-create",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "transparency",
+            "batch-create"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get All Schemas",
       "request": {
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{base_url}}/transparency/{transparency_id}",
+          "raw": "{{base_url}}/schemas",
           "host": [
             "{{base_url}}"
           ],
           "path": [
-            "transparency",
-            "{transparency_id}"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Delete a transparency calculation",
-      "request": {
-        "method": "DELETE",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/transparency/{transparency_id}",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "transparency",
-            "{transparency_id}"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Update an existing transparency calculation",
-      "request": {
-        "method": "PUT",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/transparency/{transparency_id}",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "transparency",
-            "{transparency_id}"
+            "schemas"
           ]
         }
       }
