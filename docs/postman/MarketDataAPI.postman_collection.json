@@ -34,7 +34,7 @@
   ],
   "item": [
     {
-      "name": "Get All Instruments",
+      "name": "Retrieves a paginated list of instruments",
       "request": {
         "method": "GET",
         "header": [],
@@ -50,168 +50,17 @@
       }
     },
     {
-      "name": "Get Instrument by ID or ISIN",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/instruments/{identifier}",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "instruments",
-            "{identifier}"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Get All Legal Entities",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/legal-entities",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "legal-entities"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Get Legal Entity by LEI",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/legal-entities/{lei}",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "legal-entities",
-            "{lei}"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Get All Transparency Calculations",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/transparency",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "transparency"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Create Transparency Calculation",
+      "name": "Create a new instrument from FIRDS data",
       "request": {
         "method": "POST",
         "header": [],
         "url": {
-          "raw": "{{base_url}}/transparency",
+          "raw": "{{base_url}}/instruments",
           "host": [
             "{{base_url}}"
           ],
           "path": [
-            "transparency"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Get Transparency Calculation by ID",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/transparency/{transparency_id}",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "transparency",
-            "{transparency_id}"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Get Transparency by ISIN",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/transparency/isin/{isin}",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "transparency",
-            "isin",
-            "{isin}"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Batch Source Transparency from FITRS",
-      "request": {
-        "method": "POST",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/transparency/batch",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "transparency",
-            "batch"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Batch Create Transparency Calculations",
-      "request": {
-        "method": "POST",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/transparency/batch-create",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "transparency",
-            "batch-create"
-          ]
-        }
-      }
-    },
-    {
-      "name": "Get All Schemas",
-      "request": {
-        "method": "GET",
-        "header": [],
-        "url": {
-          "raw": "{{base_url}}/schemas",
-          "host": [
-            "{{base_url}}"
-          ],
-          "path": [
-            "schemas"
+            "instruments"
           ]
         }
       }

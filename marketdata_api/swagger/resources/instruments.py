@@ -123,6 +123,117 @@ def create_instrument_resources(api, models):
                     }
                 }, HTTPStatus.INTERNAL_SERVER_ERROR
 
+        @instruments_ns.doc(
+            description='Create a new instrument from FIRDS data',
+            responses={
+                HTTPStatus.CREATED: ('Instrument created successfully', instrument_models['instrument_detail_response']),
+                HTTPStatus.BAD_REQUEST: ('Invalid request data', common_models['error_model']),
+                HTTPStatus.NOT_FOUND: ('Instrument not found in FIRDS data', common_models['error_model']),
+                HTTPStatus.UNAUTHORIZED: ('Unauthorized', common_models['error_model']),
+                HTTPStatus.INTERNAL_SERVER_ERROR: ('Internal server error', common_models['error_model'])
+            }
+        )
+        @instruments_ns.expect(instrument_models['instrument_create_request'])
+        def post(self):
+            """Create a new instrument from FIRDS data"""
+            from ...interfaces.factory.services_factory import ServicesFactory
+            from ...models.utils.cfi_instrument_manager import validate_instrument_type, get_valid_instrument_types, validate_cfi_code, normalize_instrument_type_from_cfi
+            
+            try:
+                data = request.json
+                if not data:
+                    return {
+                        ResponseFields.STATUS: "error",
+                        ResponseFields.ERROR: {
+                            "code": str(HTTPStatus.BAD_REQUEST),
+                            ResponseFields.MESSAGE: "No data provided"
+                        }
+                    }, HTTPStatus.BAD_REQUEST
+                    
+                # Required fields - ISIN and type
+                if "isin" not in data or "type" not in data:
+                    return {
+                        ResponseFields.STATUS: "error",
+                        ResponseFields.ERROR: {
+                            "code": str(HTTPStatus.BAD_REQUEST),
+                            ResponseFields.MESSAGE: "isin and type are required"
+                        }
+                    }, HTTPStatus.BAD_REQUEST
+                    
+                instrument_type = data["type"]
+                
+                # Use CFI-based validation
+                if not validate_instrument_type(instrument_type):
+                    valid_types = get_valid_instrument_types()
+                    return {
+                        ResponseFields.STATUS: "error",
+                        ResponseFields.ERROR: {
+                            "code": str(HTTPStatus.BAD_REQUEST),
+                            ResponseFields.MESSAGE: f"Invalid instrument type '{instrument_type}'. Must be one of: {', '.join(valid_types)}"
+                        }
+                    }, HTTPStatus.BAD_REQUEST
+                    
+                # If CFI code is provided, validate it and ensure consistency
+                cfi_code = data.get('cfi_code')
+                if cfi_code:
+                    is_valid, error_msg = validate_cfi_code(cfi_code)
+                    if not is_valid:
+                        return {
+                            ResponseFields.STATUS: "error",
+                            ResponseFields.ERROR: {
+                                "code": str(HTTPStatus.BAD_REQUEST),
+                                ResponseFields.MESSAGE: f"Invalid CFI code: {error_msg}"
+                            }
+                        }, HTTPStatus.BAD_REQUEST
+                        
+                    # Ensure CFI code matches the provided instrument type
+                    normalized_type = normalize_instrument_type_from_cfi(cfi_code)
+                    if normalized_type != instrument_type:
+                        return {
+                            ResponseFields.STATUS: "error",
+                            ResponseFields.ERROR: {
+                                "code": str(HTTPStatus.BAD_REQUEST),
+                                ResponseFields.MESSAGE: f"CFI code '{cfi_code}' indicates type '{normalized_type}' but '{instrument_type}' was specified"
+                            }
+                        }, HTTPStatus.BAD_REQUEST
+                
+                # Use factory pattern for service access
+                service = ServicesFactory.get_instrument_service()
+                
+                # Use the create_instrument method that gets data from FIRDS
+                instrument = service.create_instrument(data["isin"], instrument_type)
+                
+                return {
+                    ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                    ResponseFields.MESSAGE: "Instrument created successfully",
+                    ResponseFields.DATA: {
+                        "id": instrument.id,
+                        "isin": instrument.isin,
+                        "instrument_type": instrument.instrument_type
+                    }
+                }, HTTPStatus.CREATED
+                
+            except Exception as e:
+                # Check if it's an InstrumentNotFoundError
+                if "not found in local FIRDS data" in str(e):
+                    logger.warning(f"Instrument not found in FIRDS data: {str(e)}")
+                    return {
+                        ResponseFields.STATUS: "error",
+                        ResponseFields.ERROR: {
+                            "code": str(HTTPStatus.NOT_FOUND),
+                            ResponseFields.MESSAGE: str(e)
+                        }
+                    }, HTTPStatus.NOT_FOUND
+                
+                logger.error(f"Error in create_instrument: {str(e)}")
+                return {
+                    ResponseFields.STATUS: "error",
+                    ResponseFields.ERROR: {
+                        "code": str(HTTPStatus.INTERNAL_SERVER_ERROR),
+                        ResponseFields.MESSAGE: str(e)
+                    }
+                }, HTTPStatus.INTERNAL_SERVER_ERROR
+
     @instruments_ns.route('/<string:isin>')
     @instruments_ns.param('isin', 'International Securities Identification Number')
     class InstrumentDetail(Resource):

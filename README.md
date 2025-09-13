@@ -1,6 +1,6 @@
 # MarketDataAPI
 
-A comprehensive market data management system with CFI-based instrument classification, integrating FIRDS, OpenFIGI, and GLEIF data sources.
+A comprehensive market data management system with CFI-based instrument classification, integrating FIRDS, OpenFIGI, ISO10383 (MIC) and GLEIF data sources.
 
 ## 🎯 Key Features
 
@@ -15,6 +15,13 @@ A comprehensive market data management system with CFI-based instrument classifi
 - **📁 Smart File Management**: Precise regex-based pattern matching for FIRDS/FITRS files
 
 ## 🚀 Recent Major Improvements
+
+### ✅ Professional CLI Implementation (September 2025)
+- **Modern Framework**: Complete CLI rewrite using Click framework with Rich formatting
+- **Comprehensive Coverage**: All MarketDataAPI functionality accessible via professional command-line interface
+- **Enhanced CFI Analysis**: Upgraded CFI command with multi-level classification, business information, and technical details
+- **Beautiful Output**: Rich tables, panels, color coding, and status indicators for professional user experience
+- **Easy Deployment**: Package installation with batch wrapper for convenient access
 
 ### ✅ Swagger Architecture Refactor (September 2025)
 - **Modular Structure**: Refactored 1,444-line monolithic swagger.py into organized modules
@@ -71,11 +78,31 @@ python -m venv venv
 source venv/bin/activate  # Unix
 .\venv\Scripts\activate  # Windows
 
-# Install dependencies
+# Install all dependencies (includes CLI: click>=8.0.0, rich>=13.0.0)
 pip install -r requirements.txt
+
+# Install CLI package for global command access (optional)
+pip install -e .
 
 # Initialize database
 python -m marketdata_api.database.base
+```
+
+### CLI Installation Verification
+
+After installation, test the CLI:
+
+```bash
+# Windows: Use batch wrapper (recommended)
+.\mapi.bat --help
+.\mapi.bat stats
+
+# Direct Python execution (cross-platform)
+python marketdata_cli.py --help
+python marketdata_cli.py stats
+
+# Package installation (if entry points work)
+marketdata --help  # or mapi --help
 ```
 
 ## Configuration
@@ -96,30 +123,109 @@ DATABASE_URL=sqlite:///marketdata.db
 python -m marketdata_api
 ```
 
-### Command Line Interface
+### Professional Command Line Interface
+
+The MarketDataAPI includes a modern, professional CLI built with Click framework and Rich formatting for beautiful terminal output.
+
+#### Installation & Setup
+
+**Prerequisites**: Ensure you've followed the main installation steps above, including `pip install -r requirements.txt` which installs the CLI dependencies (`click>=8.0.0`, `rich>=13.0.0`).
 
 ```bash
-# List all instruments
-python scripts/cli.py instrument list
+# Option 1: Package installation (enables global commands)
+pip install -e .
+# This creates 'marketdata' and 'mapi' commands globally
 
-# Get instrument details
-python scripts/cli.py instrument detail <ISIN>
+# Option 2: Direct execution (no installation needed)
+python marketdata_cli.py [command]
 
-# Batch process instruments
-python scripts/cli.py batch create isins.txt equity
+# Option 3: Windows batch wrapper (recommended for Windows)
+.\mapi.bat [command]
 
-# Decode a CFI code
-python scripts/cli.py cfi ESVUFR
+# Verify installation
+.\mapi.bat --help  # Should show beautiful CLI help
+.\mapi.bat stats   # Quick test with database statistics
+```
 
-# Batch source from FIRDS
-python scripts/cli.py batch batch-source equity SE
+**Note**: All CLI dependencies are included in `requirements.txt`, so running `pip install -r requirements.txt` installs everything needed for the CLI to work.
 
-# MIC operations
-python scripts/cli.py mic list --country US --status ACTIVE
-python scripts/cli.py mic detail XNYS
-python scripts/cli.py mic load-data --remote  # Load from official ISO source
-python scripts/cli.py mic countries
-python scripts/cli.py mic search "New York"
+#### Core Commands
+
+**📊 Database & Statistics**
+```bash
+# Database overview with rich formatting
+mapi.bat stats
+```
+
+**🏛️ Instrument Management**
+```bash
+# List instruments with filtering and rich tables
+mapi.bat instruments list --limit 10 --type equity --currency USD
+
+# Get detailed instrument information
+mapi.bat instruments get SE0000120784
+
+# Create instrument from FIRDS data
+mapi.bat instruments create US0378331005 equity
+
+# Get trading venues for instrument
+mapi.bat instruments venues SE0000120784
+```
+
+**🔍 Comprehensive CFI Analysis**
+```bash
+# Enhanced CFI decoding with all classification levels
+mapi.bat cfi ESVUFR  # Equity example
+mapi.bat cfi DBFUFR  # Debt example  
+mapi.bat cfi FFCXXR  # Derivative example
+mapi.bat cfi CSIUFR  # Collective investment example
+
+# Output includes:
+# - Classification Levels (Category, Group, Attributes)
+# - Business Information (Type, Classification Flags)
+# - Technical Details (FITRS Patterns, Decoded Attributes)
+# - Rich Visual Display (Panels, Tables, Color Coding)
+```
+
+**🆔 Market Identification Codes (MIC)**
+```bash
+# List MICs with country filtering
+mapi.bat mic list --country US --limit 10
+
+# Get detailed MIC information
+mapi.bat mic get XNYS
+
+# Real-time ISO registry lookup
+mapi.bat mic remote lookup XLON
+```
+
+**🔒 Transparency & Legal Entities**
+```bash
+# List transparency calculations with pagination
+mapi.bat transparency list --limit 5 --offset 0
+
+# Get detailed transparency calculation
+mapi.bat transparency get [transparency_id]
+
+# Legal entity lookup
+mapi.bat entities get [LEI_CODE]
+```
+
+#### Rich Terminal Output
+The CLI features beautiful formatting with:
+- **Rich Tables**: Organized data display with colors and borders
+- **Information Panels**: Comprehensive details in bordered sections
+- **Status Indicators**: Loading spinners and progress feedback
+- **Color Coding**: Cyan headers, green success, red errors
+- **Classification Tables**: Clear Yes/No indicators with checkmarks
+
+#### Example Output
+```
+╭─────────────── Database Statistics ────────────────╮
+│ Instruments: 17                                     │
+│ Transparency Calculations: 36                       │ 
+│ MIC Codes: 2,794                                    │
+╰─────────────────────────────────────────────────────╯
 ```
 
 ### API Endpoints
@@ -244,8 +350,10 @@ MarketDataAPI/
 │   │   └── utils/api.ts # CFI validation API calls
 │   ├── admin.html      # Dynamic instrument type loading
 │   └── package.json    # Modern build tooling
-├── scripts/             # CLI tools and utilities
-│   ├── cli.py          # Enhanced CLI with CFI support
+├── marketdata_cli.py    # Professional CLI with Click framework & Rich formatting
+├── mapi.bat            # Windows CLI wrapper script
+├── setup.py            # Package installation with CLI entry points
+├── scripts/            # Utility scripts
 │   ├── generate_docs.py # OpenAPI documentation generator
 │   └── test_firds_fitrs_patterns.py # CFI pattern validation tests
 ├── docs/               # Documentation

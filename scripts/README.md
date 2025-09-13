@@ -1,27 +1,10 @@
 # Scripts Directory
 
-This directory contains operational and analysis scripts for the MarketDataAPI project. Each script serves a specific purpose in maintaining, analyzing, or operating the system.
+This directory contains utility and analysis scripts for the MarketDataAPI project. Each script serves a specific purpose in maintaining, analyzing, or operating the system.
+
+**Note**: The main CLI has been moved to `marketdata_cli.py` in the project root with modern Click framework and Rich formatting. Use `mapi.bat [command]` or `python marketdata_cli.py [command]` for interactive operations.
 
 ## Core Operational Scripts
-
-### `cli.py`
-**Purpose**: Main command-line interface for the MarketDataAPI application.
-
-**Usage**:
-```bash
-python scripts/cli.py [command] [options]
-```
-
-**Key Features**:
-- Data import and export operations
-- Database management commands
-- Instrument and entity data processing
-- GLEIF integration controls
-- File management operations
-
-**When to Use**: Primary interface for all operational tasks, data processing, and system management.
-
----
 
 ### `backup_db.py`
 **Purpose**: Database backup utility for creating backups of the MarketDataAPI database.

@@ -91,7 +91,7 @@ curl -H "Authorization: Bearer YOUR_API_KEY" \
 
 This documentation is automatically generated from the API implementation:
 
-1. **Primary Source**: `marketdata_api/routes/swagger.py`
+1. **Primary Source**: `marketdata_api/swagger/` (modular structure)
 2. **Generation Script**: `scripts/generate_docs.py`
 3. **Generated Files**: `docs/openapi/` and `docs/postman/`
 

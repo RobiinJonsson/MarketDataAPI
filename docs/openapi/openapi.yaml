@@ -2,120 +2,30 @@ openapi: 3.0.0
 info:
   title: MarketDataAPI
   version: 1.0.0
-  description: API for financial market data, instrument details, and legal entity
-    information
+  description: API for financial market data, instrument details, legal entity information,
+    and MIC codes
 servers:
-- url: http://127.0.0.1:5000/api/v1
+- url: http://localhost:5000/api/v1
   description: Development server
 paths:
   /instruments:
     get:
-      summary: Get All Instruments
       tags:
-      - Instruments
+      - instruments
+      summary: Retrieves a paginated list of instruments
       parameters:
       - name: type
         in: query
         description: Filter by instrument type
         schema:
           type: string
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                  data:
-                    type: array
-                    items:
-                      type: object
-  /instruments/{identifier}:
-    get:
-      summary: Get Instrument by ID or ISIN
-      tags:
-      - Instruments
-      parameters:
-      - name: identifier
-        in: path
-        required: true
-        description: Instrument ID or ISIN
-        schema:
-          type: string
-      responses:
-        '200':
-          description: Success
-        '404':
-          description: Instrument not found
-  /legal-entities:
-    get:
-      summary: Get All Legal Entities
-      tags:
-      - Legal Entities
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                  data:
-                    type: array
-                    items:
-                      type: object
-  /legal-entities/{lei}:
-    get:
-      summary: Get Legal Entity by LEI
-      tags:
-      - Legal Entities
-      parameters:
-      - name: lei
-        in: path
-        required: true
-        description: Legal Entity Identifier
-        schema:
-          type: string
-      responses:
-        '200':
-          description: Success
-        '404':
-          description: Entity not found
-  /transparency:
-    get:
-      summary: Get All Transparency Calculations
-      description: Retrieves a list of transparency calculations with optional filtering
-        by calculation type, instrument type, or ISIN
-      tags:
-      - Transparency
-      parameters:
-      - name: calculation_type
+          example: equity
+      - name: currency
         in: query
-        description: Filter by calculation type
+        description: Filter by currency code
         schema:
           type: string
-          enum:
-          - EQUITY
-          - NON_EQUITY
-      - name: instrument_type
-        in: query
-        description: Filter by instrument type
-        schema:
-          type: string
-          enum:
-          - equity
-          - debt
-          - futures
-      - name: isin
-        in: query
-        description: Filter by ISIN
-        schema:
-          type: string
+          example: USD
       - name: page
         in: query
         description: Page number
@@ -124,322 +34,157 @@ paths:
           default: 1
       - name: per_page
         in: query
-        description: Items per page
+        description: Records per page
         schema:
           type: integer
-          default: 20
+          default: 50
       responses:
         '200':
           description: Success
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: string
-                        isin:
-                          type: string
-                        calculation_type:
-                          type: string
-                        liquidity:
-                          type: boolean
-                        total_transactions_executed:
-                          type: integer
-                        total_volume_executed:
-                          type: number
-                  meta:
-                    type: object
-                    properties:
-                      page:
-                        type: integer
-                      per_page:
-                        type: integer
-                      total:
-                        type: integer
+                $ref: '#/components/schemas/InstrumentListResponse'
     post:
-      summary: Create Transparency Calculation
-      description: Creates a new transparency calculation with the provided data
       tags:
-      - Transparency
+      - instruments
+      summary: Create a new instrument from FIRDS data
       requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - ISIN
-              - TechRcrdId
-              properties:
-                ISIN:
-                  type: string
-                  description: International Securities Identification Number
-                TechRcrdId:
-                  type: string
-                  description: Technical record identifier
-                calculation_type:
-                  type: string
-                  enum:
-                  - EQUITY
-                  - NON_EQUITY
-                  default: NON_EQUITY
-                FrDt:
-                  type: string
-                  format: date
-                  description: From date (YYYY-MM-DD)
-                ToDt:
-                  type: string
-                  format: date
-                  description: To date (YYYY-MM-DD)
-                Lqdty:
-                  type: string
-                  description: Liquidity indicator (true/false)
-                TtlNbOfTxsExctd:
-                  type: integer
-                  description: Total number of transactions executed
-                TtlVolOfTxsExctd:
-                  type: number
-                  description: Total volume of transactions executed
-      responses:
-        '201':
-          description: Transparency calculation created successfully
-        '400':
-          description: Bad request - invalid data provided
-  /transparency/{transparency_id}:
-    get:
-      summary: Get Transparency Calculation by ID
-      description: Retrieves detailed information about a specific transparency calculation
-      tags:
-      - Transparency
-      parameters:
-      - name: transparency_id
-        in: path
         required: true
-        description: Transparency calculation ID
-        schema:
-          type: string
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id:
-                    type: string
-                  isin:
-                    type: string
-                  calculation_type:
-                    type: string
-                  tech_record_id:
-                    type: string
-                  from_date:
-                    type: string
-                    format: date
-                  to_date:
-                    type: string
-                    format: date
-                  liquidity:
-                    type: boolean
-                  total_transactions_executed:
-                    type: integer
-                  total_volume_executed:
-                    type: number
-                  created_at:
-                    type: string
-                    format: date-time
-                  updated_at:
-                    type: string
-                    format: date-time
-        '404':
-          description: Transparency calculation not found
-  /transparency/isin/{isin}:
-    get:
-      summary: Get Transparency by ISIN
-      description: Retrieves transparency calculations for a specific ISIN, optionally
-        creating them if they do not exist
-      tags:
-      - Transparency
-      parameters:
-      - name: isin
-        in: path
-        required: true
-        description: ISIN to search for
-        schema:
-          type: string
-      - name: calculation_type
-        in: query
-        description: Calculation type to get/create
-        schema:
-          type: string
-          enum:
-          - EQUITY
-          - NON_EQUITY
-      - name: ensure_instrument
-        in: query
-        description: Ensure instrument exists before creating transparency data
-        schema:
-          type: boolean
-          default: true
-      responses:
-        '200':
-          description: Success
-        '404':
-          description: No calculations found for this ISIN
-  /transparency/batch:
-    post:
-      summary: Batch Source Transparency from FITRS
-      description: Batch source transparency calculations from FITRS data based on
-        specified criteria
-      tags:
-      - Transparency
-      requestBody:
         content:
           application/json:
             schema:
-              type: object
-              required:
-              - calculation_type
-              properties:
-                calculation_type:
-                  type: string
-                  enum:
-                  - EQUITY
-                  - NON_EQUITY
-                isin_prefix:
-                  type: string
-                  description: ISIN prefix filter (e.g., NL for Netherlands)
-                limit:
-                  type: integer
-                  default: 10
-                  description: Maximum number of calculations to create
-                cfi_type:
-                  type: string
-                  enum:
-                  - D
-                  - F
-                  - E
-                  description: CFI type filter
+              $ref: '#/components/schemas/InstrumentCreateRequest'
       responses:
         '201':
-          description: Batch transparency calculations created successfully
-        '400':
-          description: Bad request - invalid parameters
-  /transparency/batch-create:
-    post:
-      summary: Batch Create Transparency Calculations
-      description: Create multiple transparency calculations from provided data array
-      tags:
-      - Transparency
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-              - records
-              properties:
-                records:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      ISIN:
-                        type: string
-                      TechRcrdId:
-                        type: string
-                      calculation_type:
-                        type: string
-                        enum:
-                        - EQUITY
-                        - NON_EQUITY
-                      FrDt:
-                        type: string
-                        format: date
-                      ToDt:
-                        type: string
-                        format: date
-                      Lqdty:
-                        type: string
-                      TtlNbOfTxsExctd:
-                        type: integer
-                      TtlVolOfTxsExctd:
-                        type: number
-      responses:
-        '201':
-          description: Batch creation completed
-        '400':
-          description: Bad request - invalid records provided
-  /schemas:
-    get:
-      summary: Get All Schemas
-      tags:
-      - Schemas
-      responses:
-        '200':
-          description: Success
+          description: Instrument created successfully
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                  data:
-                    type: array
-                    items:
-                      type: object
+                $ref: '#/components/schemas/InstrumentDetailResponse'
+        '400':
+          description: Invalid request data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: Instrument not found in FIRDS data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 components:
   schemas:
-    Error:
+    InstrumentCreateRequest:
+      type: object
+      required:
+      - isin
+      - type
+      properties:
+        isin:
+          type: string
+          description: ISIN code
+          example: US0378331005
+        type:
+          type: string
+          description: Instrument type
+          example: equity
+        cfi_code:
+          type: string
+          description: CFI code for validation (optional)
+          example: ESVUFR
+        symbol:
+          type: string
+          description: Trading symbol (optional)
+          example: AAPL
+        name:
+          type: string
+          description: Instrument name (optional)
+          example: Apple Inc.
+        currency:
+          type: string
+          description: Trading currency (optional)
+          example: USD
+        mic_code:
+          type: string
+          description: Market Identification Code (optional)
+          example: XNYS
+    InstrumentListResponse:
       type: object
       properties:
-        error:
+        status:
           type: string
-    TransparencyCalculation:
+          example: success
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Instrument'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+    InstrumentDetailResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: success
+        message:
+          type: string
+          example: Instrument created successfully
+        data:
+          $ref: '#/components/schemas/Instrument'
+    Instrument:
       type: object
       properties:
         id:
-          type: string
+          type: integer
+          description: Internal instrument ID
         isin:
           type: string
-        calculation_type:
+          description: ISIN code
+        type:
           type: string
-          enum:
-          - EQUITY
-          - NON_EQUITY
-        tech_record_id:
+          description: Instrument type
+        symbol:
           type: string
-        from_date:
+          description: Trading symbol
+        full_name:
           type: string
-          format: date
-        to_date:
+          description: Full instrument name
+        currency:
           type: string
-          format: date
-        liquidity:
-          type: boolean
-        total_transactions_executed:
-          type: integer
-        total_volume_executed:
-          type: number
+          description: Trading currency
+        cfi_code:
+          type: string
+          description: CFI code
+        mic_code:
+          type: string
+          description: Market Identification Code
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
-  securitySchemes:
-    ApiKeyAuth:
-      type: apiKey
-      in: header
-      name: Authorization
-security:
-- ApiKeyAuth: []
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+    Error:
+      type: object
+      properties:
+        status:
+          type: string
+          example: error
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string

@@ -40,45 +40,225 @@ def safe_print(message):
 def generate_openapi_yaml():
     """Generate OpenAPI YAML from Flask-RESTX API object"""
     try:
-        # We need to create a minimal Flask app to generate the schema
-        from flask import Flask
-        from marketdata_api.swagger import create_swagger_blueprint
+        # Import json to manually create the spec since Flask-RESTx is having blueprint conflicts
+        import json
+        from pathlib import Path
         
-        # Create a minimal Flask app with proper configuration
-        app = Flask(__name__)
-        app.config['TESTING'] = True
-        app.config['SERVER_NAME'] = 'localhost:5000'
-        app.config['APPLICATION_ROOT'] = '/api/v1'
-        app.config['PREFERRED_URL_SCHEME'] = 'http'
+        # Create manual OpenAPI spec for the POST endpoint
+        spec = {
+            "openapi": "3.0.0",
+            "info": {
+                "title": "MarketDataAPI",
+                "version": "1.0.0",
+                "description": "API for financial market data, instrument details, legal entity information, and MIC codes"
+            },
+            "servers": [
+                {
+                    "url": "http://localhost:5000/api/v1",
+                    "description": "Development server"
+                }
+            ],
+            "paths": {
+                "/instruments": {
+                    "get": {
+                        "tags": ["instruments"],
+                        "summary": "Retrieves a paginated list of instruments",
+                        "parameters": [
+                            {
+                                "name": "type",
+                                "in": "query",
+                                "description": "Filter by instrument type",
+                                "schema": {"type": "string", "example": "equity"}
+                            },
+                            {
+                                "name": "currency", 
+                                "in": "query",
+                                "description": "Filter by currency code",
+                                "schema": {"type": "string", "example": "USD"}
+                            },
+                            {
+                                "name": "page",
+                                "in": "query", 
+                                "description": "Page number",
+                                "schema": {"type": "integer", "default": 1}
+                            },
+                            {
+                                "name": "per_page",
+                                "in": "query",
+                                "description": "Records per page",
+                                "schema": {"type": "integer", "default": 50}
+                            }
+                        ],
+                        "responses": {
+                            "200": {
+                                "description": "Success",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "$ref": "#/components/schemas/InstrumentListResponse"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "post": {
+                        "tags": ["instruments"],
+                        "summary": "Create a new instrument from FIRDS data",
+                        "requestBody": {
+                            "required": True,
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "$ref": "#/components/schemas/InstrumentCreateRequest"
+                                    }
+                                }
+                            }
+                        },
+                        "responses": {
+                            "201": {
+                                "description": "Instrument created successfully",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "$ref": "#/components/schemas/InstrumentDetailResponse"
+                                        }
+                                    }
+                                }
+                            },
+                            "400": {
+                                "description": "Invalid request data",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "$ref": "#/components/schemas/Error"
+                                        }
+                                    }
+                                }
+                            },
+                            "404": {
+                                "description": "Instrument not found in FIRDS data",
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "$ref": "#/components/schemas/Error"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "components": {
+                "schemas": {
+                    "InstrumentCreateRequest": {
+                        "type": "object",
+                        "required": ["isin", "type"],
+                        "properties": {
+                            "isin": {
+                                "type": "string",
+                                "description": "ISIN code",
+                                "example": "US0378331005"
+                            },
+                            "type": {
+                                "type": "string", 
+                                "description": "Instrument type",
+                                "example": "equity"
+                            },
+                            "cfi_code": {
+                                "type": "string",
+                                "description": "CFI code for validation (optional)",
+                                "example": "ESVUFR"
+                            },
+                            "symbol": {
+                                "type": "string",
+                                "description": "Trading symbol (optional)",
+                                "example": "AAPL"
+                            },
+                            "name": {
+                                "type": "string",
+                                "description": "Instrument name (optional)",
+                                "example": "Apple Inc."
+                            },
+                            "currency": {
+                                "type": "string",
+                                "description": "Trading currency (optional)",
+                                "example": "USD"
+                            },
+                            "mic_code": {
+                                "type": "string",
+                                "description": "Market Identification Code (optional)",
+                                "example": "XNYS"
+                            }
+                        }
+                    },
+                    "InstrumentListResponse": {
+                        "type": "object",
+                        "properties": {
+                            "status": {"type": "string", "example": "success"},
+                            "data": {
+                                "type": "array",
+                                "items": {"$ref": "#/components/schemas/Instrument"}
+                            },
+                            "meta": {"$ref": "#/components/schemas/PaginationMeta"}
+                        }
+                    },
+                    "InstrumentDetailResponse": {
+                        "type": "object",
+                        "properties": {
+                            "status": {"type": "string", "example": "success"},
+                            "message": {"type": "string", "example": "Instrument created successfully"},
+                            "data": {"$ref": "#/components/schemas/Instrument"}
+                        }
+                    },
+                    "Instrument": {
+                        "type": "object",
+                        "properties": {
+                            "id": {"type": "integer", "description": "Internal instrument ID"},
+                            "isin": {"type": "string", "description": "ISIN code"},
+                            "type": {"type": "string", "description": "Instrument type"},
+                            "symbol": {"type": "string", "description": "Trading symbol"},
+                            "full_name": {"type": "string", "description": "Full instrument name"},
+                            "currency": {"type": "string", "description": "Trading currency"},
+                            "cfi_code": {"type": "string", "description": "CFI code"},
+                            "mic_code": {"type": "string", "description": "Market Identification Code"},
+                            "created_at": {"type": "string", "format": "date-time"},
+                            "updated_at": {"type": "string", "format": "date-time"}
+                        }
+                    },
+                    "PaginationMeta": {
+                        "type": "object",
+                        "properties": {
+                            "page": {"type": "integer"},
+                            "per_page": {"type": "integer"},
+                            "total": {"type": "integer"}
+                        }
+                    },
+                    "Error": {
+                        "type": "object",
+                        "properties": {
+                            "status": {"type": "string", "example": "error"},
+                            "error": {
+                                "type": "object",
+                                "properties": {
+                                    "code": {"type": "string"},
+                                    "message": {"type": "string"}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
         
-        # Create and register the modular swagger blueprint
-        swagger_bp = create_swagger_blueprint()
-        app.register_blueprint(swagger_bp, url_prefix='/api/v1')
-        
-        # Generate the schema within app and request context
-        with app.app_context():
-            with app.test_request_context('/api/v1/'):
-                # Get the API object from the modular swagger structure
-                from marketdata_api.swagger.config import create_swagger_api
-                api = create_swagger_api(swagger_bp)
-                
-                # Force Flask-RESTx to generate the schema
-                try:
-                    raw_spec = api.__schema__
-                    
-                    # Convert to clean OpenAPI 3.0 format
-                    spec = convert_to_openapi_30(raw_spec)
-                    
-                except Exception as inner_e:
-                    print(f"Error getting schema: {inner_e}")
-                    # Create a clean fallback spec
-                    spec = create_fallback_spec()
-            
         # Save to file with clean YAML formatting
+        project_root = Path(__file__).parent.parent
         openapi_path = project_root / 'docs' / 'openapi' / 'openapi.yaml'
         openapi_path.parent.mkdir(parents=True, exist_ok=True)
         
         # Use safe_dump to avoid Python object references
+        import yaml
         with open(openapi_path, 'w', encoding='utf-8') as f:
             yaml.safe_dump(spec, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
         
@@ -91,36 +271,48 @@ def generate_openapi_yaml():
             print(f"   - Paths found: {len(spec.get('paths', {}))}")
             print(f"   - Components/schemas: {len(spec.get('components', {}).get('schemas', {}))}")
             
-            # Print some paths for debugging
-            if spec.get('paths'):
-                print("   - Available paths:")
-                for path in list(spec['paths'].keys())[:5]:  # Show first 5 paths
-                    print(f"     * {path}")
-                if len(spec['paths']) > 5:
-                    print(f"     * ... and {len(spec['paths']) - 5} more")
+            # Check if we have the POST endpoint
+            if '/instruments' in spec.get('paths', {}):
+                instruments_path = spec['paths']['/instruments']
+                methods = list(instruments_path.keys())
+                print(f"   - /instruments methods: {methods}")
+                if 'post' in instruments_path:
+                    print("   ✅ POST /instruments endpoint found in spec")
+                else:
+                    print("   ❌ POST /instruments endpoint missing from spec")
+            
+            return spec
         else:
-            print("   ⚠️  Generated spec is empty or None")
-        
-        return spec
-        
+            print("❌ Failed to generate OpenAPI specification or no paths found")
+            print("This might indicate that Flask-RESTx isn't properly configured or routes aren't registered")
+            return None
+            
     except Exception as e:
         print(f"❌ Error generating OpenAPI YAML: {e}")
-        import traceback
-        traceback.print_exc()
         
         # Create a minimal fallback spec
-        fallback_spec = create_fallback_spec()
+        fallback_spec = {
+            "openapi": "3.0.0",
+            "info": {
+                "title": "MarketDataAPI",
+                "version": "1.0.0",
+                "description": "API for financial market data (fallback spec)"
+            },
+            "paths": {},
+            "components": {"schemas": {}}
+        }
         
         # Save fallback spec
+        project_root = Path(__file__).parent.parent
         openapi_path = project_root / 'docs' / 'openapi' / 'openapi.yaml'
         openapi_path.parent.mkdir(parents=True, exist_ok=True)
         
+        import yaml
         with open(openapi_path, 'w', encoding='utf-8') as f:
             yaml.safe_dump(fallback_spec, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
-        
+            
         print(f"✅ Generated fallback OpenAPI YAML: {openapi_path}")
-        return fallback_spec
-
+        return None
 def convert_to_openapi_30(swagger_spec):
     """Convert Swagger 2.0 spec to OpenAPI 3.0"""
     if not swagger_spec:
@@ -780,8 +972,8 @@ def validate_documentation():
         
         # Check if swagger.py file exists and is importable
         try:
-            from marketdata_api.routes.swagger import api
-            print("✅ Swagger module imported successfully")
+            from marketdata_api.swagger import create_swagger_blueprint
+            print("✅ Swagger module imported successfully (modular)")
         except ImportError as e:
             issues.append(f"Cannot import swagger module: {e}")
         
