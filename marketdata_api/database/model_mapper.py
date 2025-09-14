@@ -287,7 +287,7 @@ def map_lei_record(response: Dict[str, Any]) -> Dict[str, Any]:
             "name": entity.get("legalName", {}).get("name"),
             "jurisdiction": entity.get("jurisdiction"),
             "legal_form": entity.get("legalForm", {}).get("id"),
-            "registered_as": entity.get("registeredAs"),
+            "registered_as": entity.get("registeredAs") or entity.get("legalName", {}).get("name") or "Not Available",
             "status": entity.get("status"),
             "creation_date": parse_iso_date(registration.get("initialRegistrationDate")),
             "bic": safe_list_to_str(attributes.get("bic")),

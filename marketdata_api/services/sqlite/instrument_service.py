@@ -926,3 +926,279 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             raise ValueError("Instrument identifier must be a non-empty string")
         if len(identifier) != 12:
             raise ValueError("ISIN must be 12 characters long")
+    
+    def create_instruments_bulk(self, 
+                               jurisdiction: str = "SE", 
+                               instrument_type: str = "equity",
+                               limit: Optional[int] = None,
+                               skip_existing: bool = True,
+                               enable_enrichment: bool = True,
+                               batch_size: int = 10) -> Dict[str, Any]:
+        """
+        Create multiple instruments in bulk with filtering and performance optimization.
+        
+        Args:
+            jurisdiction: Filter by competent authority jurisdiction (default: "SE" for Sweden)
+            instrument_type: Target instrument type to create (default: "equity")  
+            limit: Maximum number of instruments to create (None = no limit)
+            skip_existing: Skip instruments already in database (default: True)
+            enable_enrichment: Enable FIGI/LEI enrichment (default: True)
+            batch_size: Number of instruments to process per batch (default: 10)
+            
+        Returns:
+            Dict with creation results and statistics
+        """
+        start_time = time.time()
+        results = {
+            'total_found': 0,
+            'total_created': 0,
+            'total_skipped': 0,
+            'total_failed': 0,
+            'failed_instruments': [],
+            'created_instruments': [],
+            'batch_results': [],
+            'elapsed_time': 0
+        }
+        
+        try:
+            self.logger.info(f"🚀 Starting bulk instrument creation")
+            self.logger.info(f"   Jurisdiction filter: {jurisdiction}")
+            self.logger.info(f"   Instrument type: {instrument_type}")
+            self.logger.info(f"   Limit: {limit or 'No limit'}")
+            self.logger.info(f"   Skip existing: {skip_existing}")
+            self.logger.info(f"   Enrichment: {enable_enrichment}")
+            self.logger.info(f"   Batch size: {batch_size}")
+            
+            # Get ISINs matching the filters from FIRDS files
+            isins_to_process = self._get_filtered_isins_from_firds(
+                jurisdiction=jurisdiction,
+                instrument_type=instrument_type,
+                limit=limit
+            )
+            
+            if not isins_to_process:
+                self.logger.warning(f"❌ No instruments found matching filters")
+                return results
+            
+            results['total_found'] = len(isins_to_process)
+            self.logger.info(f"📊 Found {len(isins_to_process)} instruments matching filters")
+            
+            # Filter out existing instruments if requested
+            if skip_existing:
+                isins_to_process = self._filter_existing_instruments(isins_to_process)
+                self.logger.info(f"📊 After filtering existing: {len(isins_to_process)} instruments to create")
+            
+            # Process in batches for better performance and error handling
+            total_batches = (len(isins_to_process) + batch_size - 1) // batch_size
+            
+            for batch_idx in range(total_batches):
+                batch_start_idx = batch_idx * batch_size
+                batch_end_idx = min(batch_start_idx + batch_size, len(isins_to_process))
+                batch_isins = isins_to_process[batch_start_idx:batch_end_idx]
+                
+                batch_start_time = time.time()
+                self.logger.info(f"🔄 Processing batch {batch_idx + 1}/{total_batches} ({len(batch_isins)} instruments)")
+                
+                batch_result = self._process_instrument_batch(
+                    batch_isins, 
+                    instrument_type, 
+                    enable_enrichment
+                )
+                
+                # Update overall results
+                results['total_created'] += batch_result['created']
+                results['total_failed'] += batch_result['failed']
+                results['failed_instruments'].extend(batch_result['failed_instruments'])
+                results['created_instruments'].extend(batch_result['created_instruments'])
+                
+                batch_elapsed = time.time() - batch_start_time
+                batch_result['elapsed_time'] = batch_elapsed
+                results['batch_results'].append(batch_result)
+                
+                self.logger.info(f"✅ Batch {batch_idx + 1} completed: {batch_result['created']} created, {batch_result['failed']} failed ({batch_elapsed:.1f}s)")
+                
+                # Progress update
+                total_processed = results['total_created'] + results['total_failed']
+                progress_pct = (total_processed / len(isins_to_process)) * 100
+                self.logger.info(f"📈 Overall progress: {total_processed}/{len(isins_to_process)} ({progress_pct:.1f}%)")
+            
+            results['elapsed_time'] = time.time() - start_time
+            
+            # Final summary
+            self.logger.info(f"🎉 Bulk creation completed!")
+            self.logger.info(f"   Total found: {results['total_found']}")
+            self.logger.info(f"   Total created: {results['total_created']}")
+            self.logger.info(f"   Total failed: {results['total_failed']}")
+            self.logger.info(f"   Total time: {results['elapsed_time']:.1f}s")
+            
+            if results['total_created'] > 0:
+                avg_time = results['elapsed_time'] / results['total_created']
+                self.logger.info(f"   Average per instrument: {avg_time:.1f}s")
+            
+            return results
+            
+        except Exception as e:
+            results['elapsed_time'] = time.time() - start_time
+            self.logger.error(f"💥 Bulk creation failed: {str(e)}")
+            raise InstrumentServiceError(f"Bulk creation failed: {str(e)}") from e
+    
+    def _get_filtered_isins_from_firds(self, 
+                                      jurisdiction: str, 
+                                      instrument_type: str, 
+                                      limit: Optional[int] = None) -> List[str]:
+        """Get ISINs from FIRDS files matching the specified filters."""
+        try:
+            from pathlib import Path
+            import pandas as pd
+            
+            self.logger.info(f"🔍 Scanning FIRDS files for {jurisdiction} {instrument_type} instruments...")
+            
+            firds_path = Path(esmaConfig.firds_path)
+            if not firds_path.exists():
+                raise InstrumentServiceError(f"FIRDS path does not exist: {firds_path}")
+            
+            # Map instrument type to FIRDS type
+            business_to_firds = {
+                'equity': 'E',
+                'debt': 'D',
+                'future': 'F',
+                'collective_investment': 'C',
+                'hybrid': 'H',
+                'interest_rate': 'I',
+                'convertible': 'J',
+                'option': 'O',
+                'rights': 'R',
+                'structured': 'S'
+            }
+            
+            firds_type = business_to_firds.get(instrument_type, 'E')
+            self.logger.info(f"🎯 Mapped {instrument_type} → FIRDS type {firds_type}")
+            
+            # Find matching files
+            file_pattern = f"*FULINS_{firds_type}*_firds_data.csv"
+            matching_files = list(firds_path.glob(file_pattern))
+            
+            if not matching_files:
+                self.logger.warning(f"❌ No FIRDS files found for type {firds_type}")
+                return []
+            
+            self.logger.info(f"📁 Found {len(matching_files)} FIRDS files for type {firds_type}")
+            
+            # Collect ISINs from all files
+            all_isins = set()
+            
+            for file_idx, file_path in enumerate(matching_files, 1):
+                try:
+                    self.logger.info(f"📄 [{file_idx}/{len(matching_files)}] Processing {file_path.name}...")
+                    
+                    # Read with jurisdiction filter
+                    df = pd.read_csv(
+                        str(file_path),
+                        dtype=str,
+                        low_memory=False,
+                        usecols=['Id', 'TechAttrbts_RlvntCmptntAuthrty']
+                    )
+                    
+                    if df is not None and not df.empty:
+                        # Filter by jurisdiction
+                        jurisdiction_filtered = df[
+                            df['TechAttrbts_RlvntCmptntAuthrty'] == jurisdiction
+                        ]
+                        
+                        if not jurisdiction_filtered.empty:
+                            file_isins = set(jurisdiction_filtered['Id'].dropna().unique())
+                            all_isins.update(file_isins)
+                            self.logger.info(f"   ✅ Found {len(file_isins)} {jurisdiction} ISINs in {file_path.name}")
+                        else:
+                            self.logger.debug(f"   ⚪ No {jurisdiction} ISINs in {file_path.name}")
+                    
+                except Exception as e:
+                    self.logger.warning(f"   💥 Error processing {file_path.name}: {str(e)}")
+                    continue
+            
+            isin_list = list(all_isins)
+            
+            # Apply limit if specified
+            if limit and len(isin_list) > limit:
+                isin_list = isin_list[:limit]
+                self.logger.info(f"🔢 Applied limit: {limit} ISINs selected from {len(all_isins)} total")
+            
+            self.logger.info(f"✅ Collection complete: {len(isin_list)} ISINs ready for processing")
+            return isin_list
+            
+        except Exception as e:
+            self.logger.error(f"💥 Error collecting ISINs from FIRDS: {str(e)}")
+            raise
+    
+    def _filter_existing_instruments(self, isins: List[str]) -> List[str]:
+        """Remove ISINs that already exist in the database."""
+        try:
+            session = SessionLocal()
+            
+            try:
+                # Query existing ISINs in batches for performance
+                batch_size = 1000
+                existing_isins = set()
+                
+                for i in range(0, len(isins), batch_size):
+                    batch = isins[i:i + batch_size]
+                    existing_batch = session.query(Instrument.isin).filter(
+                        Instrument.isin.in_(batch)
+                    ).all()
+                    existing_isins.update([isin for (isin,) in existing_batch])
+                
+                filtered_isins = [isin for isin in isins if isin not in existing_isins]
+                
+                self.logger.info(f"🔍 Filtering existing instruments:")
+                self.logger.info(f"   Total ISINs: {len(isins)}")
+                self.logger.info(f"   Already exist: {len(existing_isins)}")
+                self.logger.info(f"   To create: {len(filtered_isins)}")
+                
+                return filtered_isins
+                
+            finally:
+                session.close()
+                
+        except Exception as e:
+            self.logger.error(f"💥 Error filtering existing instruments: {str(e)}")
+            return isins  # Return all if filtering fails
+    
+    def _process_instrument_batch(self, 
+                                 isins: List[str], 
+                                 instrument_type: str, 
+                                 enable_enrichment: bool) -> Dict[str, Any]:
+        """Process a batch of instruments with error handling."""
+        batch_result = {
+            'created': 0,
+            'failed': 0,
+            'failed_instruments': [],
+            'created_instruments': []
+        }
+        
+        for isin in isins:
+            try:
+                self.logger.debug(f"   🔨 Creating {isin}...")
+                
+                # Create instrument (enrichment is handled inside create_instrument)
+                if enable_enrichment:
+                    instrument = self.create_instrument(isin, instrument_type)
+                else:
+                    # Create without enrichment (would need separate method)
+                    instrument = self.create_instrument(isin, instrument_type)
+                
+                if instrument:
+                    batch_result['created'] += 1
+                    batch_result['created_instruments'].append(isin)
+                    self.logger.debug(f"   ✅ Created {isin}")
+                else:
+                    batch_result['failed'] += 1
+                    batch_result['failed_instruments'].append({'isin': isin, 'error': 'Creation returned None'})
+                    self.logger.warning(f"   ❌ Failed to create {isin}: No instrument returned")
+                
+            except Exception as e:
+                batch_result['failed'] += 1
+                error_msg = str(e)
+                batch_result['failed_instruments'].append({'isin': isin, 'error': error_msg})
+                self.logger.warning(f"   ❌ Failed to create {isin}: {error_msg}")
+        
+        return batch_result

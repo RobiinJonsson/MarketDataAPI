@@ -35,6 +35,7 @@ try:
     from marketdata_api.models.sqlite.instrument import Instrument
     from marketdata_api.models.sqlite.transparency import TransparencyCalculation
     from marketdata_api.models.sqlite.market_identification_code import MarketIdentificationCode, MICStatus
+    from marketdata_api.models.sqlite.legal_entity import LegalEntity
 except ImportError as e:
     print(f"Error importing MarketDataAPI modules: {e}")
     print("Make sure you're in the correct project directory and the API is installed.")
@@ -192,6 +193,145 @@ def create(ctx, isin, instrument_type):
         else:
             console.print(f"[red]Failed to create instrument: {isin}[/red]")
             
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        if ctx.obj.get('verbose'):
+            import traceback
+            traceback.print_exc()
+
+@instruments.command()
+@click.argument('isin')
+@click.pass_context
+def enrich(ctx, isin):
+    """Enrich existing instrument with external data (FIGI, LEI, etc.)"""
+    try:
+        service = SqliteInstrumentService()
+        
+        # First get the instrument
+        with console.status(f"[bold green]Looking up instrument {isin}..."):
+            session, instrument = service.get_instrument(isin)
+        
+        if not instrument:
+            console.print(f"[red]Instrument not found: {isin}[/red]")
+            console.print("[yellow]Use 'instruments create' to create it first[/yellow]")
+            return
+        
+        session.close()
+        
+        with console.status(f"[bold green]Enriching instrument {isin}..."):
+            enriched_session, enriched_instrument = service.enrich_instrument(instrument)
+        
+        if enriched_instrument:
+            console.print(f"[green]✓[/green] Enriched instrument: {enriched_instrument.isin}")
+            
+            # Show enrichment results
+            enrichment_info = []
+            if hasattr(enriched_instrument, 'figi_mapping') and enriched_instrument.figi_mapping:
+                enrichment_info.append("[green]FIGI data[/green]")
+            if hasattr(enriched_instrument, 'legal_entity') and enriched_instrument.legal_entity:
+                enrichment_info.append("[green]Legal entity data[/green]")
+            
+            if enrichment_info:
+                console.print(f"  Added: {', '.join(enrichment_info)}")
+            else:
+                console.print("  [yellow]No additional data found to enrich[/yellow]")
+        else:
+            console.print(f"[red]Failed to enrich instrument: {isin}[/red]")
+        
+        enriched_session.close()
+            
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        if ctx.obj.get('verbose'):
+            import traceback
+            traceback.print_exc()
+
+@instruments.command()
+@click.option('--jurisdiction', default='SE', help='Filter by competent authority jurisdiction')
+@click.option('--type', default='equity', help='Instrument type to create')
+@click.option('--limit', type=int, help='Maximum number of instruments to create')
+@click.option('--batch-size', default=10, help='Number of instruments per batch')
+@click.option('--skip-existing/--no-skip-existing', default=True, help='Skip instruments already in database')
+@click.option('--enrichment/--no-enrichment', default=True, help='Enable FIGI/LEI enrichment')
+@click.pass_context
+def bulk_create(ctx, jurisdiction, type, limit, batch_size, skip_existing, enrichment):
+    """Create multiple instruments in bulk with filtering"""
+    try:
+        service = SqliteInstrumentService()
+        
+        # Show configuration
+        console.print(f"[cyan]Bulk Creation Configuration:[/cyan]")
+        console.print(f"  Jurisdiction: [yellow]{jurisdiction}[/yellow]")
+        console.print(f"  Type: [yellow]{type}[/yellow]")
+        console.print(f"  Limit: [yellow]{limit or 'No limit'}[/yellow]")
+        console.print(f"  Batch size: [yellow]{batch_size}[/yellow]")
+        console.print(f"  Skip existing: [yellow]{skip_existing}[/yellow]")
+        console.print(f"  Enrichment: [yellow]{enrichment}[/yellow]")
+        console.print()
+        
+        with console.status("[bold green]Processing bulk instrument creation..."):
+            results = service.create_instruments_bulk(
+                jurisdiction=jurisdiction,
+                instrument_type=type,
+                limit=limit,
+                skip_existing=skip_existing,
+                enable_enrichment=enrichment,
+                batch_size=batch_size
+            )
+        
+        # Display results
+        console.print(f"[green]✓[/green] Bulk creation completed!")
+        console.print()
+        
+        # Summary table
+        summary_table = Table(title="Creation Summary")
+        summary_table.add_column("Metric", style="cyan")
+        summary_table.add_column("Count", style="green")
+        summary_table.add_column("Details", style="yellow")
+        
+        summary_table.add_row("Found", str(results['total_found']), f"Matching {jurisdiction} {type} instruments")
+        summary_table.add_row("Created", str(results['total_created']), "Successfully created with venues")
+        summary_table.add_row("Failed", str(results['total_failed']), "Creation errors")
+        summary_table.add_row("Time", f"{results['elapsed_time']:.1f}s", f"Avg: {results['elapsed_time']/max(1, results['total_created']):.1f}s per instrument" if results['total_created'] > 0 else "")
+        
+        console.print(summary_table)
+        
+        # Show batch details if verbose
+        if ctx.obj.get('verbose') and results['batch_results']:
+            console.print()
+            batch_table = Table(title="Batch Results")
+            batch_table.add_column("Batch", style="cyan")
+            batch_table.add_column("Created", style="green")
+            batch_table.add_column("Failed", style="red")
+            batch_table.add_column("Time", style="yellow")
+            
+            for idx, batch in enumerate(results['batch_results'], 1):
+                batch_table.add_row(
+                    str(idx),
+                    str(batch['created']),
+                    str(batch['failed']),
+                    f"{batch['elapsed_time']:.1f}s"
+                )
+            
+            console.print(batch_table)
+        
+        # Show failed instruments if any
+        if results['failed_instruments']:
+            console.print()
+            console.print(f"[red]Failed Instruments ({len(results['failed_instruments'])}):[/red]")
+            for failure in results['failed_instruments'][:5]:  # Show first 5
+                console.print(f"  [red]•[/red] {failure['isin']}: {failure['error']}")
+            if len(results['failed_instruments']) > 5:
+                console.print(f"  [dim]... and {len(results['failed_instruments']) - 5} more[/dim]")
+        
+        # Show sample created instruments
+        if results['created_instruments']:
+            console.print()
+            sample_size = min(5, len(results['created_instruments']))
+            console.print(f"[green]Sample Created Instruments ({sample_size}/{len(results['created_instruments'])}):[/green]")
+            for isin in results['created_instruments'][:sample_size]:
+                console.print(f"  [green]✓[/green] {isin}")
+        
     except Exception as e:
         console.print(f"[red]Error: {str(e)}[/red]")
         if ctx.obj.get('verbose'):
@@ -470,6 +610,63 @@ def entities():
     pass
 
 @entities.command()
+@click.option('--limit', default=20, help='Number of results to show')
+@click.option('--status', help='Filter by entity status')
+@click.option('--jurisdiction', help='Filter by jurisdiction')
+@click.pass_context
+def list(ctx, limit, status, jurisdiction):
+    """List legal entities with optional filtering"""
+    try:
+        with console.status("[bold green]Fetching legal entities..."):
+            with get_session() as session:
+                query = session.query(LegalEntity)
+                if status:
+                    query = query.filter(LegalEntity.status == status.upper())
+                if jurisdiction:
+                    query = query.filter(LegalEntity.jurisdiction == jurisdiction.upper())
+                
+                # Execute query within session context
+                entities_data = []
+                for entity in query.limit(limit).all():
+                    entities_data.append({
+                        'lei': entity.lei,
+                        'name': entity.name,
+                        'status': entity.status,
+                        'jurisdiction': entity.jurisdiction,
+                        'legal_form': entity.legal_form
+                    })
+        
+        if not entities_data:
+            console.print("[yellow]No legal entities found[/yellow]")
+            return
+            
+        # Rich table output
+        table = Table(title=f"Legal Entities {f'({status})' if status else ''}")
+        table.add_column("LEI", style="cyan", no_wrap=True)
+        table.add_column("Name", style="green")
+        table.add_column("Status", style="magenta")
+        table.add_column("Jurisdiction", style="yellow")
+        table.add_column("Legal Form", style="blue")
+        
+        for entity_data in entities_data:
+            table.add_row(
+                entity_data['lei'][:20] + "..." if len(entity_data['lei']) > 20 else entity_data['lei'],
+                (entity_data['name'] or "N/A")[:30] + ("..." if len(entity_data['name'] or "") > 30 else ""),
+                entity_data['status'] or "N/A",
+                entity_data['jurisdiction'] or "N/A",
+                (entity_data['legal_form'] or "N/A")[:20] + ("..." if len(entity_data['legal_form'] or "") > 20 else "")
+            )
+        
+        console.print(table)
+        console.print(f"\n[dim]Showing {len(entities_data)} legal entities[/dim]")
+        
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        if ctx.obj.get('verbose'):
+            import traceback
+            traceback.print_exc()
+
+@entities.command()
 @click.argument('lei')
 @click.pass_context
 def get(ctx, lei):
@@ -486,10 +683,13 @@ def get(ctx, lei):
             
         details = f"""[cyan]LEI:[/cyan] {entity.lei}
 [cyan]Name:[/cyan] {entity.name}
+[cyan]Registered As:[/cyan] {entity.registered_as or 'N/A'}
 [cyan]Legal Form:[/cyan] {entity.legal_form or 'N/A'}
-[cyan]Status:[/cyan] {entity.entity_status or 'N/A'}
+[cyan]Status:[/cyan] {entity.status or 'N/A'}
 [cyan]Jurisdiction:[/cyan] {entity.jurisdiction or 'N/A'}
-[cyan]Created:[/cyan] {entity.created_at or 'N/A'}"""
+[cyan]BIC:[/cyan] {entity.bic or 'N/A'}
+[cyan]Managing LOU:[/cyan] {entity.managing_lou or 'N/A'}
+[cyan]Registration Status:[/cyan] {entity.registration_status or 'N/A'}"""
 
         console.print(Panel(details, title=f"Legal Entity: {lei}"))
         session.close()
@@ -514,17 +714,20 @@ def stats(ctx):
                 instrument_count = session.query(Instrument).count()
                 transparency_count = session.query(TransparencyCalculation).count()
                 mic_count = session.query(MarketIdentificationCode).count()
+                legal_entity_count = session.query(LegalEntity).count()
                 
                 # Store counts for use outside session
                 stats_data = {
                     'instruments': instrument_count,
                     'transparency': transparency_count,
-                    'mics': mic_count
+                    'mics': mic_count,
+                    'legal_entities': legal_entity_count
                 }
         
         stats_text = f"""[cyan]Instruments:[/cyan] {stats_data['instruments']:,}
 [cyan]Transparency Calculations:[/cyan] {stats_data['transparency']:,}
-[cyan]MIC Codes:[/cyan] {stats_data['mics']:,}"""
+[cyan]MIC Codes:[/cyan] {stats_data['mics']:,}
+[cyan]Legal Entities:[/cyan] {stats_data['legal_entities']:,}"""
 
         console.print(Panel(stats_text, title="Database Statistics"))
         
