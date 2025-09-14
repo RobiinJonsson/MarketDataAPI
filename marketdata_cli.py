@@ -389,36 +389,120 @@ def transparency():
 @transparency.command()
 @click.option('--limit', default=20, help='Number of results')
 @click.option('--offset', default=0, help='Results offset')
+@click.option('--type', help='Filter by file type (e.g., FULECR_E, FULNCR_D)')
+@click.option('--liquidity', type=click.Choice(['true', 'false', 'liquid', 'non-liquid']), help='Filter by liquidity status (liquid includes actively traded instruments)')
+@click.option('--threshold', type=click.Choice(['LIS', 'SSTI', 'SMS']), help='Filter by threshold type')
+@click.option('--isin', help='Filter by specific ISIN')
 @click.pass_context
-def list(ctx, limit, offset):
-    """List transparency calculations"""
+def list(ctx, limit, offset, type, liquidity, threshold, isin):
+    """List transparency calculations with advanced filtering"""
     try:
         with console.status("[bold green]Fetching transparency calculations..."):
             with get_session() as session:
+                # Build query with filters
+                query = session.query(TransparencyCalculation)
+                
+                # Apply filters
+                if type:
+                    query = query.filter(TransparencyCalculation.file_type.ilike(f'%{type}%'))
+                if isin:
+                    query = query.filter(TransparencyCalculation.isin == isin.upper())
+                if liquidity:
+                    if liquidity.lower() in ['true', 'liquid']:
+                        # Include both explicit liquidity=True AND instruments with trading activity
+                        query = query.filter(
+                            (TransparencyCalculation.liquidity == True) |
+                            ((TransparencyCalculation.liquidity.is_(None)) & 
+                             ((TransparencyCalculation.total_volume_executed > 0) |
+                              (TransparencyCalculation.total_transactions_executed > 0)))
+                        )
+                    elif liquidity.lower() in ['false', 'non-liquid']:
+                        query = query.filter(TransparencyCalculation.liquidity == False)
+                if threshold:
+                    # Check if there's a threshold_type field, otherwise search in related data
+                    if hasattr(TransparencyCalculation, 'threshold_type'):
+                        query = query.filter(TransparencyCalculation.threshold_type == threshold.upper())
+                
                 # Execute query and extract data within session context
                 calculations_data = []
-                for calc in session.query(TransparencyCalculation).limit(limit).offset(offset).all():
+                for calc in query.limit(limit).offset(offset).all():
                     period = f"{calc.from_date} to {calc.to_date}" if calc.from_date and calc.to_date else "N/A"
-                    liquidity = "✓" if calc.liquidity else "✗"
+                    # Smart liquidity display based on FITRS analysis
+                    volume = calc.total_volume_executed or 0
+                    transactions = calc.total_transactions_executed or 0
+                    has_trading_activity = volume > 0 or transactions > 0
+                    
+                    if calc.liquidity is True:
+                        liquidity_status = "✓ Liquid"
+                    elif calc.liquidity is False:
+                        liquidity_status = "✗ Non-Liquid" 
+                    elif has_trading_activity:
+                        # FULECR_E files with missing Lqdty but trading activity = likely liquid
+                        liquidity_status = "🔄 Active"
+                    else:
+                        liquidity_status = "❓ Unknown"
+                    
+                    # Format volume
+                    volume = "N/A"
+                    if calc.total_volume_executed is not None:
+                        if calc.total_volume_executed >= 1_000_000:
+                            volume = f"{calc.total_volume_executed/1_000_000:.1f}M"
+                        elif calc.total_volume_executed >= 1_000:
+                            volume = f"{calc.total_volume_executed/1_000:.1f}K"
+                        else:
+                            volume = f"{calc.total_volume_executed:.0f}"
+                    
+                    # Format transactions
+                    transactions = "N/A"
+                    if calc.total_transactions_executed is not None:
+                        if calc.total_transactions_executed >= 1_000_000:
+                            transactions = f"{calc.total_transactions_executed/1_000_000:.1f}M"
+                        elif calc.total_transactions_executed >= 1_000:
+                            transactions = f"{calc.total_transactions_executed/1_000:.1f}K"
+                        else:
+                            transactions = f"{calc.total_transactions_executed:,}"
+                    
+                    # Extract additional data from raw_data JSON if available
+                    raw_data = calc.raw_data or {}
+                    instrument_class = raw_data.get('FinInstrmClssfctn', 'N/A')
+                    methodology = raw_data.get('Mthdlgy', 'N/A')
                     
                     calculations_data.append({
                         'id': str(calc.id)[:8] + "...",
                         'isin': calc.isin or "N/A",
                         'file_type': calc.file_type or "N/A",
                         'period': period,
-                        'liquidity': liquidity
+                        'liquidity': liquidity_status,
+                        'volume': volume,
+                        'transactions': transactions,
+                        'instrument_class': instrument_class,
+                        'methodology': methodology
                     })
         
         if not calculations_data:
             console.print("[yellow]No transparency calculations found[/yellow]")
             return
             
-        table = Table(title="Transparency Calculations")
+        # Create enhanced table
+        title = "Transparency Calculations"
+        if type or liquidity or threshold or isin:
+            filters = []
+            if type: filters.append(f"type:{type}")
+            if liquidity: filters.append(f"liquidity:{liquidity}")
+            if threshold: filters.append(f"threshold:{threshold}")
+            if isin: filters.append(f"isin:{isin}")
+            title += f" (filtered: {', '.join(filters)})"
+        
+        table = Table(title=title)
         table.add_column("ID", style="cyan", no_wrap=True)
-        table.add_column("ISIN", style="green")
-        table.add_column("File Type", style="magenta")
+        table.add_column("ISIN", style="green", no_wrap=True)
+        table.add_column("Type", style="magenta", no_wrap=True)
         table.add_column("Period", style="yellow")
-        table.add_column("Liquid", style="red")
+        table.add_column("Liquidity", style="red")
+        table.add_column("Volume", style="blue", justify="right")
+        table.add_column("Transactions", style="bright_blue", justify="right")
+        table.add_column("Instrument", style="white", no_wrap=True)
+        table.add_column("Method", style="bright_black", no_wrap=True)
         
         for calc_data in calculations_data:
             table.add_row(
@@ -426,7 +510,11 @@ def list(ctx, limit, offset):
                 calc_data['isin'],
                 calc_data['file_type'],
                 calc_data['period'],
-                calc_data['liquidity']
+                calc_data['liquidity'],
+                calc_data['volume'],
+                calc_data['transactions'],
+                calc_data['instrument_class'],
+                calc_data['methodology']
             )
             
         console.print(table)
@@ -439,32 +527,175 @@ def list(ctx, limit, offset):
             traceback.print_exc()
 
 @transparency.command()
-@click.argument('transparency_id')
+@click.argument('isin')
+@click.option('--type', help='Instrument type (optional, will use database value if available)')
 @click.pass_context
-def get(ctx, transparency_id):
-    """Get detailed transparency calculation by ID"""
+def create(ctx, isin, type):
+    """Create transparency calculations for an ISIN from FITRS data"""
     try:
         service = TransparencyService()
         
-        with console.status(f"[bold green]Looking up transparency calculation..."):
-            session, calculation = service.get_transparency_by_id(transparency_id)
+        with console.status(f"[bold green]Creating transparency calculations for {isin}..."):
+            calculations = service.create_transparency(isin, type)
         
-        if not calculation:
-            console.print(f"[red]Transparency calculation not found: {transparency_id}[/red]")
+        if not calculations:
+            console.print(f"[yellow]No transparency data found in FITRS files for {isin}[/yellow]")
+            return
+        
+        console.print(f"[green]✓[/green] Created {len(calculations)} transparency calculations for {isin}")
+        
+        # Show created calculations
+        table = Table(title=f"Created Transparency Calculations for {isin}")
+        table.add_column("ID", style="cyan", no_wrap=True)
+        table.add_column("File Type", style="magenta")
+        table.add_column("Period", style="yellow")
+        table.add_column("Liquid", style="green")
+        table.add_column("Transactions", style="blue")
+        
+        for calc in calculations:
+            period = f"{calc.from_date} to {calc.to_date}" if calc.from_date and calc.to_date else "N/A"
+            liquidity = "✓" if calc.liquidity else "✗"
+            transactions = f"{calc.total_transactions_executed:,}" if calc.total_transactions_executed else "N/A"
+            
+            table.add_row(
+                str(calc.id)[:8] + "...",
+                calc.file_type or "N/A",
+                period,
+                liquidity,
+                transactions
+            )
+        
+        console.print(table)
+        
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        if ctx.obj.get('verbose'):
+            import traceback
+            traceback.print_exc()
+
+@transparency.command()
+@click.argument('isin')
+@click.pass_context  
+def get(ctx, isin):
+    """Get transparency calculations by ISIN"""
+    try:
+        service = TransparencyService()
+        
+        with console.status(f"[bold green]Looking up transparency calculations for {isin}..."):
+            calculations = service.get_transparency_by_isin(isin.upper())
+        
+        if not calculations:
+            console.print(f"[red]No transparency calculations found for ISIN: {isin}[/red]")
             return
             
-        details = f"""[cyan]ID:[/cyan] {calculation.id}
-[cyan]ISIN:[/cyan] {calculation.isin}
-[cyan]File Type:[/cyan] {calculation.file_type}
-[cyan]Period:[/cyan] {calculation.from_date} to {calculation.to_date}
-[cyan]Liquidity:[/cyan] {'Yes' if calculation.liquidity else 'No'}
-[cyan]Transactions:[/cyan] {calculation.total_transactions_executed:,}
-[cyan]Volume:[/cyan] {calculation.total_volume_executed:,.2f if calculation.total_volume_executed else 'N/A'}
-[cyan]Currency:[/cyan] {calculation.currency or 'N/A'}
-[cyan]Venue:[/cyan] {calculation.trading_venue or 'N/A'}"""
+        console.print(f"\n[bold]Found {len(calculations)} transparency calculation(s) for {isin}:[/bold]\n")
+        
+        for i, calculation in enumerate(calculations, 1):
+            # Handle None values safely
+            from_date = calculation.from_date or 'N/A'
+            to_date = calculation.to_date or 'N/A'
+            transactions = calculation.total_transactions_executed if calculation.total_transactions_executed is not None else 0
+            volume = calculation.total_volume_executed if calculation.total_volume_executed is not None else 0
+            
+            details = f"""[cyan]ID:[/cyan] {calculation.id or 'N/A'}
+[cyan]ISIN:[/cyan] {calculation.isin or 'N/A'}
+[cyan]File Type:[/cyan] {calculation.file_type or 'N/A'}
+[cyan]Source File:[/cyan] {calculation.source_file or 'N/A'}
+[cyan]Period:[/cyan] {from_date} to {to_date}
+[cyan]Liquidity:[/cyan] {'Yes' if calculation.liquidity else 'No' if calculation.liquidity is not None else 'Unknown'}
+[cyan]Transactions:[/cyan] {transactions:,}
+[cyan]Volume:[/cyan] {volume:,.2f}
+[cyan]Tech Record ID:[/cyan] {calculation.tech_record_id or 'N/A'}
+[cyan]Created:[/cyan] {calculation.created_at or 'N/A'}"""
+        
+            console.print(Panel(details, title=f"[bold]Transparency Calculation {i}[/bold]", border_style="cyan"))
+        
+    except Exception as e:
+        console.print(f"[red]Error: {str(e)}[/red]")
+        if ctx.obj.get('verbose'):
+            import traceback
+            traceback.print_exc()
 
-        console.print(Panel(details, title="Transparency Calculation Details"))
-        session.close()
+@transparency.command()
+@click.option('--limit', type=int, help='Maximum number of instruments to process')
+@click.option('--batch-size', default=10, help='Number of instruments per batch')
+@click.option('--skip-existing/--no-skip-existing', default=True, help='Skip instruments that already have transparency data')
+@click.pass_context
+def bulk_create(ctx, limit, batch_size, skip_existing):
+    """Create transparency calculations in bulk for instruments without them"""
+    try:
+        service = TransparencyService()
+        
+        # Show configuration
+        console.print(f"[cyan]Bulk Transparency Creation Configuration:[/cyan]")
+        console.print(f"  Limit: [yellow]{limit or 'No limit'}[/yellow]")
+        console.print(f"  Batch size: [yellow]{batch_size}[/yellow]")
+        console.print(f"  Skip existing: [yellow]{skip_existing}[/yellow]")
+        console.print()
+        
+        with console.status("[bold green]Processing bulk transparency creation..."):
+            results = service.create_transparency_bulk(
+                limit=limit,
+                batch_size=batch_size,
+                skip_existing=skip_existing
+            )
+        
+        # Display results
+        console.print(f"[green]✓[/green] Bulk transparency creation completed!")
+        console.print()
+        
+        # Summary table
+        summary_table = Table(title="Creation Summary")
+        summary_table.add_column("Metric", style="cyan")
+        summary_table.add_column("Count", style="green")
+        summary_table.add_column("Details", style="yellow")
+        
+        summary_table.add_row("Instruments Found", str(results['total_instruments']), "Instruments needing transparency calculations")
+        summary_table.add_row("Processed", str(results['total_processed']), "Instruments actually processed")
+        summary_table.add_row("Calculations Created", str(results['total_created_calculations']), "New transparency calculations")
+        summary_table.add_row("Skipped", str(results['total_skipped']), "No FITRS data found")
+        summary_table.add_row("Failed", str(results['total_failed']), "Processing errors")
+        summary_table.add_row("Time", f"{results['elapsed_time']:.1f}s", f"Avg: {results['elapsed_time']/max(1, results['total_processed']):.1f}s per instrument" if results['total_processed'] > 0 else "")
+        
+        console.print(summary_table)
+        
+        # Show batch details if verbose
+        if ctx.obj.get('verbose') and results['batch_results']:
+            console.print()
+            batch_table = Table(title="Batch Results")
+            batch_table.add_column("Batch", style="cyan")
+            batch_table.add_column("Processed", style="green")
+            batch_table.add_column("Created", style="blue")
+            batch_table.add_column("Failed", style="red")
+            batch_table.add_column("Time", style="yellow")
+            
+            for idx, batch in enumerate(results['batch_results'], 1):
+                batch_table.add_row(
+                    str(idx),
+                    str(batch['processed']),
+                    str(batch['created_calculations']),
+                    str(batch['failed']),
+                    f"{batch['elapsed_time']:.1f}s"
+                )
+            
+            console.print(batch_table)
+        
+        # Show failed instruments if any
+        if results['failed_instruments']:
+            console.print()
+            console.print(f"[red]Failed Instruments ({len(results['failed_instruments'])}):[/red]")
+            for failure in results['failed_instruments'][:5]:  # Show first 5
+                console.print(f"  [red]•[/red] {failure['isin']}: {failure['error']}")
+            if len(results['failed_instruments']) > 5:
+                console.print(f"  [dim]... and {len(results['failed_instruments']) - 5} more[/dim]")
+        
+        # Show successful instruments if any
+        if results['successful_instruments']:
+            console.print()
+            sample_size = min(5, len(results['successful_instruments']))
+            console.print(f"[green]Sample Successful Instruments ({sample_size}/{len(results['successful_instruments'])}):[/green]")
+            for success in results['successful_instruments'][:sample_size]:
+                console.print(f"  [green]✓[/green] {success['isin']}: {success['calculations_created']} calculations")
         
     except Exception as e:
         console.print(f"[red]Error: {str(e)}[/red]")

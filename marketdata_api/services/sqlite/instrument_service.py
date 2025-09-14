@@ -24,6 +24,7 @@ from ..openfigi import search_openfigi_with_fallback
 from ..gleif import fetch_lei_info
 from ...config import esmaConfig
 from ...constants import FirdsTypes, InstrumentTypes
+from ...models.utils.cfi_instrument_manager import CFIInstrumentTypeManager
 
 # Import the unified models
 from ...models.sqlite.instrument import Instrument, TradingVenue
@@ -192,31 +193,28 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             
             # If preferred type is provided, try it first
             if preferred_type:
-                # Map business instrument type back to FIRDS type for efficient search
-                business_to_firds = {
-                    'equity': 'E',
-                    'debt': 'D', 
-                    'future': 'F',
-                    'collective_investment': 'C',
-                    'hybrid': 'H',
-                    'interest_rate': 'I',
-                    'convertible': 'J',
-                    'option': 'O',
-                    'rights': 'R',
-                    'structured': 'S'
-                }
+                # Use CFI manager for consistent business type to FIRDS type mapping
+                # Reverse lookup: business type -> FIRDS letter
+                business_to_firds = {}
+                for firds_letter, category in CFIInstrumentTypeManager.FIRDS_TO_CFI_MAPPING.items():
+                    business_type = CFIInstrumentTypeManager.CFI_TO_BUSINESS_TYPE.get(category)
+                    if business_type:
+                        business_to_firds[business_type] = firds_letter
                 
                 if preferred_type in business_to_firds:
                     firds_type = business_to_firds[preferred_type]
-                    self.logger.info(f"🎯 Trying preferred type first: {preferred_type} → FIRDS {firds_type}")
+                    self.logger.info(f"🎯 Trying CFI-validated type: {preferred_type} → FIRDS {firds_type}")
                     records = self._search_firds_files_for_type(identifier, firds_type)
                     if records:
                         elapsed = time.time() - search_start
-                        self.logger.info(f"✅ Found in preferred type {firds_type} in {elapsed:.1f}s")
+                        self.logger.info(f"✅ Found in CFI type {firds_type} in {elapsed:.1f}s")
                         return records, firds_type
                     else:
-                        self.logger.info(f"❌ Not found in preferred FIRDS type {firds_type}, will search all types")
-                elif preferred_type in {'E', 'D', 'F'}:  # Legacy direct FIRDS types
+                        elapsed = time.time() - search_start
+                        self.logger.warning(f"❌ {identifier} not found in CFI-validated type {firds_type} ({elapsed:.1f}s)")
+                        self.logger.info(f"🚫 Stopping search - CFI type {firds_type} is definitive for business type '{preferred_type}'")
+                        return None, None
+                elif preferred_type in {'E', 'D', 'F', 'C'}:  # Legacy direct FIRDS types  
                     firds_type = preferred_type
                     self.logger.info(f"🎯 Trying legacy FIRDS type: {firds_type}")
                     records = self._search_firds_files_for_type(identifier, firds_type)
@@ -224,23 +222,28 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                         elapsed = time.time() - search_start
                         self.logger.info(f"✅ Found in legacy type {firds_type} in {elapsed:.1f}s")
                         return records, firds_type
-            
-            # Search all FIRDS types (C,D,E,F,H,I,J,S,R,O)
-            types_to_search = list(FirdsTypes.MAPPING.keys())
-            self.logger.info(f"🔄 Searching {len(types_to_search)} FIRDS types: {types_to_search}")
-            
-            for i, firds_type in enumerate(types_to_search, 1):
-                type_start = time.time()
-                self.logger.debug(f"  📂 [{i}/{len(types_to_search)}] Searching type {firds_type}...")
-                records = self._search_firds_files_for_type(identifier, firds_type)
-                type_elapsed = time.time() - type_start
-                
-                if records:
-                    total_elapsed = time.time() - search_start
-                    self.logger.info(f"✅ Found {identifier} in FIRDS type {firds_type} (searched {i} types, {total_elapsed:.1f}s total)")
-                    return records, firds_type
+                    else:
+                        self.logger.info(f"❌ Not found in legacy type {firds_type}, will try all types")
                 else:
-                    self.logger.debug(f"  ❌ Not found in type {firds_type} ({type_elapsed:.1f}s)")
+                    self.logger.warning(f"❌ Unknown business type '{preferred_type}' - not in CFI mapping")
+            
+            # Only search all types if no preferred type was given OR it was a legacy/unknown type
+            if not preferred_type or preferred_type not in business_to_firds:
+                types_to_search = list(FirdsTypes.MAPPING.keys())
+                self.logger.info(f"🔄 Fallback: Searching {len(types_to_search)} FIRDS types: {types_to_search}")
+                
+                for i, firds_type in enumerate(types_to_search, 1):
+                    type_start = time.time()
+                    self.logger.debug(f"  📂 [{i}/{len(types_to_search)}] Searching type {firds_type}...")
+                    records = self._search_firds_files_for_type(identifier, firds_type)
+                    type_elapsed = time.time() - type_start
+                    
+                    if records:
+                        total_elapsed = time.time() - search_start
+                        self.logger.info(f"✅ Found {identifier} in FIRDS type {firds_type} (searched {i} types, {total_elapsed:.1f}s total)")
+                        return records, firds_type
+                    else:
+                        self.logger.debug(f"  ❌ Not found in type {firds_type} ({type_elapsed:.1f}s)")
             
             total_elapsed = time.time() - search_start
             self.logger.warning(f"❌ {identifier} not found in any FIRDS files after {total_elapsed:.1f}s")
@@ -1057,19 +1060,13 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             if not firds_path.exists():
                 raise InstrumentServiceError(f"FIRDS path does not exist: {firds_path}")
             
-            # Map instrument type to FIRDS type
-            business_to_firds = {
-                'equity': 'E',
-                'debt': 'D',
-                'future': 'F',
-                'collective_investment': 'C',
-                'hybrid': 'H',
-                'interest_rate': 'I',
-                'convertible': 'J',
-                'option': 'O',
-                'rights': 'R',
-                'structured': 'S'
-            }
+            # Use CFI manager for consistent business type to FIRDS type mapping
+            # Reverse lookup: business type -> FIRDS letter
+            business_to_firds = {}
+            for firds_letter, category in CFIInstrumentTypeManager.FIRDS_TO_CFI_MAPPING.items():
+                business_type = CFIInstrumentTypeManager.CFI_TO_BUSINESS_TYPE.get(category)
+                if business_type:
+                    business_to_firds[business_type] = firds_letter
             
             firds_type = business_to_firds.get(instrument_type, 'E')
             self.logger.info(f"🎯 Mapped {instrument_type} → FIRDS type {firds_type}")

@@ -10,6 +10,7 @@ Based on the successful FIRDS unification pattern.
 import uuid
 import logging
 import pandas as pd
+import time
 from typing import Dict, Any, Optional, List, Union
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
@@ -221,7 +222,7 @@ class TransparencyService(TransparencyServiceInterface):
                 isin=data.get('ISIN') or data.get('Id'),  # FULECR_E uses 'Id' instead of 'ISIN'
                 from_date=self._parse_date(data.get('FrDt')),
                 to_date=self._parse_date(data.get('ToDt')),
-                liquidity=self._parse_boolean(data.get('Lqdty')),
+                liquidity=self._determine_liquidity(data, file_type),
                 total_transactions_executed=data.get('TtlNbOfTxsExctd'),
                 total_volume_executed=data.get('TtlVolOfTxsExctd'),
                 file_type=file_type,
@@ -437,11 +438,15 @@ class TransparencyService(TransparencyServiceInterface):
             # CFI-based returned specific patterns, but we need to convert them to letters
             # Extract letters from instrument database lookup
             try:
-                instrument = self.session.query(Instrument).filter(Instrument.isin == isin).first()
-                if instrument and instrument.cfi_code:
-                    target_letters = [instrument.cfi_code[0].upper()]
-                else:
-                    target_letters = self._get_fitrs_file_patterns(instrument_type)
+                session = SessionLocal()
+                try:
+                    instrument = session.query(Instrument).filter(Instrument.isin == isin).first()
+                    if instrument and instrument.cfi_code:
+                        target_letters = [instrument.cfi_code[0].upper()]
+                    else:
+                        target_letters = self._get_fitrs_file_patterns(instrument_type)
+                finally:
+                    session.close()
             except:
                 target_letters = self._get_fitrs_file_patterns(instrument_type)
         
@@ -597,19 +602,23 @@ class TransparencyService(TransparencyServiceInterface):
         
         try:
             # Get the instrument's CFI code from the database
-            instrument = self.session.query(Instrument).filter(
-                Instrument.isin == isin
-            ).first()
-            
-            if instrument and instrument.cfi_code:
-                # Use CFI manager for consistent pattern determination
-                patterns = CFIInstrumentTypeManager.get_fitrs_patterns_from_cfi(instrument.cfi_code)
-                self.logger.info(f"CFI-based file pattern for ISIN {isin}: CFI {instrument.cfi_code} -> {patterns}")
-                return patterns
-            else:
-                # Fallback to general search if no CFI code available
-                self.logger.info(f"No CFI code found for ISIN {isin}, using general pattern")
-                return ['FULNCR_', 'FULECR_']
+            session = SessionLocal()
+            try:
+                instrument = session.query(Instrument).filter(
+                    Instrument.isin == isin
+                ).first()
+                
+                if instrument and instrument.cfi_code:
+                    # Use CFI manager for consistent pattern determination
+                    patterns = CFIInstrumentTypeManager.get_fitrs_patterns_from_cfi(instrument.cfi_code)
+                    self.logger.info(f"CFI-based file pattern for ISIN {isin}: CFI {instrument.cfi_code} -> {patterns}")
+                    return patterns
+                else:
+                    # Fallback to general search if no CFI code available
+                    self.logger.info(f"No CFI code found for ISIN {isin}, using general pattern")
+                    return ['FULNCR_', 'FULECR_']
+            finally:
+                session.close()
                 
         except Exception as e:
             self.logger.warning(f"Error getting CFI-based patterns for {isin}: {str(e)}")
@@ -647,3 +656,213 @@ class TransparencyService(TransparencyServiceInterface):
             return value.lower() in ('true', '1', 'yes', 'on')
         
         return bool(value)
+
+    def _determine_liquidity(self, data: Dict[str, Any], file_type: str) -> Optional[bool]:
+        """
+        Determine liquidity status with smart inference based on FITRS file analysis.
+        
+        Based on analysis:
+        - FULECR_E files often have missing Lqdty but contain actual trading data
+        - FULNCR files have explicit Lqdty values but no trading data
+        - If trading volume/transactions exist, instrument should be considered liquid
+        """
+        # First check if explicit liquidity flag exists
+        lqdty_value = data.get('Lqdty')
+        if lqdty_value is not None and lqdty_value != '':
+            return self._parse_boolean(lqdty_value)
+        
+        # For FULECR_E files (equity shares), infer liquidity from trading activity
+        if file_type == 'FULECR_E':
+            volume = data.get('TtlVolOfTxsExctd')
+            transactions = data.get('TtlNbOfTxsExctd')
+            
+            # If there's actual trading activity, consider it liquid
+            if volume and transactions:
+                try:
+                    volume_float = float(volume)
+                    transactions_int = int(transactions)
+                    if volume_float > 0 or transactions_int > 0:
+                        return True
+                except (ValueError, TypeError):
+                    pass
+        
+        # For other file types without explicit liquidity flag, return None
+        # This preserves the original behavior for non-equity instruments
+        return None
+
+    def create_transparency_bulk(self, 
+                               limit: Optional[int] = None,
+                               batch_size: int = 10,
+                               skip_existing: bool = True) -> Dict[str, Any]:
+        """
+        Create transparency calculations in bulk for instruments that don't have them yet.
+        
+        Args:
+            limit: Maximum number of instruments to process (None = no limit)
+            batch_size: Number of instruments to process per batch (default: 10)
+            skip_existing: Skip instruments that already have transparency data (default: True)
+            
+        Returns:
+            Dict with creation results and statistics
+        """
+        start_time = time.time()
+        results = {
+            'total_instruments': 0,
+            'total_processed': 0,
+            'total_created_calculations': 0,
+            'total_skipped': 0,
+            'total_failed': 0,
+            'failed_instruments': [],
+            'successful_instruments': [],
+            'batch_results': [],
+            'elapsed_time': 0
+        }
+        
+        try:
+            self.logger.info(f"🚀 Starting bulk transparency creation")
+            self.logger.info(f"   Limit: {limit or 'No limit'}")
+            self.logger.info(f"   Skip existing: {skip_existing}")
+            self.logger.info(f"   Batch size: {batch_size}")
+            
+            # Get instruments without transparency calculations
+            instruments_to_process = self._get_instruments_without_transparency(limit, skip_existing)
+            
+            if not instruments_to_process:
+                self.logger.warning(f"❌ No instruments found that need transparency calculations")
+                return results
+            
+            results['total_instruments'] = len(instruments_to_process)
+            self.logger.info(f"📊 Found {len(instruments_to_process)} instruments needing transparency calculations")
+            
+            # Process in batches
+            total_batches = (len(instruments_to_process) + batch_size - 1) // batch_size
+            
+            for batch_idx in range(total_batches):
+                batch_start_idx = batch_idx * batch_size
+                batch_end_idx = min(batch_start_idx + batch_size, len(instruments_to_process))
+                batch_instruments = instruments_to_process[batch_start_idx:batch_end_idx]
+                
+                batch_start_time = time.time()
+                self.logger.info(f"🔄 Processing batch {batch_idx + 1}/{total_batches} ({len(batch_instruments)} instruments)")
+                
+                batch_result = self._process_transparency_batch(batch_instruments)
+                
+                # Update overall results
+                results['total_processed'] += batch_result['processed']
+                results['total_created_calculations'] += batch_result['created_calculations']
+                results['total_skipped'] += batch_result['skipped']
+                results['total_failed'] += batch_result['failed']
+                results['failed_instruments'].extend(batch_result['failed_instruments'])
+                results['successful_instruments'].extend(batch_result['successful_instruments'])
+                
+                batch_elapsed = time.time() - batch_start_time
+                batch_result['elapsed_time'] = batch_elapsed
+                results['batch_results'].append(batch_result)
+                
+                self.logger.info(f"✅ Batch {batch_idx + 1} completed: {batch_result['created_calculations']} calculations created, {batch_result['failed']} failed ({batch_elapsed:.1f}s)")
+                
+                # Progress update
+                progress_pct = (results['total_processed'] / len(instruments_to_process)) * 100
+                self.logger.info(f"📈 Overall progress: {results['total_processed']}/{len(instruments_to_process)} ({progress_pct:.1f}%)")
+            
+            results['elapsed_time'] = time.time() - start_time
+            
+            # Final summary
+            self.logger.info(f"🎉 Bulk transparency creation completed!")
+            self.logger.info(f"   Total instruments: {results['total_instruments']}")
+            self.logger.info(f"   Total processed: {results['total_processed']}")
+            self.logger.info(f"   Total calculations created: {results['total_created_calculations']}")
+            self.logger.info(f"   Total failed: {results['total_failed']}")
+            self.logger.info(f"   Total time: {results['elapsed_time']:.1f}s")
+            
+            return results
+            
+        except Exception as e:
+            results['elapsed_time'] = time.time() - start_time
+            self.logger.error(f"💥 Bulk transparency creation failed: {str(e)}")
+            raise TransparencyServiceError(f"Bulk transparency creation failed: {str(e)}") from e
+
+    def _get_instruments_without_transparency(self, 
+                                            limit: Optional[int] = None,
+                                            skip_existing: bool = True) -> List[Dict[str, Any]]:
+        """Get instruments that don't have transparency calculations yet."""
+        session = SessionLocal()
+        
+        try:
+            if skip_existing:
+                # Find instruments that don't have any transparency calculations
+                subquery = session.query(TransparencyCalculation.isin).distinct()
+                query = session.query(Instrument).filter(
+                    ~Instrument.isin.in_(subquery)
+                )
+            else:
+                # Get all instruments
+                query = session.query(Instrument)
+            
+            if limit:
+                query = query.limit(limit)
+            
+            instruments = query.all()
+            
+            # Convert to dict format for processing
+            instrument_data = []
+            for instrument in instruments:
+                instrument_data.append({
+                    'isin': instrument.isin,
+                    'instrument_type': instrument.instrument_type,
+                    'name': instrument.full_name or instrument.short_name,
+                    'cfi_code': instrument.cfi_code
+                })
+            
+            self.logger.info(f"🔍 Found {len(instrument_data)} instruments without transparency calculations")
+            return instrument_data
+            
+        finally:
+            session.close()
+
+    def _process_transparency_batch(self, instruments: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Process a batch of instruments for transparency creation."""
+        batch_result = {
+            'processed': 0,
+            'created_calculations': 0,
+            'skipped': 0,
+            'failed': 0,
+            'failed_instruments': [],
+            'successful_instruments': []
+        }
+        
+        for instrument_data in instruments:
+            isin = instrument_data['isin']
+            instrument_type = instrument_data['instrument_type']
+            
+            try:
+                self.logger.debug(f"   🔨 Creating transparency for {isin}...")
+                
+                # Create transparency calculations for this instrument
+                calculations = self.create_transparency(isin, instrument_type)
+                
+                batch_result['processed'] += 1
+                
+                if calculations:
+                    calc_count = len(calculations)
+                    batch_result['created_calculations'] += calc_count
+                    batch_result['successful_instruments'].append({
+                        'isin': isin,
+                        'calculations_created': calc_count
+                    })
+                    self.logger.debug(f"   ✅ Created {calc_count} calculations for {isin}")
+                else:
+                    batch_result['skipped'] += 1
+                    self.logger.debug(f"   ⚪ No transparency data found for {isin}")
+                
+            except Exception as e:
+                batch_result['failed'] += 1
+                batch_result['processed'] += 1
+                error_msg = str(e)
+                batch_result['failed_instruments'].append({
+                    'isin': isin, 
+                    'error': error_msg
+                })
+                self.logger.warning(f"   ❌ Failed to create transparency for {isin}: {error_msg}")
+        
+        return batch_result
