@@ -11,14 +11,6 @@ class InstrumentServiceInterface:
         """Create a new instrument."""
         raise NotImplementedError("Subclasses must implement this method")
     
-    def get_instrument_by_id(self, instrument_id: str) -> Optional[InstrumentInterface]:
-        """Get an instrument by its ID."""
-        raise NotImplementedError("Subclasses must implement this method")
-    
-    def get_instrument_by_isin(self, isin: str) -> Optional[InstrumentInterface]:
-        """Get an instrument by its ISIN."""
-        raise NotImplementedError("Subclasses must implement this method")
-    
     def get_instruments(self, limit: int = 100, offset: int = 0, 
                        instrument_type: Optional[str] = None) -> List[InstrumentInterface]:
         """Get a list of instruments with pagination."""

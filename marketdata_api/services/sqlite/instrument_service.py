@@ -15,15 +15,14 @@ import logging
 import re
 import time
 from typing import Dict, Any, Optional, List, Tuple
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session
 from datetime import datetime, UTC
 from ...services.interfaces.instrument_service_interface import InstrumentServiceInterface
 from ...models.interfaces.instrument_interface import InstrumentInterface
 from ...database.session import get_session, SessionLocal
 from ..openfigi import search_openfigi_with_fallback
-from ..gleif import fetch_lei_info
 from ...config import esmaConfig
-from ...constants import FirdsTypes, InstrumentTypes
+from ...constants import FirdsTypes
 from ...models.utils.cfi_instrument_manager import CFIInstrumentTypeManager
 
 # Import the unified models
@@ -848,16 +847,6 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                 lei_session.close()
 
     # Implement required interface methods for backward compatibility
-    def get_instrument_by_id(self, instrument_id: str) -> Optional[InstrumentInterface]:
-        """Get an instrument by its ID."""
-        with get_session() as session:
-            return session.query(Instrument).filter(Instrument.id == instrument_id).first()
-    
-    def get_instrument_by_isin(self, isin: str) -> Optional[InstrumentInterface]:
-        """Get an instrument by its ISIN."""
-        with get_session() as session:
-            return session.query(Instrument).filter(Instrument.isin == isin).first()
-    
     def get_instruments(self, limit: int = 100, offset: int = 0, 
                        instrument_type: Optional[str] = None) -> List[InstrumentInterface]:
         """Get a list of instruments with pagination."""

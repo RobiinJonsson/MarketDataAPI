@@ -27,6 +27,13 @@ All notable changes to the MarketDataAPI project will be documented in this file
 - **CFI Compliance**: All instruments now follow ISO 10962 standard for consistent type classification
 - **Performance Metrics**: Documented improvement from performance crisis to production-ready speeds
 
+### 🧹 CODE CLEANUP & OPTIMIZATION
+- **Service Layer Cleanup**: Removed unused imports and legacy code from services
+  - **Removed Redundant Methods**: Eliminated unused `get_instrument_by_id()` and `get_instrument_by_isin()` from interface and SQLite implementation
+  - **Import Optimization**: Removed unused imports (`fetch_lei_info`, `InstrumentTypes`, `jsonify`)
+  - **Bytecode Cleanup**: Removed orphaned `firds.cpython-313.pyc` from deleted service
+- **Method Consolidation**: Unified instrument retrieval through main `get_instrument()` method with proper session management
+
 ## [2025-09-13] - PROFESSIONAL CLI IMPLEMENTATION: Modern Command-Line Interface with Comprehensive CFI Analysis
 
 ### 🚀 PROFESSIONAL CLI FRAMEWORK

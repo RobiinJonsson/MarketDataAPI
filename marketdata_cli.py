@@ -773,20 +773,33 @@ def get(ctx, mic_code):
         with console.status(f"[bold green]Looking up MIC {mic_code}..."):
             with get_session() as session:
                 mic = session.query(MarketIdentificationCode).filter_by(mic=mic_code.upper()).first()
-        
-        if not mic:
-            console.print(f"[red]MIC not found: {mic_code}[/red]")
-            return
+                
+                if not mic:
+                    console.print(f"[red]MIC not found: {mic_code}[/red]")
+                    return
+                
+                # Extract all data while session is active
+                mic_data = {
+                    'mic': mic.mic,
+                    'market_name': mic.market_name,
+                    'legal_entity_name': mic.legal_entity_name,
+                    'iso_country_code': mic.iso_country_code,
+                    'city': mic.city,
+                    'status': mic.status.value if mic.status else 'N/A',
+                    'operation_type': mic.operation_type.value if mic.operation_type else 'N/A',
+                    'operating_mic': mic.operating_mic,
+                    'lei': mic.lei
+                }
             
-        details = f"""[cyan]MIC:[/cyan] {mic.mic}
-[cyan]Market Name:[/cyan] {mic.market_name}
-[cyan]Legal Entity:[/cyan] {mic.legal_entity_name or 'N/A'}
-[cyan]Country:[/cyan] {mic.iso_country_code}
-[cyan]City:[/cyan] {mic.city or 'N/A'}
-[cyan]Status:[/cyan] {mic.status.value}
-[cyan]Type:[/cyan] {mic.operation_type.value if mic.operation_type else 'N/A'}
-[cyan]Operating MIC:[/cyan] {mic.operating_mic or 'N/A'}
-[cyan]LEI:[/cyan] {mic.lei or 'N/A'}"""
+        details = f"""[cyan]MIC:[/cyan] {mic_data['mic']}
+[cyan]Market Name:[/cyan] {mic_data['market_name']}
+[cyan]Legal Entity:[/cyan] {mic_data['legal_entity_name'] or 'N/A'}
+[cyan]Country:[/cyan] {mic_data['iso_country_code']}
+[cyan]City:[/cyan] {mic_data['city'] or 'N/A'}
+[cyan]Status:[/cyan] {mic_data['status']}
+[cyan]Type:[/cyan] {mic_data['operation_type']}
+[cyan]Operating MIC:[/cyan] {mic_data['operating_mic'] or 'N/A'}
+[cyan]LEI:[/cyan] {mic_data['lei'] or 'N/A'}"""
 
         console.print(Panel(details, title=f"MIC Details: {mic_code.upper()}"))
         

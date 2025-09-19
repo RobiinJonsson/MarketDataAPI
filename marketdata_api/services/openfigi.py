@@ -1,7 +1,6 @@
 import requests
 import os
 from marketdata_api.config import OPENFIGI_API_KEY, EXCHANGE_CODES, DEFAULT_EXCHANGE_CODE
-from flask import jsonify
 
 
 OPENFIGI_API_URL = "https://api.openfigi.com/v3/mapping"
