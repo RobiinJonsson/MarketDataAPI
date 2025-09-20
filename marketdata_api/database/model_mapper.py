@@ -219,35 +219,55 @@ def parse_float(value: Any) -> float:
 
 
 def map_figi_data(data: list, isin: str):
-    """Maps OpenFIGI API response to FigiMapping model using direct import"""
+    """Maps OpenFIGI API response to list of FigiMapping models for multiple FIGIs per ISIN"""
     if not data or len(data) == 0:
-        return None
+        return []
         
     # Get the FigiMapping model directly
     from ..models.sqlite.figi import FigiMapping
-        
-    # Handle nested data structure from OpenFIGI
+    
+    figi_mappings = []
+    
     try:
-        if 'data' in data[0]:
-            figi_data = data[0]['data'][0]  # Get first result from nested data array
-        else:
-            figi_data = data[0]  # Fallback to old structure
-
-        if 'warning' in figi_data:  # Handle case where no data found
-            return None
-
-        return FigiMapping(
-            isin=isin,
-            figi=figi_data.get('figi'),
-            composite_figi=figi_data.get('compositeFIGI'),
-            share_class_figi=figi_data.get('shareClassFIGI'),
-            ticker=figi_data.get('ticker'),
-            security_type=figi_data.get('securityType'),
-            market_sector=figi_data.get('marketSector'),
-            security_description=figi_data.get('securityDescription')
-        )
-    except (KeyError, IndexError):
-        return None
+        # Handle the list of FIGI results (can be multiple per ISIN)
+        for item in data:
+            figi_data = item
+            
+            # Handle nested data structure from OpenFIGI
+            if 'data' in item:
+                # If there are multiple FIGIs in the data array, create a mapping for each
+                for figi_item in item['data']:
+                    if 'warning' not in figi_item:  # Skip items with warnings
+                        figi_mapping = FigiMapping(
+                            isin=isin,
+                            figi=figi_item.get('figi'),
+                            composite_figi=figi_item.get('compositeFIGI'),
+                            share_class_figi=figi_item.get('shareClassFIGI'),
+                            ticker=figi_item.get('ticker'),
+                            security_type=figi_item.get('securityType'),
+                            market_sector=figi_item.get('marketSector'),
+                            security_description=figi_item.get('securityDescription')
+                        )
+                        figi_mappings.append(figi_mapping)
+            else:
+                # Fallback to old structure - single FIGI
+                if 'warning' not in figi_data:
+                    figi_mapping = FigiMapping(
+                        isin=isin,
+                        figi=figi_data.get('figi'),
+                        composite_figi=figi_data.get('compositeFIGI'),
+                        share_class_figi=figi_data.get('shareClassFIGI'),
+                        ticker=figi_data.get('ticker'),
+                        security_type=figi_data.get('securityType'),
+                        market_sector=figi_data.get('marketSector'),
+                        security_description=figi_data.get('securityDescription')
+                    )
+                    figi_mappings.append(figi_mapping)
+        
+        return figi_mappings
+        
+    except (KeyError, IndexError, TypeError):
+        return []
 
 def flatten_address(address: Dict[str, Any], address_type: str, lei: str) -> Dict[str, Any]:
     return {

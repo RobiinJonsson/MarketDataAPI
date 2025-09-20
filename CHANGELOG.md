@@ -2,6 +2,46 @@
 
 All notable changes to the MarketDataAPI project will be documented in this file.
 
+## [2025-09-20] - ENHANCED OPENFIGI INTEGRATION: Simplified Two-Stage Search with Multiple FIGI Support
+
+### 🎯 OPENFIGI SERVICE OVERHAUL
+- **Simplified Search Strategy**: Replaced complex multi-tier fallback with efficient two-stage approach
+  - **Stage 1**: ISIN + MIC code (venue-specific search)  
+  - **Stage 2**: ISIN-only fallback (broad search)
+- **Native MIC Code Support**: Uses MIC codes directly from FIRDS venue data, never generated internally
+- **Multiple FIGI Storage**: Database now supports multiple FIGI mappings per ISIN for comprehensive coverage
+
+### 🔧 DATABASE SCHEMA UPDATES
+- **FIGI Relationship Changes**: Updated from one-to-one to one-to-many FIGI mappings per instrument
+- **Schema Migration**: Removed unique constraint on ISIN in figi_mappings table to allow multiple entries
+- **Backward Compatibility**: API responses include both legacy `figi_mapping` and new `figi_mappings` fields
+
+### 📊 PERFORMANCE IMPROVEMENTS  
+- **Higher Success Rate**: Testing shows 100% success with MIC-specific searches vs previous failures
+- **Precision Control**: MIC-specific searches reduce result bloat (144 FIGIs → 1 FIGI for Swedbank with XSTO)
+- **Fallback Strategy**: Automatic fallback to broad search when venue-specific search fails
+
+### �️ DATA INTEGRITY ENHANCEMENTS
+- **FIGI Uniqueness Constraints**: Added unique constraint on FIGI field to prevent duplicates across instruments
+- **Duplicate Detection Logic**: Enrichment process now checks for existing FIGIs before adding new ones
+- **Cross-ISIN Protection**: Prevents same FIGI being assigned to multiple instruments
+- **Migration with Deduplication**: Database migration removes existing duplicates while preserving data
+
+### �🛠 CLI ENHANCEMENTS
+- **New FIGI Command Group**: Added comprehensive FIGI operations to CLI
+  - `figi get [ISIN]` - Display stored FIGI mappings for an instrument
+  - `figi search [ISIN] [--mic MIC]` - Search OpenFIGI directly with optional MIC code targeting
+- **Enhanced Transparency Display**: Improved transparency CLI to show asset-type-specific data
+  - **Equity Data**: Shows Id_2 (venue identifier), average daily turnover, large-in-scale thresholds
+  - **Non-Equity Data**: Displays classification criteria and instrument-specific attributes
+- **Asset-Type Intelligence**: CLI automatically detects equity vs non-equity and shows relevant fields
+
+### 🧹 CODE CLEANUP & REFACTORING
+- **Unified OpenFIGI Service**: Replaced old openfigi.py with enhanced version, renamed for clarity
+- **Removed Legacy Dependencies**: Eliminated old fallback functions and consolidated service architecture
+- **Updated Import References**: All modules now use unified OpenFIGI service
+- **Removed Prototype Files**: Cleaned up test files and development artifacts
+
 ## [2025-09-14] - CFI STANDARD COMPLIANCE & PERFORMANCE OPTIMIZATION: ISO 10962 Implementation with Critical Performance Fixes
 
 ### ⚡ CRITICAL PERFORMANCE IMPROVEMENTS

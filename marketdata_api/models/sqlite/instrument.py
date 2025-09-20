@@ -49,7 +49,7 @@ class Instrument(Base):
     # Relationships
     legal_entity = relationship("LegalEntity", back_populates="instruments")
     trading_venues = relationship("TradingVenue", back_populates="instrument", cascade="all, delete-orphan")
-    figi_mapping = relationship("FigiMapping", back_populates="instrument", uselist=False, cascade="all, delete-orphan", passive_deletes=True)
+    figi_mappings = relationship("FigiMapping", back_populates="instrument", cascade="all, delete-orphan", passive_deletes=True)  # Changed to plural, removed uselist=False to allow multiple FIGIs
     transparency_calculations = relationship("TransparencyCalculation", back_populates="instrument", cascade="all, delete-orphan")
     
     # Indexes for performance

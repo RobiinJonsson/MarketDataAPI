@@ -9,8 +9,8 @@ class FigiMapping(Base):
     __table_args__ = {'extend_existing': True}  # Allow table redefinition
     
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    isin = Column(String(12), ForeignKey('instruments.isin', ondelete='CASCADE'), unique=True, nullable=False)
-    figi = Column(String(12))  # FIGI is always 12 characters
+    isin = Column(String(12), ForeignKey('instruments.isin', ondelete='CASCADE'), nullable=False)  # Removed unique=True to allow multiple FIGIs per ISIN
+    figi = Column(String(12), unique=True)  # FIGI is always 12 characters and must be unique across all instruments
     composite_figi = Column(String(12))
     share_class_figi = Column(String(12))
     ticker = Column(String(20))
@@ -21,6 +21,6 @@ class FigiMapping(Base):
     
     instrument = relationship(
         "marketdata_api.models.sqlite.instrument.Instrument",
-        back_populates="figi_mapping",
+        back_populates="figi_mappings",
         passive_deletes=True
     )

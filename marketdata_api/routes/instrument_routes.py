@@ -357,14 +357,14 @@ def enrich_instrument(identifier):
             return jsonify({ResponseFields.ERROR: ErrorMessages.INSTRUMENT_NOT_FOUND}), HTTPStatus.NOT_FOUND
             
         # Track current enrichment state
-        pre_figi = True if instrument.figi_mapping else False
+        pre_figi = True if instrument.figi_mappings else False
         pre_lei = True if instrument.legal_entity else False
         
         # Perform enrichment
         session, enriched = service.enrich_instrument(instrument)
         
         # Track post-enrichment state
-        post_figi = True if enriched.figi_mapping else False
+        post_figi = True if enriched.figi_mappings else False
         post_lei = True if enriched.legal_entity else False
         
         session.close()
@@ -440,7 +440,7 @@ def batch_process_instruments():
                             DbFields.ISIN: isin,
                             DbFields.ID: enriched.id,
                             DbFields.TYPE: enriched.type,
-                            DbFields.FIGI: enriched.figi_mapping.figi if enriched.figi_mapping else None,
+                            DbFields.FIGI: enriched.figi_mappings[0].figi if enriched.figi_mappings else None,
                             DbFields.LEI: enriched.legal_entity.lei if enriched.legal_entity else None
                         })
                     else:
@@ -496,23 +496,38 @@ def build_instrument_response(instrument):
             "creation_date": instrument.legal_entity.creation_date.isoformat() if instrument.legal_entity.creation_date else None
         }
     
-    # Add FIGI mapping if available
-    if instrument.figi_mapping:
-        response["figi"] = instrument.figi_mapping.figi
-        response["composite_figi"] = instrument.figi_mapping.composite_figi
-        response["share_class_figi"] = instrument.figi_mapping.share_class_figi
-        response["security_type"] = instrument.figi_mapping.security_type
-        response["market_sector"] = instrument.figi_mapping.market_sector
-        response["ticker"] = instrument.figi_mapping.ticker
+    # Add FIGI mappings if available (now supporting multiple FIGIs)
+    if instrument.figi_mappings:
+        # For backward compatibility, use first FIGI for top-level fields
+        primary_figi = instrument.figi_mappings[0]
+        response["figi"] = primary_figi.figi
+        response["composite_figi"] = primary_figi.composite_figi
+        response["share_class_figi"] = primary_figi.share_class_figi
+        response["security_type"] = primary_figi.security_type
+        response["market_sector"] = primary_figi.market_sector
+        response["ticker"] = primary_figi.ticker
         
-        # Keep the nested object for compatibility
+        # Backward compatibility: single figi_mapping object with primary FIGI
         response["figi_mapping"] = {
-            "figi": instrument.figi_mapping.figi,
-            "composite_figi": instrument.figi_mapping.composite_figi,
-            "share_class_figi": instrument.figi_mapping.share_class_figi,
-            "security_type": instrument.figi_mapping.security_type,
-            "market_sector": instrument.figi_mapping.market_sector,
-            "ticker": instrument.figi_mapping.ticker
+            "figi": primary_figi.figi,
+            "composite_figi": primary_figi.composite_figi,
+            "share_class_figi": primary_figi.share_class_figi,
+            "security_type": primary_figi.security_type,
+            "market_sector": primary_figi.market_sector,
+            "ticker": primary_figi.ticker
         }
+        
+        # New field: all FIGI mappings as array
+        response["figi_mappings"] = [
+            {
+                "figi": figi.figi,
+                "composite_figi": figi.composite_figi,
+                "share_class_figi": figi.share_class_figi,
+                "security_type": figi.security_type,
+                "market_sector": figi.market_sector,
+                "ticker": figi.ticker
+            } 
+            for figi in instrument.figi_mappings
+        ]
     
     return response

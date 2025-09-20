@@ -34,13 +34,13 @@ def test_figi_relationship(setup_database):
             security_type="Common Stock"
         )
         
-        instrument.figi_mapping = figi
+        instrument.figi_mappings = [figi]
         session.add(instrument)
         session.commit()
         
         # Test relationship
         loaded = session.get(Equity, "test-id")  # Use Equity instead of Instrument
-        assert loaded.figi_mapping.figi == "BBG000123"
+        assert loaded.figi_mappings[0].figi == "BBG000123"
 
 def test_legal_entity_relationship(setup_database):
     with get_session() as session:

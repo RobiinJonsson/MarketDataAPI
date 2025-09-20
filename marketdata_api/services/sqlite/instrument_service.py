@@ -20,13 +20,14 @@ from datetime import datetime, UTC
 from ...services.interfaces.instrument_service_interface import InstrumentServiceInterface
 from ...models.interfaces.instrument_interface import InstrumentInterface
 from ...database.session import get_session, SessionLocal
-from ..openfigi import search_openfigi_with_fallback
+# Removed old OpenFIGI import - now using enhanced service for both primary and fallback
 from ...config import esmaConfig
 from ...constants import FirdsTypes
 from ...models.utils.cfi_instrument_manager import CFIInstrumentTypeManager
 
 # Import the unified models
 from ...models.sqlite.instrument import Instrument, TradingVenue
+from ...models.sqlite.figi import FigiMapping
 
 logger = logging.getLogger(__name__)
 
@@ -380,7 +381,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             instrument = (
                 session.query(Instrument)
                 .options(
-                    joinedload(Instrument.figi_mapping),
+                    joinedload(Instrument.figi_mappings),
                     joinedload(Instrument.legal_entity),
                     joinedload(Instrument.trading_venues)
                 )
@@ -757,7 +758,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             instrument = session.merge(instrument)
             
             # Enrich with FIGI if not present
-            if not instrument.figi_mapping:
+            if not instrument.figi_mappings:
                 try:
                     self.logger.info("Starting FIGI enrichment...")
                     self._enrich_figi(session, instrument)
@@ -784,47 +785,118 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             raise InstrumentServiceError(f"Enrichment failed: {str(e)}")
 
     def _enrich_figi(self, session: Session, instrument: InstrumentInterface) -> None:
-        """Helper method to handle FIGI enrichment with venue-aware optimization."""
+        """Helper method to handle FIGI enrichment with enhanced OpenFIGI service and multiple FIGI support."""
         from ...database.model_mapper import map_figi_data
         
         self.logger.debug(f"Starting FIGI enrichment for {instrument.isin}")
         
-        # Get venue records for this ISIN to optimize OpenFIGI search
+        # Check if instrument already has FIGI mappings
+        if instrument.figi_mappings:
+            self.logger.info(f"FIGI mappings already exist for {instrument.isin} ({len(instrument.figi_mappings)} FIGIs)")
+            return
+        
+        # Use the new enhanced OpenFIGI service
         try:
-            venue_records = session.query(TradingVenue).filter(
-                TradingVenue.instrument_id == instrument.id
-            ).all()
+            from ..openfigi import OpenFIGIService
+            openfigi_service = OpenFIGIService()
             
-            # Convert to format expected by OpenFIGI function
-            venue_data = [venue.original_firds_record for venue in venue_records if venue.original_firds_record]
+            # Get MIC code from trading venues for enhanced search
+            mic_code = None
+            if instrument.trading_venues:
+                # Use the first active trading venue's MIC code
+                for venue in instrument.trading_venues:
+                    if venue.market_identifier_code:
+                        mic_code = venue.market_identifier_code
+                        break
             
-            if venue_data:
-                self.logger.info(f"Using {len(venue_data)} venue records for optimized FIGI search")
+            if mic_code:
+                self.logger.info(f"Using MIC code {mic_code} for enhanced FIGI search")
             else:
-                self.logger.warning(f"No venue records found for {instrument.isin}, using basic search")
-                venue_data = None
+                self.logger.info(f"No MIC code available, using ISIN-only search for {instrument.isin}")
+            
+            # Search for FIGIs using the enhanced service
+            figi_results = openfigi_service.search_figi(instrument.isin, mic_code)
+            
+            if figi_results:
+                self.logger.info(f"Found {len(figi_results)} FIGI(s) for {instrument.isin}")
+                
+                # Create FIGI mappings for all results
+                figi_mappings = map_figi_data(figi_results, instrument.isin)
+                if figi_mappings:
+                    self.logger.info(f"Created {len(figi_mappings)} FIGI mapping(s) for {instrument.isin}")
+                    
+                    # Check for existing FIGIs and add only new ones
+                    added_count = 0
+                    for figi_mapping in figi_mappings:
+                        # Check if this FIGI already exists in the database
+                        existing_figi = session.query(FigiMapping).filter(
+                            FigiMapping.figi == figi_mapping.figi
+                        ).first()
+                        
+                        if existing_figi:
+                            self.logger.info(f"FIGI {figi_mapping.figi} already exists for ISIN {existing_figi.isin}, skipping")
+                        else:
+                            instrument.figi_mappings.append(figi_mapping)
+                            session.add(figi_mapping)
+                            added_count += 1
+                    
+                    self.logger.info(f"Added {added_count} new FIGI mapping(s) for {instrument.isin} (skipped {len(figi_mappings) - added_count} duplicates)")
+                else:
+                    self.logger.warning(f"Failed to create FIGI mappings from results: {figi_results}")
+            else:
+                self.logger.warning(f"No FIGI data returned for {instrument.isin}")
+                
         except Exception as e:
-            self.logger.warning(f"Failed to get venue data for FIGI optimization: {e}")
-            venue_data = None
-        
-        # Use venue-aware search with fallback
-        figi_data = search_openfigi_with_fallback(
-            instrument.isin, 
-            instrument.instrument_type, 
-            venue_data
-        )
-        
-        if figi_data:
-            self.logger.debug(f"Received FIGI data: {figi_data}")
-            figi_mapping = map_figi_data(figi_data, instrument.isin)
-            if figi_mapping:
-                self.logger.info(f"Created FIGI mapping for {instrument.isin}")
-                instrument.figi_mapping = figi_mapping
-                session.add(figi_mapping)
+            self.logger.error(f"Error during FIGI enrichment: {e}")
+            # Fallback to old service if new one fails
+            self.logger.info("Falling back to original OpenFIGI service...")
+            
+            # Get venue records for this ISIN to optimize OpenFIGI search
+            try:
+                venue_records = session.query(TradingVenue).filter(
+                    TradingVenue.instrument_id == instrument.id
+                ).all()
+                
+                # Convert to format expected by OpenFIGI function
+                venue_data = [venue.original_firds_record for venue in venue_records if venue.original_firds_record]
+                
+                if venue_data:
+                    self.logger.info(f"Using {len(venue_data)} venue records for fallback FIGI search")
+                else:
+                    venue_data = None
+            except Exception as fallback_e:
+                self.logger.warning(f"Failed to get venue data for fallback: {fallback_e}")
+                venue_data = None
+            
+            # Use enhanced service as final fallback with None MIC (broad search)
+            fallback_results, fallback_strategy = openfigi_service.search_figi(instrument.isin, None)
+            
+            if fallback_results:
+                self.logger.debug(f"Received fallback FIGI data: {fallback_results}")
+                figi_mappings = map_figi_data(fallback_results, instrument.isin)
+                if figi_mappings:
+                    self.logger.info(f"Created {len(figi_mappings)} FIGI mapping(s) via fallback for {instrument.isin}")
+                    
+                    # Check for existing FIGIs and add only new ones
+                    added_count = 0
+                    for figi_mapping in figi_mappings:
+                        # Check if this FIGI already exists in the database
+                        existing_figi = session.query(FigiMapping).filter(
+                            FigiMapping.figi == figi_mapping.figi
+                        ).first()
+                        
+                        if existing_figi:
+                            self.logger.info(f"FIGI {figi_mapping.figi} already exists for ISIN {existing_figi.isin}, skipping")
+                        else:
+                            instrument.figi_mappings.append(figi_mapping)
+                            session.add(figi_mapping)
+                            added_count += 1
+                    
+                    self.logger.info(f"Added {added_count} new FIGI mapping(s) via fallback for {instrument.isin} (skipped {len(figi_mappings) - added_count} duplicates)")
+                else:
+                    self.logger.warning(f"Failed to create FIGI mappings from fallback data: {fallback_results}")
             else:
-                self.logger.warning(f"Failed to create FIGI mapping from data: {figi_data}")
-        else:
-            self.logger.warning(f"No FIGI data returned for {instrument.isin}")
+                self.logger.warning(f"No FIGI data returned from fallback for {instrument.isin}")
 
     def _enrich_legal_entity(self, session: Session, instrument: InstrumentInterface) -> None:
         """Helper method to handle legal entity enrichment"""
