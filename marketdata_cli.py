@@ -31,6 +31,7 @@ try:
     from marketdata_api.services.sqlite.legal_entity_service import LegalEntityService
     from marketdata_api.services.sqlite.transparency_service import TransparencyService
     from marketdata_api.services.mic_data_loader import MICDataLoader, remote_mic_service
+    from marketdata_api.services.file_management_service import FileManagementService
     from marketdata_api.database.session import get_session
     from marketdata_api.models.sqlite.instrument import Instrument
     from marketdata_api.models.sqlite.transparency import TransparencyCalculation
@@ -71,6 +72,7 @@ def cli(ctx, verbose, format):
             "• [yellow]transparency[/yellow] - Transparency calculations\n" +
             "• [yellow]mic[/yellow] - Market identification codes\n" +
             "• [yellow]entities[/yellow] - Legal entities\n" +
+            "• [yellow]files[/yellow] - File management operations\n" +
             "• [yellow]stats[/yellow] - Database statistics\n" +
             "• [yellow]cfi[/yellow] - Comprehensive CFI code analysis\n\n" +
             "Use [green]--help[/green] with any command for details"
@@ -1101,6 +1103,359 @@ def get(ctx, lei):
         
     except Exception as e:
         console.print(f"[red]Error: {str(e)}[/red]")
+        if ctx.obj.get('verbose'):
+            import traceback
+            traceback.print_exc()
+
+# ============================================================================
+# FILE MANAGEMENT COMMANDS
+# ============================================================================
+
+@cli.group()
+@click.pass_context
+def files(ctx):
+    """File management operations - download, list, cleanup ESMA files"""
+    pass
+
+@files.command('list')
+@click.option('--file-type', type=click.Choice(['firds', 'fitrs', 'all']), 
+              default='all', help='Filter by file type')
+@click.option('--date-from', help='Filter from date (YYYY-MM-DD)')
+@click.option('--date-to', help='Filter to date (YYYY-MM-DD)')
+@click.option('--limit', type=int, default=50, help='Limit number of results')
+@click.pass_context
+def list_files(ctx, file_type, date_from, date_to, limit):
+    """List available files with filtering options"""
+    try:
+        file_service = FileManagementService()
+        
+        with console.status("[bold green]Loading files..."):
+            if file_type == 'all':
+                all_files_dict = file_service.get_all_files()
+                # Flatten the dictionary to a list
+                files_data = []
+                for file_list in all_files_dict.values():
+                    files_data.extend(file_list)
+            else:
+                files_data = file_service.get_files_with_filters(
+                    file_type=file_type,
+                    date_from=date_from,
+                    date_to=date_to,
+                    limit=limit
+                )
+        
+        if not files_data:
+            console.print("[yellow]No files found matching criteria[/yellow]")
+            return
+            
+        # Apply limit if specified
+        if limit and len(files_data) > limit:
+            files_data = files_data[:limit]
+            
+        # Create Rich table
+        table = Table(title=f"Local Files ({len(files_data)} total)")
+        table.add_column("Filename", style="cyan", overflow="fold")
+        table.add_column("Type", style="magenta")
+        table.add_column("Dataset", style="blue")
+        table.add_column("Size", style="yellow")
+        table.add_column("Modified", style="green")
+        
+        for file_info in files_data:
+            # Format file size
+            size_mb = file_info.size / (1024 * 1024) if file_info.size else 0
+            size_str = f"{size_mb:.1f} MB" if size_mb > 0 else "N/A"
+            
+            # Format date
+            modified_str = file_info.modified.strftime('%Y-%m-%d %H:%M') if file_info.modified else "N/A"
+            
+            table.add_row(
+                file_info.name,
+                file_info.file_type,
+                file_info.dataset_type or 'N/A',
+                size_str,
+                modified_str
+            )
+            
+        console.print(table)
+        
+        # Summary info
+        total_size_mb = sum(f.size for f in files_data if f.size) / (1024 * 1024)
+        console.print(f"[dim]Total size: {total_size_mb:.1f} MB[/dim]")
+        
+    except Exception as e:
+        console.print(f"[red]Error listing files: {str(e)}[/red]")
+        if ctx.obj.get('verbose'):
+            import traceback
+            traceback.print_exc()
+
+@files.command('download')
+@click.argument('file_type', type=click.Choice(['firds', 'fitrs']))
+@click.option('--date', help='Specific date to download (YYYY-MM-DD)')
+@click.option('--dataset', help='Dataset type (e.g., FULINS_E for equity, FULINS_D for debt, FULINS_S, FULINS_R, etc.)')
+@click.option('--force', is_flag=True, help='Force re-download even if file exists')
+@click.pass_context
+def download_files(ctx, file_type, date, dataset, force):
+    """Download ESMA files (FIRDS or FITRS) with optional dataset filtering"""
+    try:
+        file_service = FileManagementService()
+        
+        if date:
+            console.print(f"[cyan]Downloading {file_type.upper()} files for {date}...[/cyan]")
+        else:
+            console.print(f"[cyan]Downloading latest {file_type.upper()} files...[/cyan]")
+            
+        with console.status("[bold green]Downloading and processing..."):
+            result = file_service.download_by_criteria(
+                file_type=file_type,
+                date=date,
+                dataset=dataset,
+                force_update=force
+            )
+        
+        if result.get('success'):
+            console.print(f"[green]✓ Download completed successfully![/green]")
+            console.print(f"[dim]{result.get('message', '')}[/dim]")
+            
+            # Show summary of downloaded files
+            downloaded = result.get('files_downloaded', [])
+            skipped = result.get('files_skipped', [])
+            failed = result.get('files_failed', [])
+            
+            if downloaded:
+                table = Table(title="Downloaded Files")
+                table.add_column("Filename", style="cyan")
+                table.add_column("Status", style="green")
+                
+                for file_info in downloaded:
+                    table.add_row(
+                        file_info.get('filename', str(file_info)),
+                        "✓ Downloaded"
+                    )
+                console.print(table)
+            
+            if skipped:
+                console.print(f"[yellow]⚠ Skipped {len(skipped)} files (already exist)[/yellow]")
+                
+            if failed:
+                console.print(f"[red]✗ Failed to download {len(failed)} files[/red]")
+                for failed_file in failed[:3]:  # Show first 3 failures
+                    console.print(f"  [red]• {failed_file}[/red]")
+        else:
+            console.print(f"[red]✗ Download failed: {result.get('message', 'Unknown error')}[/red]")
+            
+    except Exception as e:
+        console.print(f"[red]Error downloading files: {str(e)}[/red]")
+        if ctx.obj.get('verbose'):
+            import traceback
+            traceback.print_exc()
+
+@files.command('delete')
+@click.argument('filename')
+@click.option('--confirm', is_flag=True, help='Skip confirmation prompt')
+@click.pass_context
+def delete_file(ctx, filename, confirm):
+    """Delete a specific file"""
+    try:
+        if not confirm:
+            if not click.confirm(f"Are you sure you want to delete '{filename}'?"):
+                console.print("[yellow]Operation cancelled[/yellow]")
+                return
+                
+        file_service = FileManagementService()
+        
+        with console.status("[bold red]Deleting file..."):
+            result = file_service.delete_file(filename)
+        
+        if result.get('success'):
+            console.print(f"[green]✓ File '{filename}' deleted successfully[/green]")
+        else:
+            console.print(f"[red]✗ Failed to delete file: {result.get('message', 'Unknown error')}[/red]")
+            
+    except Exception as e:
+        console.print(f"[red]Error deleting file: {str(e)}[/red]")
+        if ctx.obj.get('verbose'):
+            import traceback
+            traceback.print_exc()
+
+@files.command('cleanup')
+@click.option('--dry-run', is_flag=True, help='Show what would be deleted without actually deleting')
+@click.option('--older-than', type=int, default=30, help='Delete files older than N days')
+@click.pass_context
+def cleanup_files(ctx, dry_run, older_than):
+    """Clean up old files based on retention policies"""
+    try:
+        file_service = FileManagementService()
+        
+        mode_text = "DRY RUN - " if dry_run else ""
+        console.print(f"[cyan]{mode_text}Cleaning up files older than {older_than} days...[/cyan]")
+        
+        with console.status("[bold yellow]Scanning for old files..."):
+            result = file_service.auto_cleanup_outdated_patterns(
+                days_to_keep=older_than,
+                dry_run=dry_run
+            )
+        
+        if result.get('success'):
+            cleaned_files = result.get('cleaned_files', [])
+            
+            if cleaned_files:
+                table = Table(title=f"{'Files to Delete' if dry_run else 'Deleted Files'}")
+                table.add_column("Filename", style="red")
+                table.add_column("Age (days)", style="yellow")
+                table.add_column("Size", style="cyan")
+                
+                for file_info in cleaned_files:
+                    table.add_row(
+                        file_info.get('filename', 'N/A'),
+                        str(file_info.get('age_days', 'N/A')),
+                        file_info.get('size', 'N/A')
+                    )
+                console.print(table)
+                
+                action_text = "would be deleted" if dry_run else "deleted"
+                console.print(f"[green]✓ {len(cleaned_files)} files {action_text}[/green]")
+            else:
+                console.print("[green]✓ No old files found - nothing to clean up[/green]")
+        else:
+            console.print(f"[red]✗ Cleanup failed: {result.get('message', 'Unknown error')}[/red]")
+            
+    except Exception as e:
+        console.print(f"[red]Error during cleanup: {str(e)}[/red]")
+        if ctx.obj.get('verbose'):
+            import traceback
+            traceback.print_exc()
+
+@files.command('stats')
+@click.pass_context
+def file_stats(ctx):
+    """Show file storage statistics"""
+    try:
+        file_service = FileManagementService()
+        
+        with console.status("[bold green]Gathering file statistics..."):
+            stats = file_service.get_storage_stats()
+        
+        if stats:
+            # Main statistics panel
+            stats_text = f"""[cyan]Total Files:[/cyan] {stats.get('total_files', 0):,}
+[cyan]Total Size:[/cyan] {stats.get('total_size_gb', 0):.2f} GB
+[cyan]Available Space:[/cyan] {stats.get('available_space_gb', 0):.2f} GB
+[cyan]FIRDS Files:[/cyan] {stats.get('firds_count', 0):,}
+[cyan]FITRS Files:[/cyan] {stats.get('fitrs_count', 0):,}"""
+            
+            console.print(Panel(stats_text, title="File Storage Statistics"))
+            
+            # File type breakdown if available
+            if 'file_types' in stats:
+                table = Table(title="File Type Breakdown")
+                table.add_column("Type", style="magenta")
+                table.add_column("Count", style="green")
+                table.add_column("Size (MB)", style="yellow")
+                
+                for file_type, type_stats in stats['file_types'].items():
+                    table.add_row(
+                        file_type,
+                        str(type_stats.get('count', 0)),
+                        f"{type_stats.get('size_mb', 0):.1f}"
+                    )
+                console.print(table)
+        else:
+            console.print("[yellow]Unable to retrieve file statistics[/yellow]")
+            
+    except Exception as e:
+        console.print(f"[red]Error getting file statistics: {str(e)}[/red]")
+        if ctx.obj.get('verbose'):
+            import traceback
+            traceback.print_exc()
+
+@files.command('available')
+@click.argument('file_type', type=click.Choice(['firds', 'fitrs']))
+@click.option('--days', type=int, default=7, help='Check availability for last N days')
+@click.option('--dataset', help='Filter by dataset type (e.g., FULINS_E for equity, FULINS_D for debt, FULINS_S, FULINS_R, etc.)')
+@click.pass_context
+def available_files(ctx, file_type, days, dataset):
+    """Check what files are available for download from ESMA with optional dataset filtering"""
+    try:
+        from datetime import datetime, timedelta
+        
+        # Calculate date range
+        date_to = datetime.now().strftime('%Y-%m-%d')
+        date_from = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+        
+        file_service = FileManagementService()
+        
+        with console.status(f"[bold green]Checking available {file_type.upper()} files..."):
+            # Handle dataset filtering differently for FIRDS vs FITRS
+            asset_type = None
+            file_type_filter = None
+            
+            if dataset:
+                if file_type.lower() == 'firds' and 'FULINS_' in dataset:
+                    # For FIRDS: extract asset type (e.g., FULINS_E -> E)
+                    asset_type = dataset.split('_')[1]
+                elif file_type.lower() == 'fitrs':
+                    # For FITRS: use the dataset as a file type filter
+                    # FULECR_E should match FULECR files with _E_ pattern
+                    if '_' in dataset:
+                        prefix, suffix = dataset.split('_', 1)
+                        if prefix in ['FULECR', 'FULNCR']:
+                            file_type_filter = prefix
+                            asset_type = suffix
+                        else:
+                            # If it's something like FULINS_E, extract the asset type
+                            asset_type = suffix
+            
+            available = file_service.get_available_esma_files(
+                datasets=[file_type],
+                date_from=date_from,
+                date_to=date_to,
+                file_type=file_type_filter,
+                asset_type=asset_type
+            )
+        
+        if available:
+            title = f"Available {file_type.upper()} Files (Last {days} days)"
+            if dataset:
+                title += f" - {dataset}"
+            table = Table(title=title)
+            table.add_column("Creation Date", style="green")
+            table.add_column("Publication Date", style="blue")
+            table.add_column("Filename", style="cyan")
+            table.add_column("Size", style="yellow")
+            table.add_column("Local Status", style="magenta")
+            
+            for file_info in available:
+                # Check if file exists locally
+                local_path = file_service.config.base_path / file_type / file_info.file_name
+                is_local = local_path.exists() if hasattr(file_service.config, 'base_path') else False
+                local_status = "Downloaded" if is_local else "Available"
+                status_style = "green" if is_local else "yellow"
+                
+                # Format file size
+                size_str = "N/A"
+                if file_info.file_size:
+                    if file_info.file_size > 1024 * 1024:
+                        size_str = f"{file_info.file_size / (1024 * 1024):.1f} MB"
+                    else:
+                        size_str = f"{file_info.file_size / 1024:.1f} KB"
+                
+                table.add_row(
+                    file_info.creation_date or 'N/A',
+                    file_info.publication_date or 'N/A', 
+                    file_info.file_name or 'N/A',
+                    size_str,
+                    f"[{status_style}]{local_status}[/{status_style}]"
+                )
+            console.print(table)
+            
+            # Summary
+            total = len(available)
+            console.print(f"[dim]Total available: {total} files[/dim]")
+        else:
+            console.print(f"[yellow]No {file_type.upper()} files available for the last {days} days[/yellow]")
+            
+    except Exception as e:
+        console.print(f"[red]Error checking available files: {str(e)}[/red]")
         if ctx.obj.get('verbose'):
             import traceback
             traceback.print_exc()

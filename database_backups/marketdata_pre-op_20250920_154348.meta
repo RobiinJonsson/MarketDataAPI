@@ -1,0 +1,5 @@
+timestamp: 20250920_154348
+backup_type: pre-op
+description: Pre-operation backup before: download_and_parse_2_files
+original_db_path: marketdata_api\database\marketdata.db
+backup_size: 4001792

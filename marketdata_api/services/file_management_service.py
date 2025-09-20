@@ -139,6 +139,18 @@ class FileManagementService:
             return 'FULINS_F'
         elif 'FULINS_C' in filename_upper:
             return 'FULINS_C'
+        elif 'FULINS_S' in filename_upper:
+            return 'FULINS_S'
+        elif 'FULINS_R' in filename_upper:
+            return 'FULINS_R'
+        elif 'FULINS_O' in filename_upper:
+            return 'FULINS_O'
+        elif 'FULINS_J' in filename_upper:
+            return 'FULINS_J'
+        elif 'FULINS_I' in filename_upper:
+            return 'FULINS_I'
+        elif 'FULINS_H' in filename_upper:
+            return 'FULINS_H'
         elif 'DELVINS' in filename_upper or 'DELTA' in filename_upper:
             return 'DELVINS'
         elif 'FITRS' in filename_upper or 'TRANSPARENCY' in filename_upper:
@@ -718,6 +730,12 @@ class FileManagementService:
                         'FULINS_D': ['FULINS.*_D_', 'debt'], 
                         'FULINS_F': ['FULINS.*_F_', 'future'],
                         'FULINS_C': ['FULINS.*_C_'],
+                        'FULINS_S': ['FULINS.*_S_'],
+                        'FULINS_R': ['FULINS.*_R_'],
+                        'FULINS_O': ['FULINS.*_O_'],
+                        'FULINS_J': ['FULINS.*_J_'],
+                        'FULINS_I': ['FULINS.*_I_'],
+                        'FULINS_H': ['FULINS.*_H_'],
                         'DELVINS': ['DELVINS'],
                         'FITRS': ['FULNCR', 'FULECR'],
                         'DVCAP': ['DVCAP', 'DVCRES']

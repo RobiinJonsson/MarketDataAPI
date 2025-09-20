@@ -2,7 +2,31 @@
 
 All notable changes to the MarketDataAPI project will be documented in this file.
 
-## [2025-09-20] - ENHANCED OPENFIGI INTEGRATION: Simplified Two-Stage Search with Multiple FIGI Support
+## [2025-09-20] - COMPLETE CLI FILE MANAGEMENT & ENHANCED OPENFIGI INTEGRATION
+
+### 📁 NEW FILE MANAGEMENT CLI COMMANDS
+- **Comprehensive File Operations**: Added complete CLI interface for file management operations
+  - `files list` - List local files with filtering by type, date range, and dataset
+  - `files available` - Check available ESMA files for download with dataset filtering
+  - `files download` - Download ESMA files by criteria (date, dataset type)
+  - `files delete` - Delete specific files with confirmation prompts
+  - `files cleanup` - Automated cleanup with dry-run support and age-based retention
+  - `files stats` - Storage statistics and file type breakdown
+- **Rich Output Formatting**: Professional tables, progress indicators, and colored status messages
+- **Local PC Deployment Ready**: Complete command-line-only operation capability
+
+### 🔧 DATASET TYPE RECOGNITION FIXES
+- **Extended Dataset Support**: Added recognition for newer FIRDS dataset types
+  - `FULINS_S` - Structured Products
+  - `FULINS_R` - Rights/Warrants 
+  - `FULINS_O` - Options
+  - `FULINS_J` - Exchange Traded Products
+  - `FULINS_I` - Other Instruments
+  - `FULINS_H` - Hybrid Instruments
+- **FITRS Dataset Filtering**: Enhanced filtering for FITRS files (`FULECR`, `FULNCR`) with proper pattern matching
+- **Download Command Integration**: All dataset types now supported in download operations
+
+### 🎯 OPENFIGI SERVICE OVERHAUL
 
 ### 🎯 OPENFIGI SERVICE OVERHAUL
 - **Simplified Search Strategy**: Replaced complex multi-tier fallback with efficient two-stage approach
@@ -27,7 +51,11 @@ All notable changes to the MarketDataAPI project will be documented in this file
 - **Cross-ISIN Protection**: Prevents same FIGI being assigned to multiple instruments
 - **Migration with Deduplication**: Database migration removes existing duplicates while preserving data
 
-### �🛠 CLI ENHANCEMENTS
+### 🛠 CLI ENHANCEMENTS
+- **Complete File Management Interface**: Full CLI support for file operations matching API functionality
+  - Dataset filtering for all commands (`--dataset FULINS_E`, `--dataset FULECR_E`, etc.)
+  - Date range filtering and limit controls for efficient file browsing
+  - Rich formatted output with file statistics, sizes, and modification dates
 - **New FIGI Command Group**: Added comprehensive FIGI operations to CLI
   - `figi get [ISIN]` - Display stored FIGI mappings for an instrument
   - `figi search [ISIN] [--mic MIC]` - Search OpenFIGI directly with optional MIC code targeting
