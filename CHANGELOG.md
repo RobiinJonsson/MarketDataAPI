@@ -2,6 +2,58 @@
 
 All notable changes to the MarketDataAPI project will be documented in this file.
 
+## [2025-09-21] - COMPREHENSIVE HEALTH MONITORING & API ENHANCEMENTS
+
+### 🏥 ENHANCED HEALTH MONITORING SYSTEM
+- **Comprehensive Health Endpoints**: Added detailed health monitoring capabilities
+  - `/api/v1/health` - Basic health check with database connectivity
+  - `/api/v1/health/detailed` - Detailed system metrics including CPU, memory, disk usage
+  - `/api/v1/status` - Quick system status overview
+- **System Metrics Integration**: Optional psutil integration for system resource monitoring
+  - CPU usage percentage tracking
+  - Memory utilization monitoring  
+  - Disk usage statistics
+  - Graceful degradation when psutil unavailable
+- **Service Health Validation**: Comprehensive service connectivity checks
+  - Database connection status verification
+  - Instrument service health validation
+  - Service type identification and status reporting
+
+### 🔧 ERROR HANDLING IMPROVEMENTS
+- **Enhanced JSON Error Responses**: Improved error handling for malformed JSON requests
+  - Malformed JSON now returns 400 (Bad Request) instead of 500 (Internal Server Error)
+  - More user-friendly error messages for API consumers
+  - Proper exception handling in instrument creation endpoints
+
+### 📚 DOCUMENTATION SYSTEM FIXES
+- **Path Resolution Corrections**: Fixed documentation system file path issues
+  - Corrected relative path resolution in docs.py (../../docs)
+  - All documentation endpoints now accessible
+  - OpenAPI specifications properly served
+  - Markdown documentation files correctly loaded
+
+### 🌐 GLEIF SERVICE INTEGRATION
+- **Standardized Service Architecture**: Created proper GLEIFService class structure
+  - Consistent service pattern implementation
+  - Proper method organization (get_lei_data, get_parent_data, get_children_data)
+  - Integration with existing GLEIF API functionality
+  - Improved code maintainability and extensibility
+
+### 🧹 CODE QUALITY IMPROVEMENTS
+- **Redundant Code Cleanup**: Removed duplicate and unused code
+  - Eliminated redundant health.py file
+  - Consolidated health monitoring in common_routes.py
+  - Fixed import error handling with HAS_PSUTIL flag
+  - Clean blueprint registration in __init__.py
+
+### ✅ TESTING ENHANCEMENTS
+- **Comprehensive Health Check Tests**: 24 test cases with 96% success rate (23/24 passing)
+  - Database connectivity validation
+  - System endpoint testing
+  - Service health verification
+  - Error condition handling
+  - Graceful degradation testing
+
 ## [2025-09-20] - COMPLETE CLI FILE MANAGEMENT & ENHANCED OPENFIGI INTEGRATION
 
 ### 📁 NEW FILE MANAGEMENT CLI COMMANDS

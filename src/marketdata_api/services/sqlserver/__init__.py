@@ -1,3 +1,3 @@
 """SQL Server services."""
 
-__all__ = ['SqlServerInstrumentService']
+__all__ = ["SqlServerInstrumentService"]

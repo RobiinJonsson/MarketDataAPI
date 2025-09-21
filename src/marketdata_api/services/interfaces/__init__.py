@@ -1,3 +1,3 @@
 """Service base interfaces."""
 
-__all__ = ['InstrumentServiceInterface']
+__all__ = ["InstrumentServiceInterface"]

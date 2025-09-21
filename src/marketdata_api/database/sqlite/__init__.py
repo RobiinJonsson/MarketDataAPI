@@ -1,3 +1,3 @@
 """SQLite database implementation."""
 
-__all__ = ['SqliteDatabase']
+__all__ = ["SqliteDatabase"]

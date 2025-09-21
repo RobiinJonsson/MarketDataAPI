@@ -1,3 +1,3 @@
 """SQL Server models."""
 
-__all__ = ['SqlServerInstrument']
+__all__ = ["SqlServerInstrument"]

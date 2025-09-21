@@ -5,52 +5,62 @@ This module provides session management functionality using direct database
 configuration without the factory pattern.
 """
 
-from sqlalchemy.orm import Session, sessionmaker
+import logging
 from contextlib import contextmanager
 from typing import Generator
+
+from sqlalchemy.orm import Session, sessionmaker
+
 from ..config import DatabaseConfig
-import logging
 
 logger = logging.getLogger(__name__)
+
 
 def _get_session_maker():
     """Get session maker based on database configuration."""
     db_type = DatabaseConfig.get_database_type()
-    
-    if db_type == 'sqlite':
+
+    if db_type == "sqlite":
         from .sqlite.sqlite_database import SqliteDatabase
+
         db = SqliteDatabase()
-    elif db_type in ['sqlserver', 'azure_sql', 'mssql']:
+    elif db_type in ["sqlserver", "azure_sql", "mssql"]:
         from .sqlserver.sql_server_database import SqlServerDatabase
+
         db = SqlServerDatabase()
     else:
         raise ValueError(f"Unsupported database type: {db_type}")
-    
+
     return db.get_session_maker()
+
 
 def _get_engine():
     """Get engine based on database configuration."""
     db_type = DatabaseConfig.get_database_type()
-    
-    if db_type == 'sqlite':
+
+    if db_type == "sqlite":
         from .sqlite.sqlite_database import SqliteDatabase
+
         db = SqliteDatabase()
-    elif db_type in ['sqlserver', 'azure_sql', 'mssql']:
+    elif db_type in ["sqlserver", "azure_sql", "mssql"]:
         from .sqlserver.sql_server_database import SqlServerDatabase
+
         db = SqlServerDatabase()
     else:
         raise ValueError(f"Unsupported database type: {db_type}")
-    
+
     return db.get_engine()
 
-# Backward compatibility - expose SessionLocal 
+
+# Backward compatibility - expose SessionLocal
 def __getattr__(name):
     """Module-level attribute access for backward compatibility."""
-    if name == 'SessionLocal':
+    if name == "SessionLocal":
         return _get_session_maker()
-    elif name == 'engine':
+    elif name == "engine":
         return _get_engine()
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
 
 @contextmanager
 def get_session() -> Generator[Session, None, None]:
@@ -70,13 +80,14 @@ def get_session() -> Generator[Session, None, None]:
     finally:
         session.close()
 
+
 def get_session_with_expiration(expire_on_commit=False):
     """
     Get a SQLAlchemy session with custom expire_on_commit setting.
-    
+
     Args:
         expire_on_commit: If False, doesn't expire objects when committing, useful for detached objects.
-        
+
     Returns:
         A SQLAlchemy Session
     """

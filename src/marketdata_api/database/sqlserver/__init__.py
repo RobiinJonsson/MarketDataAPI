@@ -1,3 +1,3 @@
 """SQL Server database implementation."""
 
-__all__ = ['SqlServerDatabase']
+__all__ = ["SqlServerDatabase"]

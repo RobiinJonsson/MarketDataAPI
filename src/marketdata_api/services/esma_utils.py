@@ -1,46 +1,46 @@
-import hashlib
 import functools
+import hashlib
+import logging
 import os
 import re
-import requests
 import tempfile
-import zipfile
 import warnings
-import pandas as pd
 import xml.etree.ElementTree as ET
+import zipfile
 from collections import defaultdict, deque
-from bs4 import BeautifulSoup
-from tqdm import tqdm
-from pathlib import Path
 from dataclasses import dataclass
-from requests.models import Response
 from enum import Enum
-import logging
+from pathlib import Path
+
+import pandas as pd
+import requests
+from bs4 import BeautifulSoup
+from requests.models import Response
+from tqdm import tqdm
+
 from marketdata_api.config import esmaConfig
 
 
 class Utils:
-
     """
-    Utility class providing various helper methods for data processing, file handling, 
+    Utility class providing various helper methods for data processing, file handling,
     logging, and caching. It includes functions for hashing strings, managing directories,
     logging, parsing XML responses, and caching DataFrames.
 
-    This class is designed to work in symbiosis with EsmaDataLoader and  to simplify common tasks such as working with files, 
+    This class is designed to work in symbiosis with EsmaDataLoader and  to simplify common tasks such as working with files,
     handling data caching, and performing logging for operations related to data retrieval.
 
     """
-    
+
     # Add namespaces as class constant at the top of class
     NAMESPACES = {
-        'BizData': 'urn:iso:std:iso:20022:tech:xsd:head.003.001.01',
-        'AppHdr': 'urn:iso:std:iso:20022:tech:xsd:head.001.001.01',
-        'Document': 'urn:iso:std:iso:20022:tech:xsd:auth.017.001.02'
+        "BizData": "urn:iso:std:iso:20022:tech:xsd:head.003.001.01",
+        "AppHdr": "urn:iso:std:iso:20022:tech:xsd:head.001.001.01",
+        "Document": "urn:iso:std:iso:20022:tech:xsd:auth.017.001.02",
     }
 
     @staticmethod
     def _hash(string: str) -> str:
-        
         """
         Generate an MD5 hash from a string.
 
@@ -49,12 +49,12 @@ class Utils:
 
         Returns:
             str: The MD5 hash of the input string.
-        
+
         Example:
             >>> Utils._hash("my_string")
             'e99a18c428cb38d5f260853678922e03'
         """
-        
+
         h = hashlib.new("md5")
         h.update(string.encode("utf-8"))
         return h.hexdigest()
@@ -62,21 +62,24 @@ class Utils:
     @staticmethod
     @functools.lru_cache(maxsize=None)
     def _warning_cached_data(file: str):
-        
         """
         Warn about previously saved data being used and notify that an update can be triggered.
 
         Args:
             file (str): The file being used from the cache.
-        
+
         Example:
             >>> Utils._warning_cached_data("file_path.csv")
             "Previously saved data used: file_path.csv"
         """
         """Warn about previously saved data being used."""
-        
-        logger = Utils.set_logger('EsmaDataUtils')
-        logger.warning("Previously saved data used:\n{}\nSet update=True to get the most up-to-date data".format(file))
+
+        logger = Utils.set_logger("EsmaDataUtils")
+        logger.warning(
+            "Previously saved data used:\n{}\nSet update=True to get the most up-to-date data".format(
+                file
+            )
+        )
 
     @staticmethod
     @functools.lru_cache(maxsize=None)
@@ -86,7 +89,7 @@ class Utils:
         Now properly organized by file type.
         """
         downloads_folder = esmaConfig.downloads_path
-        
+
         if not downloads_folder.exists():
             downloads_folder.mkdir(parents=True)
 
@@ -106,32 +109,33 @@ class Utils:
         """
         Enhanced decorator to save and retrieve DataFrames with improved file organization.
         """
+
         def decorator(func):
             @functools.wraps(func)
             def wrapper(*args, **kwargs):
-                logger = Utils.set_logger('EsmaDataUtils')
-                
+                logger = Utils.set_logger("EsmaDataUtils")
+
                 # Determine file type and target directory based on URL and content
-                url = kwargs.get('url') or (args[0] if args else '')
+                url = kwargs.get("url") or (args[0] if args else "")
                 url_str = str(url).lower()
-                
+
                 # More comprehensive URL pattern matching
                 is_fitrs = (
-                    'fitrs' in url_str or 
-                    'transparency' in url_str or 
-                    'fulncr' in url_str or  # Non-equity transparency
-                    'fulecr' in url_str     # Equity transparency
+                    "fitrs" in url_str
+                    or "transparency" in url_str
+                    or "fulncr" in url_str  # Non-equity transparency
+                    or "fulecr" in url_str  # Equity transparency
                 )
                 is_firds = (
-                    'firds' in url_str or 
-                    'fulins' in url_str or  # Full instrument reference data
-                    'delvins' in url_str    # Delta instrument reference data
+                    "firds" in url_str
+                    or "fulins" in url_str  # Full instrument reference data
+                    or "delvins" in url_str  # Delta instrument reference data
                 )
                 # DVCAP (volume cap) files also go to FIRDS folder
-                is_dvcap = 'dvcap' in url_str or 'dvcres' in url_str
-                
+                is_dvcap = "dvcap" in url_str or "dvcres" in url_str
+
                 base_folder = Utils._create_folder(folder)
-                
+
                 if is_fitrs:
                     data_folder = base_folder / "fitrs"
                 elif is_firds or is_dvcap:
@@ -140,11 +144,15 @@ class Utils:
                     # Default to firds folder for other ESMA data
                     data_folder = base_folder / "firds"
 
-                non_update_save_args = [str(value) for key, value in kwargs.items() if key not in ["update"]]
-                string_file_arg = non_update_save_args + [func.__name__] + [str(arg) for arg in args]
+                non_update_save_args = [
+                    str(value) for key, value in kwargs.items() if key not in ["update"]
+                ]
+                string_file_arg = (
+                    non_update_save_args + [func.__name__] + [str(arg) for arg in args]
+                )
 
                 # Create meaningful filename based on URL if available
-                if url and ('download' in func.__name__.lower() or url.startswith('http')):
+                if url and ("download" in func.__name__.lower() or url.startswith("http")):
                     # Extract meaningful filename from URL
                     original_filename = Utils.extract_file_name_from_url(url)
                     if is_fitrs:
@@ -155,20 +163,22 @@ class Utils:
                         file_name = os.path.join(data_folder, f"{original_filename}_data.csv")
                 else:
                     # Use hash-based filename for other functions
-                    file_name = os.path.join(data_folder, Utils._hash("".join(string_file_arg)) + ".csv")
+                    file_name = os.path.join(
+                        data_folder, Utils._hash("".join(string_file_arg)) + ".csv"
+                    )
 
                 update = kwargs.get("update", False)
-                
+
                 if not os.path.exists(file_name) or update:
                     df = func(*args, **kwargs)
                     try:
                         # Save as CSV instead of pickle since file has .csv extension
-                        if file_name.endswith('.csv'):
-                            df.to_csv(file_name, index=False, encoding='utf-8')
+                        if file_name.endswith(".csv"):
+                            df.to_csv(file_name, index=False, encoding="utf-8")
                         else:
                             df.to_pickle(file_name)
                         logger.info(f"Data saved: {file_name}")
-                                    
+
                     except Exception as e:
                         warnings.warn(f"Error saving file: {file_name}\n{str(e)}")
                         logger.error(f"Error, file not saved: {file_name}\n{df}")
@@ -179,11 +189,11 @@ class Utils:
                 else:
                     try:
                         # Load file based on extension
-                        if file_name.endswith('.csv'):
-                            df = pd.read_csv(file_name, encoding='utf-8')
+                        if file_name.endswith(".csv"):
+                            df = pd.read_csv(file_name, encoding="utf-8")
                         else:
                             df = pd.read_pickle(file_name)
-                            
+
                         if "Unnamed: 0" in df.columns:
                             del df["Unnamed: 0"]
                     except Exception as e:
@@ -199,12 +209,13 @@ class Utils:
                         df = obj(df)
 
                 return df
+
             return wrapper
+
         return decorator
 
     @staticmethod
     def extract_file_name_from_url(url: str) -> str:
-        
         """
         Extract the file name from a URL.
 
@@ -219,7 +230,7 @@ class Utils:
             'file'
         """
 
-        file_name_raw = url.split('/')[len(url.split('/')) - 1]
+        file_name_raw = url.split("/")[len(url.split("/")) - 1]
         file_name = file_name_raw.split(".")[0]
         return file_name
 
@@ -230,8 +241,8 @@ class Utils:
         pattern_tag = r"\{[^}]*\}(\S+)"
 
         for elem in root.iter():
-            if (clean_tag := re.search(pattern_tag, elem.tag).group(1)) in ['Amt', 'Nb']:
-                elem.tag = '_'.join([parent_elem.tag, clean_tag])
+            if (clean_tag := re.search(pattern_tag, elem.tag).group(1)) in ["Amt", "Nb"]:
+                elem.tag = "_".join([parent_elem.tag, clean_tag])
             else:
                 elem.tag = clean_tag
 
@@ -241,11 +252,11 @@ class Utils:
     def process_tags(child: ET) -> dict:
         """Process XML tags and map values into a dictionary."""
         mini_tags = defaultdict(list)
-        list_additional_vals = [deque(range(2,101)) for _ in range(15)]
+        list_additional_vals = [deque(range(2, 101)) for _ in range(15)]
         mini_tags_list_map = defaultdict(int)
 
         for i in child.iter():
-            if str(i.text).strip() != '':
+            if str(i.text).strip() != "":
                 if i.tag not in mini_tags:
                     mini_tags[i.tag].append(i.text)
                 else:
@@ -253,7 +264,7 @@ class Utils:
                         mini_tags_list_map[i.tag] = len(mini_tags_list_map)
 
                     key_list_map = mini_tags_list_map[i.tag]
-                    key = '_'.join([i.tag, str(list_additional_vals[key_list_map].popleft())])
+                    key = "_".join([i.tag, str(list_additional_vals[key_list_map].popleft())])
                     mini_tags[key].append(i.text)
 
         return mini_tags
@@ -262,34 +273,33 @@ class Utils:
     def process_tags_firds(child: ET) -> dict:
         """Process XML tags by building complete paths for all fields."""
         mini_tags = defaultdict(list)
-        
+
         def process_element(elem, current_path=[]):
             """Recursively process elements and build path."""
             # Special case for ISIN ID field - always map to Id for consistency
-            if elem.tag == 'Id' and current_path and current_path[-1] == 'FinInstrmGnlAttrbts':
+            if elem.tag == "Id" and current_path and current_path[-1] == "FinInstrmGnlAttrbts":
                 if str(elem.text).strip():
-                    mini_tags['Id'].append(elem.text)
+                    mini_tags["Id"].append(elem.text)
                 return
-                
+
             path = current_path + [elem.tag]
-            
+
             # Store any non-empty value with its full path
-            if str(elem.text).strip() and str(elem.text).strip().lower() != 'nan':
-                column_name = '_'.join(path)
+            if str(elem.text).strip() and str(elem.text).strip().lower() != "nan":
+                column_name = "_".join(path)
                 mini_tags[column_name].append(elem.text)
-            
+
             # Process children
             for child_elem in elem:
                 process_element(child_elem, path)
-        
+
         # Start processing from root
         process_element(child)
-        
+
         return mini_tags
 
     @staticmethod
     def parse_request_to_df(request: Response) -> pd.DataFrame:
-        
         """
         Parse an XML response to a DataFrame.
 
@@ -303,27 +313,26 @@ class Utils:
             >>> df = Utils.parse_request_to_df(response)
         """
 
-        xml = BeautifulSoup(request.text, 'xml')
+        xml = BeautifulSoup(request.text, "xml")
         list_of_dicts = []
 
-        for doc in xml.find_all('doc'):
+        for doc in xml.find_all("doc"):
             record_dict = {}
 
             for element in doc.find_all():
-                name = element.get('name')  
-                if name:  
+                name = element.get("name")
+                if name:
                     record_dict[name] = element.text
 
             list_of_dicts.append(record_dict)
 
         data = pd.DataFrame.from_records(list_of_dicts)
-        
+
         return data
 
     @staticmethod
     @save_df()
     def download_and_parse_file(url: str, update: bool = False) -> pd.DataFrame:
-        
         """
         Download a file from a URL, extract its contents, and parse it into a DataFrame.
 
@@ -338,12 +347,12 @@ class Utils:
             >>> df = Utils.download_and_parse_file("http://example.com/file.zip")
         """
 
-        logger = Utils.set_logger('EsmaDataUtils')
+        logger = Utils.set_logger("EsmaDataUtils")
         logger.info(f"Downloading from URL: {url}")
-        
+
         file_name = Utils.extract_file_name_from_url(url)
         logger.info(f"Extracted file name: {file_name}")
-        
+
         r = requests.get(url)
         logger.info(f"Download status code: {r.status_code}")
 
@@ -362,7 +371,7 @@ class Utils:
                 with open(file_dwn, mode="wb") as file:
                     file.write(r.content)
                     logger.info(f"File written successfully, size: {len(r.content)} bytes")
-                
+
                 with zipfile.ZipFile(file_dwn, "r") as zip_ref:
                     logger.info(f"Zip contents: {zip_ref.namelist()}")
                     zip_ref.extractall(dataDir)
@@ -380,36 +389,36 @@ class Utils:
                 raise
 
         # First check for FIRDS format
-        if root.find('.//Document:RefData', Utils.NAMESPACES) is not None:
+        if root.find(".//Document:RefData", Utils.NAMESPACES) is not None:
             logger.info("Detected FIRDS format")
             Utils.clean_inner_tags_firds(root)
             logger.info("Cleaned inner tags for FIRDS")
-            root_list = list(root.iter('RefData'))
+            root_list = list(root.iter("RefData"))
             if not root_list:
                 logger.warning("No RefData found in FIRDS XML")
                 return pd.DataFrame()
             logger.info(f"Found {len(root_list)} records to process")
             list_dicts = []
-            for child in tqdm(root_list, desc='Parsing file ... ', position=0, leave=True):
+            for child in tqdm(root_list, desc="Parsing file ... ", position=0, leave=True):
                 list_dicts.append(Utils.process_tags_firds(child))
             df = pd.DataFrame.from_records(list_dicts)
-            
+
             # Clean the DataFrame:
             # 1. Convert lists to scalar values
             df = df.map(lambda x: x[0] if isinstance(x, list) else x)
-            
+
             # 2. Drop columns with all null values (includes np.nan, None, and empty strings)
-            df = df.replace(r'^\s*$', pd.NA, regex=True)  # Convert empty strings to NA
-            df = df.dropna(axis=1, how='all')  # Drop columns where all values are NA
-            
+            df = df.replace(r"^\s*$", pd.NA, regex=True)  # Convert empty strings to NA
+            df = df.dropna(axis=1, how="all")  # Drop columns where all values are NA
+
             # 3. Drop intermediate node columns (those with count = 0)
             null_counts = df.isnull().sum()
             empty_columns = null_counts[null_counts == len(df)].index
             df = df.drop(columns=empty_columns)
-            
+
             # 4. Clean up RefData prefix from column names
-            df.columns = df.columns.str.replace('^RefData_', '', regex=True)
-            
+            df.columns = df.columns.str.replace("^RefData_", "", regex=True)
+
             logger.info(f"Final DataFrame shape after cleaning: {df.shape}")
             if df.empty:
                 logger.warning("The DataFrame is empty after processing FIRDS XML.")
@@ -420,32 +429,32 @@ class Utils:
         Utils.clean_inner_tags(root)
         logger.info("Cleaned inner tags")
 
-        root_list = list(root.iter('NonEqtyTrnsprncyData'))
+        root_list = list(root.iter("NonEqtyTrnsprncyData"))
         if not root_list:
-            root_list = list(root.iter('EqtyTrnsprncyData'))
+            root_list = list(root.iter("EqtyTrnsprncyData"))
         if not root_list:
-            root_list = list(root.iter('VolCapRslt'))
-        
+            root_list = list(root.iter("VolCapRslt"))
+
         logger.info(f"Found {len(root_list)} records to process")
 
         list_dicts = []
-        for child in tqdm(root_list, desc='Parsing file ... ', position=0, leave=True):
+        for child in tqdm(root_list, desc="Parsing file ... ", position=0, leave=True):
             list_dicts.append(Utils.process_tags(child))
 
         df = pd.DataFrame.from_records(list_dicts)
         delivery_df = df.map(lambda x: x[0] if isinstance(x, list) else x)
         logger.info(f"Final DataFrame shape: {delivery_df.shape}")
         return delivery_df
-    
+
     @staticmethod
     def set_logger(name: str):
         """Set up a logger for the specified name."""
         logger = logging.getLogger(name)
-        
+
         # Only configure if the logger doesn't already have handlers
         if not logger.handlers:
             logger.setLevel(logging.DEBUG)
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
             console_handler = logging.StreamHandler()
             console_handler.setFormatter(formatter)
             logger.addHandler(console_handler)
@@ -460,24 +469,24 @@ class Utils:
 
         # Track parents and their children
         parent_sections = {
-            'FinInstrmGnlAttrbts': True,
-            'DerivInstrmAttrbts': True,
-            'TradgVnRltdAttrbts': True,
-            'TechAttrbts': True,
-            'PblctnPrd': True
+            "FinInstrmGnlAttrbts": True,
+            "DerivInstrmAttrbts": True,
+            "TradgVnRltdAttrbts": True,
+            "TechAttrbts": True,
+            "PblctnPrd": True,
         }
         current_parent = None
 
         for elem in root.iter():
             # Clean namespace
-            if (clean_tag := re.search(pattern_tag, elem.tag)):
+            if clean_tag := re.search(pattern_tag, elem.tag):
                 clean_tag = clean_tag.group(1)
                 # Handle parent sections
                 if clean_tag in parent_sections:
                     current_parent = clean_tag
                     # Remove numbered duplicates
-                    if '_' in clean_tag:
-                        base_tag = clean_tag.split('_')[0]
+                    if "_" in clean_tag:
+                        base_tag = clean_tag.split("_")[0]
                         if base_tag in parent_sections:
                             clean_tag = base_tag
                     elem.tag = clean_tag
@@ -494,30 +503,36 @@ class Utils:
 
 
 class Dataset(Enum):
-    FITRS = 'fitrs'
-    FIRDS = 'firds'
-    DVCAP = 'dvcap'
+    FITRS = "fitrs"
+    FIRDS = "firds"
+    DVCAP = "dvcap"
 
 
 class Cfi(Enum):
-    C = 'C'
-    D = 'D'
-    E = 'E'
-    F = 'F'
-    H = 'H'
-    I = 'I'
-    J = 'J'
-    O = 'O'
-    R = 'R'
-    S = 'S'
+    C = "C"
+    D = "D"
+    E = "E"
+    F = "F"
+    H = "H"
+    I = "I"
+    J = "J"
+    O = "O"
+    R = "R"
+    S = "S"
 
 
 @dataclass
 class QueryUrl:
 
-    ssr: str = ('https://registers.esma.europa.eu/solr/esma_registers_mifid_shsexs/select?'
-                'q=({{!parent%20which=%27type_s:parent%27}})&wt=json&indent=true&rows=150000&fq=(shs_countryCode:{country})')
-    mifid: str = ('https://registers.esma.europa.eu/solr/esma_registers_{db}_files/select?q=*'
-                  '&fq={date_column}:%5B{creation_date_from}T00:00:00Z+TO+{creation_date_to}T23:59:59Z%5D&wt=xml&indent=true&start=0&rows={limit}')
-    fca_firds: str =  ('https://api.data.fca.org.uk/fca_data_firds_files?q=((file_type:FULINS)'
-                       '%20AND%20(publication_date:[{creation_date_from}%20TO%20{creation_date_to}]))&from=0&size={limit}')
+    ssr: str = (
+        "https://registers.esma.europa.eu/solr/esma_registers_mifid_shsexs/select?"
+        "q=({{!parent%20which=%27type_s:parent%27}})&wt=json&indent=true&rows=150000&fq=(shs_countryCode:{country})"
+    )
+    mifid: str = (
+        "https://registers.esma.europa.eu/solr/esma_registers_{db}_files/select?q=*"
+        "&fq={date_column}:%5B{creation_date_from}T00:00:00Z+TO+{creation_date_to}T23:59:59Z%5D&wt=xml&indent=true&start=0&rows={limit}"
+    )
+    fca_firds: str = (
+        "https://api.data.fca.org.uk/fca_data_firds_files?q=((file_type:FULINS)"
+        "%20AND%20(publication_date:[{creation_date_from}%20TO%20{creation_date_to}]))&from=0&size={limit}"
+    )

@@ -1,13 +1,15 @@
-import os
-import yaml
 import logging
-from typing import Dict, Any, List, Optional, Type, Union, Tuple
-from pathlib import Path
+import os
 from dataclasses import dataclass
-from datetime import datetime, date
+from datetime import date, datetime
 from functools import lru_cache
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
+
+import yaml
 
 logger = logging.getLogger(__name__)
+
 
 @dataclass
 class SchemaField:
@@ -17,6 +19,7 @@ class SchemaField:
     required: bool
     description: str
     transformation: Optional[str] = None
+
 
 @dataclass
 class SchemaMapping:
@@ -28,6 +31,7 @@ class SchemaMapping:
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
+
 class SchemaMapper:
     def __init__(self):
         self.mappings: Dict[str, SchemaMapping] = {}
@@ -36,21 +40,21 @@ class SchemaMapper:
         self._version_history = {}  # Store version history
         self._dependents = {}  # Track schema dependencies
         self.load_mappings()
-        
+
     def _get_type_mapping(self):
         """Lazy load type mapping using direct imports"""
         if not self.type_mapping:
-            from ..models.sqlite.instrument import Instrument, Equity, Debt, Future
-            
+            from ..models.sqlite.instrument import Debt, Equity, Future, Instrument
+
             # Create type mapping based on available models
             self.type_mapping = {
                 "equity": Equity,
-                "debt": Debt, 
+                "debt": Debt,
                 "future": Future,
-                "base": Instrument
+                "base": Instrument,
             }
         return self.type_mapping
-    
+
     @lru_cache(maxsize=32)
     def get_schema_version(self, schema_name: str) -> Tuple[str, SchemaMapping]:
         """Get latest version of a schema"""
@@ -62,15 +66,15 @@ class SchemaMapper:
         """Get fields for a schema including inherited fields"""
         if schema_name not in self.mappings:
             raise ValueError(f"Unknown schema: {schema_name}")
-            
+
         return self._get_all_fields(schema_name)
-    
+
     def load_mappings(self) -> None:
         """Load all schema mappings from YAML files"""
         mapping_dir = Path(__file__).parent / "mappings"
         if not mapping_dir.exists():
             raise ValueError(f"Schema mapping directory not found: {mapping_dir}")
-            
+
         loaded = {}
         # Load base schema first
         base_path = mapping_dir / "base.yaml"
@@ -80,17 +84,15 @@ class SchemaMapper:
             self._version_history["base"] = {
                 loaded["base"].version: self._schema_to_dict(loaded["base"])
             }
-            
+
         # Load other schemas
         for file in mapping_dir.glob("*.yaml"):
             if file.stem != "base":
                 schema = self._load_schema_file(file)
                 loaded[file.stem] = schema
                 # Initialize version history for each schema
-                self._version_history[file.stem] = {
-                    schema.version: self._schema_to_dict(schema)
-                }
-                
+                self._version_history[file.stem] = {schema.version: self._schema_to_dict(schema)}
+
         self.mappings = loaded
 
     def _schema_to_dict(self, schema: SchemaMapping) -> Dict[str, Any]:
@@ -102,7 +104,7 @@ class SchemaMapper:
             "fields": [vars(f) for f in schema.fields],
             "extends": schema.extends,
             "created_at": schema.created_at,
-            "updated_at": schema.updated_at
+            "updated_at": schema.updated_at,
         }
 
     def _load_schema_file(self, path: Path) -> SchemaMapping:
@@ -118,13 +120,15 @@ class SchemaMapper:
                     fields=fields,
                     extends=data.get("extends"),
                     created_at=data.get("created_at"),
-                    updated_at=data.get("updated_at")
+                    updated_at=data.get("updated_at"),
                 )
             except (KeyError, TypeError) as e:
                 logger.error(f"Error loading schema from {path}: {e}")
                 raise ValueError(f"Invalid schema file: {path}")
 
-    def map_to_schema(self, instrument: Union[Any, Dict[str, Any]], schema_name: str) -> Dict[str, Any]:
+    def map_to_schema(
+        self, instrument: Union[Any, Dict[str, Any]], schema_name: str
+    ) -> Dict[str, Any]:
         """Map instrument data to requested schema format"""
         if schema_name not in self.mappings:
             raise ValueError(f"Unknown schema: {schema_name}")
@@ -140,20 +144,20 @@ class SchemaMapper:
         mapping = self.mappings[schema_name]
         result = {}
         fields = self._get_all_fields(schema_name)
-        
+
         logger.debug(f"Mapping data to schema {schema_name}")
         logger.debug(f"Available data keys: {list(data.keys())}")
         logger.debug(f"Schema fields: {[field.name for field in fields]}")
-        
+
         for field in fields:
             try:
                 value = data.get(field.source)
                 logger.debug(f"Field {field.name} (source: {field.source}) = {value}")
-                
+
                 if value is not None and field.transformation:
                     value = self._apply_transformation(value, field.transformation)
                     logger.debug(f"After transformation: {value}")
-                    
+
                 if value is not None or field.required:
                     result[field.name] = value
             except Exception as e:
@@ -167,29 +171,36 @@ class SchemaMapper:
     def _map_model_to_schema(self, instrument: Any, schema_name: str) -> Dict[str, Any]:
         """Map model instance to schema format"""
         expected_type = self._get_type_mapping().get(schema_name)
-        
+
         # Create a dictionary from the instrument data
         data = {}
-        
+
         # First add all base instrument attributes
         for key, value in instrument.__dict__.items():
-            if not key.startswith('_'):  # Skip SQLAlchemy internal attributes
+            if not key.startswith("_"):  # Skip SQLAlchemy internal attributes
                 data[key] = value
-                
+
         # For specific instrument types, we need to fully load their attributes
-        instrument_type = getattr(instrument, 'type', '').lower()
-        
+        instrument_type = getattr(instrument, "type", "").lower()
+
         # Debug the type and expected type
         logger.debug(f"Mapping instrument of type {instrument_type} to schema {schema_name}")
         logger.debug(f"Expected type: {expected_type.__name__ if expected_type else 'None'}")
-        
+
         # Handle Future type specially - we need to get all the future-specific attributes
-        if instrument_type == 'future' and hasattr(instrument, 'expiration_date'):
+        if instrument_type == "future" and hasattr(instrument, "expiration_date"):
             logger.debug("Processing Future instrument attributes")
             # Add future-specific attributes
-            for attr in ['expiration_date', 'final_settlement_date', 'delivery_type', 
-                        'settlement_method', 'contract_size', 'contract_unit', 
-                        'price_multiplier', 'settlement_currency']:
+            for attr in [
+                "expiration_date",
+                "final_settlement_date",
+                "delivery_type",
+                "settlement_method",
+                "contract_size",
+                "contract_unit",
+                "price_multiplier",
+                "settlement_currency",
+            ]:
                 try:
                     # Try to get attribute directly from instrument
                     value = getattr(instrument, attr, None)
@@ -198,25 +209,25 @@ class SchemaMapper:
                         logger.debug(f"Found attribute {attr} = {value}")
                 except Exception as e:
                     logger.warning(f"Error getting future attribute {attr}: {e}")
-        
+
         # Map the collected data using the schema
         return self._map_dict_to_schema(data, schema_name)
-    
+
     def _get_all_fields(self, schema_name: str, visited=None) -> List[SchemaField]:
         """Get all fields including from extended schemas"""
         if visited is None:
             visited = set()
-        
+
         if schema_name in visited:
             return []
-            
+
         visited.add(schema_name)
         mapping = self.mappings[schema_name]
         fields = mapping.fields.copy()
-        
+
         if mapping.extends:
             fields.extend(self._get_all_fields(mapping.extends, visited))
-            
+
         return fields
 
     def _get_field_value(self, instrument: Any, field: SchemaField) -> Any:
@@ -234,23 +245,23 @@ class SchemaMapper:
         try:
             if not transformation:
                 return value
-                
+
             if transformation.startswith("round"):
                 decimals = int(transformation.split("(")[1].split(")")[0])
                 return round(float(value), decimals)
-                
+
             if transformation.startswith("format"):
                 format_str = transformation.split("(")[1].split(")")[0]
                 if isinstance(value, (datetime, date)):
                     return value.strftime(format_str)
                 return value
-                
+
             if transformation == "upper":
                 return str(value).upper()
-                
+
             if transformation == "lower":
                 return str(value).lower()
-                
+
             logger.warning(f"Unknown transformation: {transformation}")
             return value
         except Exception as e:
@@ -262,10 +273,10 @@ class SchemaMapper:
         try:
             if field.required and value is None:
                 return False
-                
+
             if value is None:
                 return True
-                
+
             if field.type == "number":
                 return isinstance(value, (int, float))
             elif field.type == "date":
@@ -274,7 +285,7 @@ class SchemaMapper:
                 return isinstance(value, str)
             elif field.type == "boolean":
                 return isinstance(value, bool)
-                
+
             return True
         except Exception as e:
             logger.error(f"Validation error for field {field.name}: {str(e)}")
@@ -283,49 +294,48 @@ class SchemaMapper:
     def output_as_xml(self, data: Dict[str, Any]) -> str:
         """Convert mapped data to XML format"""
         from dicttoxml import dicttoxml
-        xml_bytes = dicttoxml(data, custom_root='instrument', attr_type=False)
-        return xml_bytes.decode('utf-8')  # Convert bytes to string
+
+        xml_bytes = dicttoxml(data, custom_root="instrument", attr_type=False)
+        return xml_bytes.decode("utf-8")  # Convert bytes to string
 
     def _save_schema_to_file(self, schema_data: Dict[str, Any], version: str) -> None:
         """Save schema to filesystem with version"""
-        name = schema_data['name']
+        name = schema_data["name"]
         mapping_dir = Path(__file__).parent / "mappings"
         mapping_dir.mkdir(exist_ok=True)  # Ensure directory exists
-        
+
         # Save current version
         schema_path = mapping_dir / f"{name}.yaml"
-        with open(schema_path, 'w') as f:
+        with open(schema_path, "w") as f:
             yaml.dump(schema_data, f, sort_keys=False, default_flow_style=False)
-            
+
         # Save versioned copy
         versions_dir = mapping_dir / "versions" / name
         versions_dir.mkdir(parents=True, exist_ok=True)
         version_path = versions_dir / f"{name}_v{version}.yaml"
-        with open(version_path, 'w') as f:
+        with open(version_path, "w") as f:
             yaml.dump(schema_data, f, sort_keys=False, default_flow_style=False)
 
     def add_schema(self, schema_data: Dict[str, Any]) -> None:
         """Add new schema to registry"""
-        name = schema_data.get('name')
+        name = schema_data.get("name")
         if not name:
             raise ValueError("Schema must have a name")
-            
+
         # Store initial version
-        schema_data['version'] = '1.0'
-        schema_data['created_at'] = datetime.now().isoformat()
-        
+        schema_data["version"] = "1.0"
+        schema_data["created_at"] = datetime.now().isoformat()
+
         # Save to filesystem with versioning
-        self._save_schema_to_file(schema_data, '1.0')
-            
+        self._save_schema_to_file(schema_data, "1.0")
+
         # Add to memory
         self.mappings[name] = SchemaMapping(**schema_data)
-        self._version_history[name] = {
-            '1.0': schema_data.copy()
-        }
-        
+        self._version_history[name] = {"1.0": schema_data.copy()}
+
         # Track dependencies
-        if schema_data.get('extends'):
-            parent = schema_data['extends']
+        if schema_data.get("extends"):
+            parent = schema_data["extends"]
             if parent not in self._dependents:
                 self._dependents[parent] = set()
             self._dependents[parent].add(name)
@@ -334,40 +344,40 @@ class SchemaMapper:
         """Update existing schema with version increment"""
         if name not in self.mappings:
             raise ValueError(f"Schema '{name}' not found")
-            
+
         try:
             logger.info(f"Updating schema {name}")
-            
+
             # Initialize version history if it doesn't exist
             if name not in self._version_history:
                 self._version_history[name] = {
                     self.mappings[name].version: self.mappings[name].__dict__
                 }
-            
+
             # Get current version and increment
             current = self.mappings[name].version
-            major, minor = current.split('.')
+            major, minor = current.split(".")
             new_version = f"{major}.{int(minor) + 1}"
             logger.info(f"Incrementing version from {current} to {new_version}")
-            
+
             # Update metadata but preserve created_at if it exists
-            schema_data['version'] = new_version
-            schema_data['updated_at'] = datetime.now().isoformat()
-            if hasattr(self.mappings[name], 'created_at'):
-                schema_data['created_at'] = self.mappings[name].created_at
-            
+            schema_data["version"] = new_version
+            schema_data["updated_at"] = datetime.now().isoformat()
+            if hasattr(self.mappings[name], "created_at"):
+                schema_data["created_at"] = self.mappings[name].created_at
+
             try:
                 # Convert raw field dicts to SchemaField objects
                 fields = []
-                for field_data in schema_data.get('fields', []):
+                for field_data in schema_data.get("fields", []):
                     logger.debug(f"Processing field: {field_data}")
                     field = SchemaField(
-                        name=field_data['name'],
-                        source=field_data['source'],
-                        type=field_data['type'],
-                        required=field_data['required'],
-                        description=field_data['description'],
-                        transformation=field_data.get('transformation')
+                        name=field_data["name"],
+                        source=field_data["source"],
+                        type=field_data["type"],
+                        required=field_data["required"],
+                        description=field_data["description"],
+                        transformation=field_data.get("transformation"),
                     )
                     fields.append(field)
             except Exception as field_error:
@@ -378,12 +388,12 @@ class SchemaMapper:
                 # Create new schema mapping
                 new_mapping = SchemaMapping(
                     version=new_version,
-                    name=schema_data['name'],
-                    description=schema_data['description'],
+                    name=schema_data["name"],
+                    description=schema_data["description"],
                     fields=fields,
-                    extends=schema_data.get('extends'),
-                    created_at=schema_data.get('created_at'),
-                    updated_at=schema_data['updated_at']
+                    extends=schema_data.get("extends"),
+                    created_at=schema_data.get("created_at"),
+                    updated_at=schema_data["updated_at"],
                 )
                 logger.info(f"Created new mapping object: {new_mapping}")
             except Exception as mapping_error:
@@ -392,7 +402,7 @@ class SchemaMapper:
 
             # Save to filesystem
             self._save_schema_to_file(schema_data, new_version)
-            
+
             # Update memory storage
             self.mappings[name] = new_mapping
             self._version_history[name][new_version] = schema_data
@@ -412,19 +422,21 @@ class SchemaMapper:
         """Get version history for a schema"""
         if name not in self._version_history:
             return []
-        
+
         versions = []
         for version, schema in self._version_history[name].items():
-            versions.append({
-                'version': version,
-                'timestamp': schema.get('updated_at', schema.get('created_at', '')),
-                'description': schema.get('description', ''),
-                'extends': schema.get('extends'),
-                'fields_count': len(schema.get('fields', [])),
-                'created_at': schema.get('created_at', ''),
-                'updated_at': schema.get('updated_at', '')
-            })
-        return sorted(versions, key=lambda x: x['version'])
+            versions.append(
+                {
+                    "version": version,
+                    "timestamp": schema.get("updated_at", schema.get("created_at", "")),
+                    "description": schema.get("description", ""),
+                    "extends": schema.get("extends"),
+                    "fields_count": len(schema.get("fields", [])),
+                    "created_at": schema.get("created_at", ""),
+                    "updated_at": schema.get("updated_at", ""),
+                }
+            )
+        return sorted(versions, key=lambda x: x["version"])
 
     def has_dependents(self, name: str) -> bool:
         """Check if schema has dependent schemas"""
@@ -434,18 +446,18 @@ class SchemaMapper:
         """Delete schema from registry"""
         if name not in self.mappings:
             raise ValueError(f"Schema {name} not found")
-            
+
         # Check dependencies first
         if self.has_dependents(name):
             raise ValueError(f"Cannot delete schema {name}: has dependent schemas")
-            
+
         # Get parent info before deletion
         schema = self.mappings[name]
         parent = schema.extends
-            
+
         # Remove from main registry
         del self.mappings[name]
-        
+
         # Update dependencies
         if parent and parent in self._dependents:
             self._dependents[parent].remove(name)
