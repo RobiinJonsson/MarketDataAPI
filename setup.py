@@ -51,14 +51,15 @@ def read_requirements():
 
 setup(
     name="marketdata-api",
-    version="1.0.0",
+    version="1.0.1",
     author="Robin Jonsson",
     author_email="robin_j88@hotmail.com",  # Update with your email
     description="Professional Financial Market Data Platform with CLI and API",
     long_description=read_file("README.md"),
     long_description_content_type="text/markdown",
     url="https://github.com/RobiinJonsson/MarketDataAPI",  # Update with your repo URL
-    packages=find_packages(),
+    packages=find_packages(where="src"),
+    package_dir={"": "src"},
     include_package_data=True,
     zip_safe=False,
     classifiers=[

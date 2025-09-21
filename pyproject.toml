@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "marketdata-api"
-version = "1.0.0"
+version = "1.0.1"
 description = "Professional Financial Market Data Platform with CLI and API"
 authors = [
     {name = "Robin Jonsson", email = "robin@example.com"}
@@ -78,6 +78,7 @@ Issues = "https://github.com/RobiinJonsson/MarketDataAPI/issues"
 Documentation = "https://github.com/RobiinJonsson/MarketDataAPI/docs"
 
 [tool.setuptools.packages.find]
+where = ["src"]
 include = ["marketdata_api*"]
 
 [tool.setuptools.package-data]

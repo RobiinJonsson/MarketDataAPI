@@ -38,7 +38,7 @@ class Config:
 class esmaConfig:
     # Use environment variables with fallback defaults
     # Updated to point to the actual downloads folder structure
-    downloads_path = Path(os.getenv("DOWNLOADS_PATH", r"C:\Users\robin\Projects\MarketDataAPI\downloads"))
+    downloads_path = Path(os.getenv("DOWNLOADS_PATH", r"C:\Users\robin\Projects\MarketDataAPI\data\downloads"))
     firds_path= downloads_path / "firds"  # For FIRDS files
     fitrs_path = downloads_path / "fitrs"  # For FITRS files
     

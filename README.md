@@ -1,6 +1,16 @@
 # MarketDataAPI
 
-A comprehensive market data management system with CFI-based instrument classification, integrating FIRDS, OpenFIGI, ISO10383 (MIC) and GLEIF data sources.
+A comprehensive market data management system with CFI-based instrument classification, integrating FIRDS, OpenFIGI, ISO10383 (MIC) and GLEIF # List instruments with filtering and rich tables
+deployment\mapi.bat instruments list --limit 10 --type equity --currency USD
+
+# Get detailed instrument information
+deployment\mapi.bat instruments get SE0000120784
+
+# Create instrument from FIRDS data
+deployment\mapi.bat instruments create US0378331005 equity
+
+# Show venues for instrument  
+deployment\mapi.bat instruments venues SE0000120784s.
 
 ## 🎯 Key Features
 
@@ -94,12 +104,12 @@ After installation, test the CLI:
 
 ```bash
 # Windows: Use batch wrapper (recommended)
-.\mapi.bat --help
-.\mapi.bat stats
+deployment\mapi.bat --help
+deployment\mapi.bat stats
 
-# Direct Python execution (cross-platform)
-python marketdata_cli.py --help
-python marketdata_cli.py stats
+# Direct Python module execution (cross-platform)
+python -m marketdata_api.cli --help
+python -m marketdata_api.cli stats
 
 # Package installation (if entry points work)
 marketdata --help  # or mapi --help
@@ -136,15 +146,15 @@ The MarketDataAPI includes a modern, professional CLI built with Click framework
 pip install -e .
 # This creates 'marketdata' and 'mapi' commands globally
 
-# Option 2: Direct execution (no installation needed)
-python marketdata_cli.py [command]
+# Option 2: Direct module execution (no installation needed)
+python -m marketdata_api.cli [command]
 
 # Option 3: Windows batch wrapper (recommended for Windows)
-.\mapi.bat [command]
+deployment\mapi.bat [command]
 
 # Verify installation
-.\mapi.bat --help  # Should show beautiful CLI help
-.\mapi.bat stats   # Quick test with database statistics
+deployment\mapi.bat --help  # Should show beautiful CLI help
+deployment\mapi.bat stats   # Quick test with database statistics
 ```
 
 **Note**: All CLI dependencies are included in `requirements.txt`, so running `pip install -r requirements.txt` installs everything needed for the CLI to work.
@@ -154,7 +164,7 @@ python marketdata_cli.py [command]
 **📊 Database & Statistics**
 ```bash
 # Database overview with rich formatting
-mapi.bat stats
+deployment\mapi.bat stats
 ```
 
 **🏛️ Instrument Management**
@@ -175,10 +185,10 @@ mapi.bat instruments venues SE0000120784
 **🔍 Comprehensive CFI Analysis**
 ```bash
 # Enhanced CFI decoding with all classification levels
-mapi.bat cfi ESVUFR  # Equity example
-mapi.bat cfi DBFUFR  # Debt example  
-mapi.bat cfi FFCXXR  # Derivative example
-mapi.bat cfi CSIUFR  # Collective investment example
+deployment\mapi.bat cfi ESVUFR  # Equity example
+deployment\mapi.bat cfi DBFUFR  # Debt example  
+deployment\mapi.bat cfi FFCXXR  # Derivative example
+deployment\mapi.bat cfi CSIUFR  # Collective investment example
 
 # Output includes:
 # - Classification Levels (Category, Group, Attributes)
@@ -190,25 +200,25 @@ mapi.bat cfi CSIUFR  # Collective investment example
 **🆔 Market Identification Codes (MIC)**
 ```bash
 # List MICs with country filtering
-mapi.bat mic list --country US --limit 10
+deployment\mapi.bat mic list --country US --limit 10
 
 # Get detailed MIC information
-mapi.bat mic get XNYS
+deployment\mapi.bat mic get XNYS
 
 # Real-time ISO registry lookup
-mapi.bat mic remote lookup XLON
+deployment\mapi.bat mic remote lookup XLON
 ```
 
 **🔒 Transparency & Legal Entities**
 ```bash
 # List transparency calculations with pagination
-mapi.bat transparency list --limit 5 --offset 0
+deployment\mapi.bat transparency list --limit 5 --offset 0
 
 # Get detailed transparency calculation
-mapi.bat transparency get [transparency_id]
+deployment\mapi.bat transparency get [transparency_id]
 
 # Legal entity lookup
-mapi.bat entities get [LEI_CODE]
+deployment\mapi.bat entities get [LEI_CODE]
 ```
 
 #### Rich Terminal Output
@@ -341,17 +351,17 @@ MarketDataAPI/
 │   ├── database/        # Database configuration
 │   ├── config/          # Configuration management
 │   └── tests/           # Test suite
-├── downloads/           # Downloaded ESMA files
-│   ├── firds/          # FIRDS files (all 10 types: C,D,E,F,H,I,J,O,R,S)
-│   └── fitrs/          # FITRS files (ECR/NCR pattern support)
+├── data/
+│   ├── downloads/       # Downloaded ESMA files
+│   │   ├── firds/      # FIRDS files (all 10 types: C,D,E,F,H,I,J,O,R,S)
+│   │   └── fitrs/      # FITRS files (ECR/NCR pattern support)
+│   └── uploads/        # Uploaded files
 ├── frontend-modern/     # Modern frontend with CFI validation
 │   ├── src/
 │   │   ├── admin.ts    # CFI-enabled admin interface
 │   │   └── utils/api.ts # CFI validation API calls
 │   ├── admin.html      # Dynamic instrument type loading
 │   └── package.json    # Modern build tooling
-├── marketdata_cli.py    # Professional CLI with Click framework & Rich formatting
-├── mapi.bat            # Windows CLI wrapper script
 ├── setup.py            # Package installation with CLI entry points
 ├── scripts/            # Utility scripts
 │   ├── generate_docs.py # OpenAPI documentation generator

@@ -7,8 +7,8 @@ import os
 
 def create_app():
     app = Flask(__name__,
-                template_folder="../frontend/templates",
-                static_folder="../frontend/static")
+                template_folder="../../frontend/templates",
+                static_folder="../../frontend/static")
     app.config["ENV"] = FLASK_ENV
     app.config["ROOT_PATH"] = Config.ROOT_PATH
 
@@ -16,8 +16,9 @@ def create_app():
     CORS(app, origins=["http://localhost:3000", "http://127.0.0.1:3000"])
 
     # Set up logging and register cleanup
-    if not os.path.exists('logs'):
-        os.mkdir('logs')
+    logs_dir = os.path.join(Config.ROOT_PATH, 'logs')
+    if not os.path.exists(logs_dir):
+        os.makedirs(logs_dir)
     
     formatter = logging.Formatter(
         '[%(asctime)s] %(levelname)s in %(module)s: %(message)s'
@@ -25,7 +26,7 @@ def create_app():
 
     # Simple file handler without rotation to avoid numbered backups
     debug_handler = logging.FileHandler(
-        'logs/debug.log',
+        os.path.join(logs_dir, 'debug.log'),
         mode='a',  # Append mode
         encoding='utf-8'
     )

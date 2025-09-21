@@ -21,7 +21,7 @@ from marketdata_api.models.sqlite.market_identification_code import MarketIdenti
 
 # Configuration
 API_BASE_URL = "http://localhost:5000/api/v1"
-CSV_PATH = "downloads/ISO10383_MIC.csv"
+CSV_PATH = "data/downloads/ISO10383_MIC.csv"
 
 def test_database_connection():
     """Test database connection and MIC table existence."""

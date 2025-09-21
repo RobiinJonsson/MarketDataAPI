@@ -100,8 +100,8 @@ FLASK_DEBUG=false
 SECRET_KEY=your-secret-key-here
 
 # File Management
-FIRDS_PATH=./downloads/firds
-FITRS_PATH=./downloads/fitrs
+FIRDS_PATH=./data/downloads/firds
+FITRS_PATH=./data/downloads/fitrs
 RETENTION_DAYS=30
 
 # API Keys (if needed)
@@ -263,7 +263,7 @@ alembic upgrade head
 ```bash
 # Fix permissions
 chmod +x install.sh
-chmod +x mapi.bat
+chmod +x deployment/mapi.bat
 sudo chown -R $USER:$USER ./data ./logs ./downloads
 ```
 

@@ -227,8 +227,8 @@ Error responses include detailed error messages:
 ## File Storage Structure
 
 Downloaded files are stored in:
-- FIRDS files: `downloads/firds/`
-- FITRS files: `downloads/fitrs/`
+- FIRDS files: `data/downloads/firds/`
+- FITRS files: `data/downloads/fitrs/`
 
 Files are named with meaningful names like:
 - `FULINS_20240115_E_1of1_firds_data.csv`

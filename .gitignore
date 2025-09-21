@@ -20,7 +20,8 @@ ENV/
 
 # Logs and local dev files
 *.log
-downloads/
+data/downloads/
+data/uploads/
 
 # OS files
 .DS_Store

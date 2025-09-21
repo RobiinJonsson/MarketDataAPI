@@ -171,7 +171,7 @@ class DatabaseBackupManager:
 
 def main():
     parser = argparse.ArgumentParser(description="Database Backup Manager")
-    parser.add_argument('--db-path', default='marketdata_api/database/marketdata.db', help='Database file path')
+    parser.add_argument('--db-path', default='src/marketdata_api/database/marketdata.db', help='Database file path')
     parser.add_argument('--backup-dir', default='database_backups', help='Backup directory')
     
     subparsers = parser.add_subparsers(dest='command', help='Available commands')

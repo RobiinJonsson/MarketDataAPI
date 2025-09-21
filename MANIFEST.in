@@ -3,13 +3,21 @@ include README.md
 include LICENSE
 include CHANGELOG.md
 include requirements.txt
-include alembic.ini
-include marketdata_cli.py
-include mapi.bat
 
-# Include configuration files
-recursive-include marketdata_api/config *.py *.yaml *.json
-recursive-include marketdata_api/schema *.py *.json
+# Configuration files
+include config/alembic.ini
+include config/pytest.ini
+include config/.env.example
+
+# Deployment files
+include deployment/mapi.bat
+include deployment/install.bat
+include deployment/install.sh
+include deployment/Dockerfile
+include deployment/docker-compose.yml
+
+# Include package source
+recursive-include src/marketdata_api *.py *.yaml *.json
 
 # Include alembic migrations
 recursive-include alembic *.py *.mako

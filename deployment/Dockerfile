@@ -48,11 +48,9 @@ CMD ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=5000"]
 FROM base as production
 
 # Copy only necessary files
-COPY marketdata_api/ ./marketdata_api/
-COPY marketdata_cli.py .
-COPY alembic/ ./alembic/
-COPY alembic.ini .
-COPY mapi.bat .
+COPY src/marketdata_api/ ./src/marketdata_api/
+COPY config/alembic.ini ./config/
+COPY deployment/mapi.bat ./
 
 # Install package
 RUN pip install .

@@ -268,7 +268,7 @@ The unified transparency calculation model with JSON storage for flexible data r
 ### Prerequisites
 
 1. **FIRDS Reference Data**: The ISIN must exist in the instruments table
-2. **FITRS Files**: Relevant FITRS files must be available in the downloads/fitrs directory
+2. **FITRS Files**: Relevant FITRS files must be available in the data/downloads/fitrs directory
 3. **API Authentication**: Valid API key required
 
 ### Workflow

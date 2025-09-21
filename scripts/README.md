@@ -2,7 +2,7 @@
 
 This directory contains utility and analysis scripts for the MarketDataAPI project. Each script serves a specific purpose in maintaining, analyzing, or operating the system.
 
-**Note**: The main CLI has been moved to `marketdata_cli.py` in the project root with modern Click framework and Rich formatting. Use `mapi.bat [command]` or `python marketdata_cli.py [command]` for interactive operations.
+**Note**: The main CLI has been moved to `src/marketdata_api/cli.py` with modern Click framework and Rich formatting. Use `deployment\mapi.bat [command]` or `python -m marketdata_api.cli [command]` for interactive operations.
 
 ## Core Operational Scripts
 

@@ -23,9 +23,8 @@ pause
 
 REM Clean previous builds
 echo Cleaning previous builds...
-if exist dist rmdir /s /q dist
 if exist build rmdir /s /q build
-if exist *.egg-info rmdir /s /q *.egg-info
+if exist src\*.egg-info rmdir /s /q src\*.egg-info
 
 REM Build new package
 echo Building package...

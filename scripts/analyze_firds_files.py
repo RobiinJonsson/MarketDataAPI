@@ -9,7 +9,7 @@ FIRDS = Financial Instruments Reference Data System
 Contains reference data for instruments (C,D,E,F,H,I,J,S,R,O types)
 
 This script will:
-1. Read all FIRDS CSV files in downloads/firds/
+1. Read all FIRDS CSV files in data/downloads/firds/
 2. Extract column names and first 5 rows from each file
 3. Identify patterns and differences between instrument types
 4. Generate a comprehensive markdown report for model design decisions
@@ -323,8 +323,8 @@ def main():
     """Main execution function."""
     
     # Configuration
-    firds_dir = r"c:\Users\robin\Projects\MarketDataAPI\downloads\firds"
-    output_file = r"c:\Users\robin\Projects\MarketDataAPI\docs\firds_analysis_report.md"
+    firds_dir = r"data\downloads\firds"
+    output_file = r"docs\firds_analysis_report.md"
     
     try:
         print("🔍 Starting FIRDS File Analysis...")

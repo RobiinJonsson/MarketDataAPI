@@ -11,6 +11,7 @@ import uuid
 import logging
 import pandas as pd
 import time
+import os
 from typing import Dict, Any, Optional, List, Union
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
@@ -18,6 +19,7 @@ from sqlalchemy import and_, or_
 from ...database.session import get_session, SessionLocal
 from ...models.sqlite.transparency import TransparencyCalculation, TransparencyThreshold
 from ...models.sqlite.instrument import Instrument
+from ...config import Config
 from datetime import datetime, UTC, date
 from ..esma_data_loader import EsmaDataLoader
 from ...config import esmaConfig
@@ -415,7 +417,7 @@ class TransparencyService(TransparencyServiceInterface):
         import os
         import pandas as pd
         
-        fitrs_directory = "c:/Users/robin/Projects/MarketDataAPI/downloads/fitrs"
+        fitrs_directory = os.path.join(Config.ROOT_PATH, "data", "downloads", "fitrs")
         created_calculations = []
         
         if not os.path.exists(fitrs_directory):
