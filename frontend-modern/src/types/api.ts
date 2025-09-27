@@ -6,6 +6,15 @@ export interface ApiResponse<T> {
   message?: string;
 }
 
+// Comprehensive Instrument Data
+export interface ComprehensiveInstrumentData {
+  instrument: any;
+  transparency: any[];
+  venues: any[];
+  lei_data?: any;
+  relationships?: any;
+}
+
 // Instrument Types
 export interface Instrument {
   id: string;

@@ -14,6 +14,9 @@ pushd "%PROJECT_ROOT%"
 REM Set PYTHONPATH to include src directory for development
 set "PYTHONPATH=%PROJECT_ROOT%\src;%PYTHONPATH%"
 
+REM Set database path to ensure CLI works from any directory
+set "SQLITE_DB_PATH=%PROJECT_ROOT%\src\marketdata_api\database\marketdata.db"
+
 REM Run the CLI using the module entry point
 python -m marketdata_api.cli %*
 

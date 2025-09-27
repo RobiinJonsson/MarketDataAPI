@@ -144,48 +144,10 @@ def create_legal_entity_resources(api, models):
                         },
                     }, HTTPStatus.NOT_FOUND
 
-                # Build detailed response
-                result = {
-                    "lei": entity.lei,
-                    "name": entity.name,
-                    "jurisdiction": entity.jurisdiction,
-                    "legal_form": entity.legal_form,
-                    "status": entity.status,
-                    "address": (
-                        {
-                            "first_address_line": entity.first_address_line,
-                            "additional_address_line": entity.additional_address_line,
-                            "city": entity.city,
-                            "region": entity.region,
-                            "country": entity.country,
-                            "postal_code": entity.postal_code,
-                        }
-                        if hasattr(entity, "first_address_line")
-                        else None
-                    ),
-                    "registration": (
-                        {
-                            "initial_registration_date": (
-                                entity.initial_registration_date.isoformat()
-                                if entity.initial_registration_date
-                                else None
-                            ),
-                            "last_update_date": (
-                                entity.last_update_date.isoformat()
-                                if entity.last_update_date
-                                else None
-                            ),
-                            "registration_status": entity.registration_status,
-                            "next_renewal_date": (
-                                entity.next_renewal_date.isoformat()
-                                if entity.next_renewal_date
-                                else None
-                            ),
-                        }
-                        if hasattr(entity, "initial_registration_date")
-                        else None
-                    ),
-                }
+                # Use the model's comprehensive API response method
+                result = entity.to_api_response(
+                    include_relationships=False, include_addresses=True, include_registration=True
+                )
 
                 session.close()
 

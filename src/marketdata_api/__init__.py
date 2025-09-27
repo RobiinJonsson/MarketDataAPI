@@ -8,12 +8,16 @@ from marketdata_api.config import FLASK_ENV, Config
 from marketdata_api.database import init_database
 
 
-def create_app():
+def create_app(config_override=None):
     app = Flask(
         __name__, template_folder="../../frontend/templates", static_folder="../../frontend/static"
     )
     app.config["ENV"] = FLASK_ENV
     app.config["ROOT_PATH"] = Config.ROOT_PATH
+
+    # Apply test configuration if provided
+    if config_override:
+        app.config.update(config_override)
 
     # Enable CORS for all routes
     CORS(app, origins=["http://localhost:3000", "http://127.0.0.1:3000"])
@@ -46,10 +50,11 @@ def create_app():
     root_logger.addHandler(debug_handler)
     root_logger.addHandler(console_handler)
 
-    # Initialize database and create tables
-    app.logger.info("Initializing database...")
-    init_database()
-    app.logger.info("Database initialization complete")
+    # Initialize database and create tables (skip during testing)
+    if not app.config.get("TESTING"):
+        app.logger.info("Initializing database...")
+        init_database()
+        app.logger.info("Database initialization complete")
 
     from marketdata_api.routes.common_routes import common_bp, frontend_bp  # Import both blueprints
     from marketdata_api.routes.docs import docs_bp  # Import the Docs API blueprint

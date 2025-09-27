@@ -65,15 +65,34 @@ frontend-modern/
 ├── public/                 # Static assets
 │   └── favicon.svg
 ├── src/
-│   ├── components/         # Reusable components
-│   │   └── SearchComponent.ts
+│   ├── components/         # Component architecture
+│   │   ├── base/          # Base component classes
+│   │   │   └── BaseSearchComponent.ts
+│   │   ├── tabs/          # Tab renderer system
+│   │   │   ├── BaseTabRenderer.ts
+│   │   │   ├── OverviewTabRenderer.ts
+│   │   │   ├── LeiTabRenderer.ts
+│   │   │   ├── TransparencyTabRenderer.ts
+│   │   │   ├── CfiTabRenderer.ts
+│   │   │   ├── VenuesTabRenderer.ts
+│   │   │   ├── TabManager.ts
+│   │   │   └── index.ts
+│   │   ├── ComprehensiveSearchComponent.ts
+│   │   ├── SearchComponent.ts
+│   │   └── index.ts
+│   ├── services/          # Business logic services
+│   │   ├── InstrumentDataService.ts
+│   │   └── index.ts
+│   ├── utils/             # Utility functions
+│   │   ├── formatters/    # Data formatting utilities
+│   │   │   ├── dataFormatters.ts
+│   │   │   └── index.ts
+│   │   ├── api.ts         # API integration
+│   │   └── helpers.ts     # Helper functions
 │   ├── styles/            # CSS styles
 │   │   └── main.css
 │   ├── types/             # TypeScript type definitions
 │   │   └── api.ts
-│   ├── utils/             # Utility functions
-│   │   ├── api.ts         # API integration
-│   │   └── helpers.ts     # Helper functions
 │   ├── admin.ts           # Admin interface entry
 │   └── main.ts            # Main interface entry
 ├── index.html             # Main interface
@@ -106,17 +125,39 @@ The frontend communicates with the backend API using typed functions:
 
 ## 🧪 Development
 
+### Architecture Overview
+
+The frontend uses a modular architecture with clear separation of concerns:
+
+- **Base Components**: Reusable abstract classes providing common functionality
+- **Tab Renderers**: Specialized components for rendering different data views
+- **Services**: Business logic and API communication layer
+- **Formatters**: Utility functions for data presentation
+
 ### Adding New Components
 
-1. Create a new TypeScript file in `src/components/`
-2. Export a class or functions
-3. Import and use in main application files
+1. **For new search components**: Extend `BaseSearchComponent` in `src/components/base/`
+2. **For new tab renderers**: Extend `BaseTabRenderer` in `src/components/tabs/`
+3. **For reusable UI**: Create new components in `src/components/`
+
+### Adding New Tab Types
+
+1. Create a new renderer extending `BaseTabRenderer`
+2. Implement required methods: `render()`, `getTabId()`, `getTabLabel()`
+3. Add optional methods: `getBadgeCount()`, `isEnabled()`
+4. Register with `TabManager` in the constructor
 
 ### Adding New API Endpoints
 
 1. Add types to `src/types/api.ts`
-2. Add API functions to `src/utils/api.ts`
-3. Use in components with full type safety
+2. Add service methods to appropriate service class or create new service
+3. Use services in components with full type safety
+
+### Adding Data Formatters
+
+1. Add formatting functions to `src/utils/formatters/dataFormatters.ts`
+2. Export from `src/utils/formatters/index.ts`
+3. Import and use in tab renderers or components
 
 ### Customizing Styles
 

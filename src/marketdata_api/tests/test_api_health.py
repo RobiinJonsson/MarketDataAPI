@@ -23,10 +23,12 @@ from .test_data_real import get_test_instrument, get_test_lei, get_test_mic
 @pytest.fixture
 def app():
     """Create a test Flask application."""
-    # Use a temporary database for testing
-    app = create_app()
-    app.config["TESTING"] = True
-    app.config["DATABASE_URL"] = "sqlite:///:memory:"
+    # Create app with test configuration to prevent production database access
+    test_config = {
+        "TESTING": True,
+        "DATABASE_URL": "sqlite:///:memory:",
+    }
+    app = create_app(config_override=test_config)
     return app
 
 

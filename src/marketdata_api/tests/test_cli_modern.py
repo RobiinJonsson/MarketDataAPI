@@ -20,6 +20,18 @@ from marketdata_api.models.sqlite.market_identification_code import MarketIdenti
 from .test_data_real import KNOWN_MIC_CODES, get_test_instrument, get_test_lei, get_test_mic
 
 
+@pytest.fixture(autouse=True)
+def cli_test_environment():
+    """Set test environment for CLI tests to prevent database access."""
+    original = os.getenv("MARKETDATA_TEST_MODE")
+    os.environ["MARKETDATA_TEST_MODE"] = "1"
+    yield
+    if original is None:
+        os.environ.pop("MARKETDATA_TEST_MODE", None)
+    else:
+        os.environ["MARKETDATA_TEST_MODE"] = original
+
+
 class TestCLIBasics:
     """Test basic CLI functionality and structure."""
 

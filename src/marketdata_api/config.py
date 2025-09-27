@@ -6,7 +6,25 @@ from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 
-load_dotenv()  # Load environment variables from .env file
+# Load .env file from project root, regardless of current working directory
+# Handle both development (source) and installed package scenarios
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# For installed packages, we need to look for the .env in common project locations
+possible_env_locations = [
+    os.path.join(PROJECT_ROOT, ".env"),  # Development: from source
+    os.path.join(os.getcwd(), ".env"),  # Current working directory
+    "C:\\Users\\robin\\Projects\\MarketDataAPI\\.env",  # Hardcoded fallback for this project
+]
+
+# Try to load from the first available location
+for env_path in possible_env_locations:
+    if os.path.exists(env_path):
+        load_dotenv(env_path, override=True)  # Override existing env vars
+        break
+else:
+    # No .env found, proceed with system environment variables only
+    load_dotenv()
 
 OPENFIGI_API_KEY = os.getenv("OPENFIGI_API_KEY")
 FLASK_ENV = os.getenv("FLASK_ENV", "production")
@@ -17,8 +35,6 @@ DATABASE_TYPE = os.getenv("DATABASE_TYPE", "sqlite")  # "sqlite" or "azure_sql"
 
 # SQLite Database configuration
 SQLITE_DB_FILE = os.getenv("SQLITE_DB_FILE", "marketdata.db")
-# Calculate project root: src/marketdata_api -> src -> project_root
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SQLITE_DB_PATH = os.getenv(
     "SQLITE_DB_PATH",
     os.path.join(PROJECT_ROOT, "src", "marketdata_api", "database", SQLITE_DB_FILE),
