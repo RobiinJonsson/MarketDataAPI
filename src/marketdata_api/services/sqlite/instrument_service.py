@@ -914,6 +914,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
     def _enrich_figi(self, session: Session, instrument: InstrumentInterface) -> None:
         """Helper method to handle FIGI enrichment with enhanced OpenFIGI service and multiple FIGI support."""
         from ...database.model_mapper import map_figi_data
+        from ...models.sqlite.figi import FigiMapping
 
         self.logger.debug(f"Starting FIGI enrichment for {instrument.isin}")
 
@@ -930,14 +931,29 @@ class SqliteInstrumentService(InstrumentServiceInterface):
 
             openfigi_service = OpenFIGIService()
 
-            # Get MIC code from trading venues for enhanced search
+            # Get MIC code by looking up the operating MIC from relevant_trading_venue
             mic_code = None
-            if instrument.trading_venues:
-                # Use the first active trading venue's MIC code
-                for venue in instrument.trading_venues:
-                    if venue.market_identifier_code:
-                        mic_code = venue.market_identifier_code
-                        break
+            if instrument.relevant_trading_venue:
+                from ...models.sqlite.market_identification_code import MarketIdentificationCode
+                
+                # Look up the MIC record to get the operating MIC
+                mic_record = session.query(MarketIdentificationCode).filter(
+                    MarketIdentificationCode.mic == instrument.relevant_trading_venue
+                ).first()
+                
+                if mic_record and mic_record.operating_mic:
+                    mic_code = mic_record.operating_mic
+                    self.logger.info(f"Mapped {instrument.relevant_trading_venue} to operating MIC: {mic_code}")
+                elif mic_record:
+                    # Use the MIC itself if no operating MIC is set
+                    mic_code = mic_record.mic
+                    self.logger.info(f"Using MIC directly: {mic_code}")
+                else:
+                    # Fallback to using relevant_trading_venue as-is
+                    mic_code = instrument.relevant_trading_venue
+                    self.logger.warning(f"No MIC record found for {instrument.relevant_trading_venue}, using as-is")
+            else:
+                self.logger.info("No relevant_trading_venue available for MIC lookup")
 
             if mic_code:
                 self.logger.info(f"Using MIC code {mic_code} for enhanced FIGI search")
@@ -945,15 +961,32 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                 self.logger.info(
                     f"No MIC code available, using ISIN-only search for {instrument.isin}"
                 )
+                mic_code = ""  # OpenFIGI service expects string, not None
 
-            # Search for FIGIs using the enhanced service
-            figi_results = openfigi_service.search_figi(instrument.isin, mic_code)
+            # Search for FIGIs using the enhanced service - unpack tuple return
+            figi_results, search_strategy = openfigi_service.search_figi(instrument.isin, mic_code)
 
             if figi_results:
-                self.logger.info(f"Found {len(figi_results)} FIGI(s) for {instrument.isin}")
+                self.logger.info(f"Found {len(figi_results)} FIGI(s) for {instrument.isin} using strategy: {search_strategy}")
+
+                # Convert OpenFIGISearchResult objects to dictionary format for map_figi_data
+                figi_data_list = []
+                for result in figi_results:
+                    figi_data_list.append({
+                        "figi": result.figi,
+                        "name": result.name,
+                        "ticker": result.ticker,
+                        "exchCode": result.exch_code,
+                        "securityType": result.security_type,
+                        "marketSector": result.market_sector,
+                        "compositeFIGI": result.composite_figi,
+                        "shareClassFIGI": result.share_class_figi,
+                        "currency": result.currency,
+                        "securityDescription": result.security_description,
+                    })
 
                 # Create FIGI mappings for all results
-                figi_mappings = map_figi_data(figi_results, instrument.isin)
+                figi_mappings = map_figi_data(figi_data_list, instrument.isin)
                 if figi_mappings:
                     self.logger.info(
                         f"Created {len(figi_mappings)} FIGI mapping(s) for {instrument.isin}"
@@ -1018,14 +1051,31 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                 self.logger.warning(f"Failed to get venue data for fallback: {fallback_e}")
                 venue_data = None
 
-            # Use enhanced service as final fallback with None MIC (broad search)
+            # Use enhanced service as final fallback with empty MIC (broad search)
             fallback_results, fallback_strategy = openfigi_service.search_figi(
-                instrument.isin, None
+                instrument.isin, ""
             )
 
             if fallback_results:
-                self.logger.debug(f"Received fallback FIGI data: {fallback_results}")
-                figi_mappings = map_figi_data(fallback_results, instrument.isin)
+                self.logger.debug(f"Received fallback FIGI data: {len(fallback_results)} results")
+                
+                # Convert OpenFIGISearchResult objects to dictionary format
+                figi_data_list = []
+                for result in fallback_results:
+                    figi_data_list.append({
+                        "figi": result.figi,
+                        "name": result.name,
+                        "ticker": result.ticker,
+                        "exchCode": result.exch_code,
+                        "securityType": result.security_type,
+                        "marketSector": result.market_sector,
+                        "compositeFIGI": result.composite_figi,
+                        "shareClassFIGI": result.share_class_figi,
+                        "currency": result.currency,
+                        "securityDescription": result.security_description,
+                    })
+                
+                figi_mappings = map_figi_data(figi_data_list, instrument.isin)
                 if figi_mappings:
                     self.logger.info(
                         f"Created {len(figi_mappings)} FIGI mapping(s) via fallback for {instrument.isin}"
@@ -1055,7 +1105,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                     )
                 else:
                     self.logger.warning(
-                        f"Failed to create FIGI mappings from fallback data: {fallback_results}"
+                        f"Failed to create FIGI mappings from fallback data: received {len(fallback_results)} results but couldn't map them"
                     )
             else:
                 self.logger.warning(f"No FIGI data returned from fallback for {instrument.isin}")

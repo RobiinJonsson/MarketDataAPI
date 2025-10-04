@@ -1,80 +1,48 @@
 # MarketDataAPI
 
-A comprehensive market data management system with CFI-based instrument classification, integrating FIRDS, OpenFIGI, ISO10383 (MIC) and GLEIF # List instruments with filtering and rich tables
-deployment\mapi.bat instruments list --limit 10 --type equity --currency USD
+Comprehensive market data management system with CFI-based instrument classification, integrating FIRDS, OpenFIGI, ISO10383 (MIC), and GLEIF data sources.
 
-# Get detailed instrument information
-deployment\mapi.bat instruments get SE0000120784
+## Key Features
 
-# Create instrument from FIRDS data
-deployment\mapi.bat instruments create US0378331005 equity
+- **MIC Code Integration**: Complete IS**Complete API Documentation**: Available at `/api/v1/swagger` (interactive) and `docs/api/` 10383 Market Identification Code system with dual-mode operations
+- **CFI-Based Classification**: ISO 10962 compliant CFI code system as single source of truth for instrument types
+- **Unified Architecture**: JSON-based models supporting all 10 FIRDS instrument types (C,D,E,F,H,I,J,O,R,S)
+- **Performance Optimized**: CFI-driven file filtering reduces I/O operations by 90%
+- **Dual Database Support**: SQLite (development) / Azure SQL (production) with unified transparency calculations
+- **Complete Data Integration**: FIRDS/FITRS integration with intelligent type detection
+- **RESTful API**: Modular Swagger UI with comprehensive endpoint documentation
+- **Professional CLI**: Modern command-line interface with Rich formatting
+- **Smart File Management**: Precise regex-based pattern matching for FIRDS/FITRS files
 
-# Show venues for instrument  
-deployment\mapi.bat instruments venues SE0000120784s.
+## Recent Major Improvements
 
-## 🎯 Key Features
+### Professional CLI Implementation (September 2025)
+- Complete CLI rewrite using Click framework with Rich formatting
+- All MarketDataAPI functionality accessible via command-line interface
+- Enhanced CFI analysis with multi-level classification and business information
+- Professional output with Rich tables, panels, and status indicators
 
-- **🆔 MIC Code Integration**: Complete ISO 10383 Market Identification Code system with dual-mode operations
-- **🏛️ CFI-Based Classification**: ISO 10962 compliant CFI code system as single source of truth for instrument types
-- **🎯 Unified Architecture**: JSON-based models supporting all 10 FIRDS instrument types (C,D,E,F,H,I,J,O,R,S)
-- **⚡ Performance Optimized**: CFI-driven file filtering reduces I/O operations by 90%
-- **🔧 Database**: SQLite (development) / Azure SQL (production) with unified transparency calculations
-- **📊 Data Sources**: Complete FIRDS/FITRS integration with intelligent type detection
-- **🌐 RESTful API**: Modular Swagger UI with comprehensive endpoint documentation
-- **🖥️ Modern Frontend**: Dynamic type loading with real-time CFI validation and visual feedback
-- **📁 Smart File Management**: Precise regex-based pattern matching for FIRDS/FITRS files
+### MIC Code Integration (September 2025)
+- Complete ISO 10383 support with 2,794 MIC records
+- Dual-mode operations: local database storage + remote real-time validation
+- Direct integration with ISO 20022 registry
+- Smart caching with 60-minute refresh for remote operations
 
-## 🚀 Recent Major Improvements
+### CFI-Based Validation System (September 2025)
+- Single source of truth: all instrument types derived from CFI codes
+- Real-time CFI code validation with comprehensive error handling
+- Dynamic instrument type loading with live CFI validation
+- CFI first character maps directly to file types for optimal search performance
 
-### ✅ Professional CLI Implementation (September 2025)
-- **Modern Framework**: Complete CLI rewrite using Click framework with Rich formatting
-- **Comprehensive Coverage**: All MarketDataAPI functionality accessible via professional command-line interface
-- **Enhanced CFI Analysis**: Upgraded CFI command with multi-level classification, business information, and technical details
-- **Beautiful Output**: Rich tables, panels, color coding, and status indicators for professional user experience
-- **Easy Deployment**: Package installation with batch wrapper for convenient access
+### Unified Transparency Architecture (August 2025)
+- Simplified models: unified JSON-based transparency calculations
+- Optimized FITRS file search using instrument types for targeted filtering
+- Fixed timeout issues: all instruments complete in 4-6 seconds
 
-### ✅ Swagger Architecture Refactor (September 2025)
-- **Modular Structure**: Refactored 1,444-line monolithic swagger.py into organized modules
-- **Complete Integration**: All endpoints (Instruments, Legal Entities, Transparency, Relationships, MIC) fully functional
-- **Working Implementations**: Real business logic integration instead of placeholder documentation
-- **Model Fixes**: Corrected all attribute mismatches between database models and API responses
-- **Enhanced Search**: Improved MIC remote search with country-only filtering capability
-
-- **� CFI-Based Classification**: ISO 10962 compliant CFI code system as single source of truth for instrument types
-- **🎯 Unified Architecture**: JSON-based models supporting all 10 FIRDS instrument types (C,D,E,F,H,I,J,O,R,S)
-- **⚡ Performance Optimized**: CFI-driven file filtering reduces I/O operations by 90%
-- **�🔧 Database**: SQLite (development) / Azure SQL (production) with unified transparency calculations
-- **📊 Data Sources**: Complete FIRDS/FITRS integration with intelligent type detection
-- **🌐 RESTful API**: CFI-validated endpoints with real-time instrument type validation
-- **🖥️ Modern Frontend**: Dynamic type loading with real-time CFI validation and visual feedback
-- **📁 Smart File Management**: Precise regex-based pattern matching for FIRDS/FITRS files
-
-## 🚀 Recent Major Improvements
-
-### ✅ MIC Code Integration (September 2025)
-- **Complete ISO 10383 Support**: Full Market Identification Code implementation with 2,794 MIC records
-- **Dual-Mode Operations**: Local database storage for performance + remote real-time validation
-- **Foreign Key Integration**: MIC codes properly linked to TradingVenue models
-- **Official Data Source**: Direct integration with ISO 20022 registry (`https://www.iso20022.org/.../ISO10383_MIC.csv`)
-- **8 Comprehensive Endpoints**: Both local database and remote real-time API operations
-- **Smart Caching**: 60-minute cache for remote operations with automatic refresh
-
-### ✅ CFI-Based Validation System (September 2025)
-- **Single Source of Truth**: All instrument types now derived from CFI codes
-- **API Validation**: Real-time CFI code validation with comprehensive error handling
-- **Frontend Integration**: Dynamic instrument type loading with live CFI validation
-- **Pattern Matching**: Precise regex-based file filtering (eliminated false positives)
-- **Performance**: CFI first character directly maps to file types for optimal search
-
-### ✅ Unified Transparency Architecture (August 2025)
-- **Simplified Models**: Unified JSON-based transparency calculations (replaced complex polymorphic inheritance)
-- **FITRS Integration**: Optimized file search using instrument types for targeted filtering
-- **100% Success Rate**: Fixed timeout issues, all instruments complete in 4-6 seconds
-
-### ✅ Complete FIRDS Support (August 2025)
-- **All 10 Types**: Expanded from 3 to all 10 FIRDS instrument types
-- **Smart Processing**: Auto-detection of instrument types from filenames
-- **Common Fields**: Promoted frequently-used fields to dedicated columns for performance
+### Complete FIRDS Support (August 2025)
+- Expanded from 3 to all 10 FIRDS instrument types
+- Auto-detection of instrument types from filenames
+- Promoted frequently-used fields to dedicated columns for performance
 
 ## Installation
 
@@ -133,71 +101,57 @@ DATABASE_URL=sqlite:///marketdata.db
 python -m marketdata_api
 ```
 
-### Professional Command Line Interface
+### Command Line Interface
 
-The MarketDataAPI includes a modern, professional CLI built with Click framework and Rich formatting for beautiful terminal output.
+Modern CLI built with Click framework and Rich formatting for professional terminal output.
 
-#### Installation & Setup
-
-**Prerequisites**: Ensure you've followed the main installation steps above, including `pip install -r requirements.txt` which installs the CLI dependencies (`click>=8.0.0`, `rich>=13.0.0`).
+#### Setup
 
 ```bash
-# Option 1: Package installation (enables global commands)
+# Package installation (enables global commands)
 pip install -e .
-# This creates 'marketdata' and 'mapi' commands globally
 
-# Option 2: Direct module execution (no installation needed)
-python -m marketdata_api.cli [command]
-
-# Option 3: Windows batch wrapper (recommended for Windows)
+# Windows batch wrapper (recommended)
 deployment\mapi.bat [command]
 
+# Direct module execution
+python -m marketdata_api.cli [command]
+
 # Verify installation
-deployment\mapi.bat --help  # Should show beautiful CLI help
-deployment\mapi.bat stats   # Quick test with database statistics
-```
-
-**Note**: All CLI dependencies are included in `requirements.txt`, so running `pip install -r requirements.txt` installs everything needed for the CLI to work.
-
-#### Core Commands
-
-**📊 Database & Statistics**
-```bash
-# Database overview with rich formatting
+deployment\mapi.bat --help
 deployment\mapi.bat stats
 ```
 
-**🏛️ Instrument Management**
+#### Core Commands
+
+**Database & Statistics**
 ```bash
-# List instruments with filtering and rich tables
+deployment\mapi.bat stats
+```
+
+**Instrument Management**
+```bash
+# List instruments with filtering
 mapi.bat instruments list --limit 10 --type equity --currency USD
 
-# Get detailed instrument information
+# Get detailed information
 mapi.bat instruments get SE0000120784
 
-# Create instrument from FIRDS data
+# Create from FIRDS data
 mapi.bat instruments create US0378331005 equity
 
-# Get trading venues for instrument
+# Show trading venues
 mapi.bat instruments venues SE0000120784
 ```
 
-**🔍 Comprehensive CFI Analysis**
+**CFI Analysis**
 ```bash
-# Enhanced CFI decoding with all classification levels
+# Enhanced CFI decoding with classification levels
 deployment\mapi.bat cfi ESVUFR  # Equity example
-deployment\mapi.bat cfi DBFUFR  # Debt example  
-deployment\mapi.bat cfi FFCXXR  # Derivative example
-deployment\mapi.bat cfi CSIUFR  # Collective investment example
-
-# Output includes:
-# - Classification Levels (Category, Group, Attributes)
-# - Business Information (Type, Classification Flags)
-# - Technical Details (FITRS Patterns, Decoded Attributes)
-# - Rich Visual Display (Panels, Tables, Color Coding)
+deployment\mapi.bat cfi DBFUFR  # Debt example
 ```
 
-**🆔 Market Identification Codes (MIC)**
+**Market Identification Codes**
 ```bash
 # List MICs with country filtering
 deployment\mapi.bat mic list --country US --limit 10
@@ -209,7 +163,7 @@ deployment\mapi.bat mic get XNYS
 deployment\mapi.bat mic remote lookup XLON
 ```
 
-**🔒 Transparency & Legal Entities**
+**Transparency & Legal Entities**
 ```bash
 # List transparency calculations with pagination
 deployment\mapi.bat transparency list --limit 5 --offset 0
@@ -240,9 +194,9 @@ The CLI features beautiful formatting with:
 
 ### API Endpoints
 
-#### 🆔 MIC Code Operations
-- `GET /api/v1/mic/` - List MICs with advanced filtering (country, status, type, category)
-- `GET /api/v1/mic/{mic_code}` - Detailed MIC information with optional trading venues
+#### MIC Code Operations
+- `GET /api/v1/mic/` - List MICs with advanced filtering
+- `GET /api/v1/mic/{mic_code}` - Detailed MIC information with trading venues
 - `GET /api/v1/mic/{mic_code}/segments` - Get segment MICs for operating MIC
 - `GET /api/v1/mic/countries` - Countries with MIC counts and statistics
 - `GET /api/v1/mic/search` - Advanced MIC search by name, entity, or code
@@ -250,18 +204,18 @@ The CLI features beautiful formatting with:
 - `POST /api/v1/mic/load-data` - Load from local file or remote source
 - `GET /api/v1/mic/enums` - Available enum values for MIC fields
 
-#### 🌐 Remote MIC Operations (Real-time)
+#### Remote MIC Operations (Real-time)
 - `GET /api/v1/mic/remote/lookup/{mic_code}` - Direct lookup from ISO registry
 - `GET /api/v1/mic/remote/search` - Real-time search in official data
 - `GET /api/v1/mic/remote/country/{country_code}` - Country MICs from official source
 - `GET /api/v1/mic/remote/validate/{mic_code}` - Official MIC validation
 - `POST /api/v1/mic/remote/cache/clear` - Clear remote data cache
 
-#### 🔍 CFI & Instrument Classification
-- `GET /api/v1/instruments/types` - **NEW**: Get valid instrument types from CFI system
-- `GET /api/v1/instruments/cfi/{cfi_code}` - **Enhanced**: Comprehensive CFI decoding with business types
-- `GET /api/v1/instruments/{isin}/cfi` - **NEW**: Classify existing instruments using their CFI codes
-- `POST /api/v1/instruments` - **Enhanced**: CFI-validated instrument creation with consistency checks
+#### CFI & Instrument Classification
+- `GET /api/v1/instruments/types` - Get valid instrument types from CFI system
+- `GET /api/v1/instruments/cfi/{cfi_code}` - Comprehensive CFI decoding with business types
+- `GET /api/v1/instruments/{isin}/cfi` - Classify existing instruments using CFI codes
+- `POST /api/v1/instruments` - CFI-validated instrument creation with consistency checks
 
 #### Core Operations
 - `GET/POST /api/v1/instruments` - Instrument management with CFI validation
@@ -281,7 +235,7 @@ The CLI features beautiful formatting with:
 
 **📖 Complete API Documentation**: Available at `/api/v1/swagger` (interactive) and `docs/api/`
 
-## 🔧 Integration Examples
+## Integration Examples
 
 ### MIC Code Operations
 ```bash
@@ -384,9 +338,9 @@ MarketDataAPI/
 - **Testing**: Pytest with comprehensive CFI pattern validation
 - **Migrations**: Alembic for database versioning
 
-## 🎯 CFI Code Support
+## CFI Code Support
 
-The system provides complete ISO 10962 CFI code support:
+Complete ISO 10962 CFI code support:
 
 ### Supported Categories
 - **E** - Equities (Common shares, Preferred shares, etc.)
@@ -409,13 +363,13 @@ CFI codes automatically map to business instrument types:
 - E → `equity`, R → `rights`, D → `debt`, F → `future`, O → `option`
 - J → `collective_investment`, S → `structured`, etc.
 
-## 📈 Performance Metrics
+## Performance Metrics
 
-- **File Search Optimization**: 90% reduction in I/O operations via CFI-based targeting
-- **API Response Time**: <5 seconds for complex instruments (previously 70+ seconds)
-- **Validation Accuracy**: 100% CFI compliance with real-time frontend feedback
-- **Coverage**: All 10 FIRDS instrument types supported (up from 3)
-- **Success Rate**: 100% instrument processing (eliminated timeouts)
+- File Search Optimization: 90% reduction in I/O operations via CFI-based targeting
+- API Response Time: <5 seconds for complex instruments (previously 70+ seconds)
+- Validation Accuracy: 100% CFI compliance with real-time frontend feedback
+- Coverage: All 10 FIRDS instrument types supported (up from 3)
+- Success Rate: 100% instrument processing (eliminated timeouts)
 
 ## Requirements
 

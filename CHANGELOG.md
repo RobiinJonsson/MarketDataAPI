@@ -2,57 +2,41 @@
 
 All notable changes to the MarketDataAPI project will be documented in this file.
 
-## [2025-09-21] - COMPREHENSIVE HEALTH MONITORING & API ENHANCEMENTS
+## [2025-10-04] - FIGI Enrichment Fixes and Enhanced Statistics
 
-### 🏥 ENHANCED HEALTH MONITORING SYSTEM
-- **Comprehensive Health Endpoints**: Added detailed health monitoring capabilities
-  - `/api/v1/health` - Basic health check with database connectivity
-  - `/api/v1/health/detailed` - Detailed system metrics including CPU, memory, disk usage
-  - `/api/v1/status` - Quick system status overview
-- **System Metrics Integration**: Optional psutil integration for system resource monitoring
-  - CPU usage percentage tracking
-  - Memory utilization monitoring  
-  - Disk usage statistics
-  - Graceful degradation when psutil unavailable
-- **Service Health Validation**: Comprehensive service connectivity checks
-  - Database connection status verification
-  - Instrument service health validation
-  - Service type identification and status reporting
+### FIGI Enrichment System Repairs
+- Fixed OpenFIGI service integration issues preventing FIGI storage
+- Corrected tuple unpacking in search_figi() method calls
+- Added MIC code resolution using ISO 10383 registry (DSTO -> XSTO mapping)
+- Fixed data format conversion from OpenFIGISearchResult objects
+- Added missing FigiMapping import in enrichment service
+- Implemented two-stage search: ISIN + MIC code, then ISIN-only fallback
 
-### 🔧 ERROR HANDLING IMPROVEMENTS
-- **Enhanced JSON Error Responses**: Improved error handling for malformed JSON requests
-  - Malformed JSON now returns 400 (Bad Request) instead of 500 (Internal Server Error)
-  - More user-friendly error messages for API consumers
-  - Proper exception handling in instrument creation endpoints
+### Enhanced CLI Statistics
+- Added coverage percentages to stats command for all data types
+- FIGI coverage: Shows total mappings and instrument percentage
+- Legal entity coverage: Displays linked instruments and percentage
+- Transparency coverage: Shows instruments with transparency data and percentage
+- Color-coded display with clear separation of totals vs unique counts
 
-### 📚 DOCUMENTATION SYSTEM FIXES
-- **Path Resolution Corrections**: Fixed documentation system file path issues
-  - Corrected relative path resolution in docs.py (../../docs)
-  - All documentation endpoints now accessible
-  - OpenAPI specifications properly served
-  - Markdown documentation files correctly loaded
+## [2025-09-21] - Health Monitoring and API Enhancements
 
-### 🌐 GLEIF SERVICE INTEGRATION
-- **Standardized Service Architecture**: Created proper GLEIFService class structure
-  - Consistent service pattern implementation
-  - Proper method organization (get_lei_data, get_parent_data, get_children_data)
-  - Integration with existing GLEIF API functionality
-  - Improved code maintainability and extensibility
+### Health Monitoring System
+- Added health monitoring endpoints: /api/v1/health, /api/v1/health/detailed, /api/v1/status
+- System metrics integration with optional psutil support for CPU, memory, disk usage
+- Database connectivity and service health validation
+- Graceful degradation when system monitoring unavailable
 
-### 🧹 CODE QUALITY IMPROVEMENTS
-- **Redundant Code Cleanup**: Removed duplicate and unused code
-  - Eliminated redundant health.py file
-  - Consolidated health monitoring in common_routes.py
-  - Fixed import error handling with HAS_PSUTIL flag
-  - Clean blueprint registration in __init__.py
+### Error Handling Improvements
+- Fixed JSON error responses to return 400 instead of 500 for malformed requests
+- Enhanced error messages for API consumers
+- Improved exception handling in instrument creation endpoints
 
-### ✅ TESTING ENHANCEMENTS
-- **Comprehensive Health Check Tests**: 24 test cases with 96% success rate (23/24 passing)
-  - Database connectivity validation
-  - System endpoint testing
-  - Service health verification
-  - Error condition handling
-  - Graceful degradation testing
+### Documentation and Service Fixes
+- Fixed documentation system path resolution issues
+- Standardized GLEIFService class architecture
+- Removed duplicate code and consolidated health monitoring
+- Enhanced testing with 24 test cases (96% success rate)
 
 ## [2025-09-20] - COMPLETE CLI FILE MANAGEMENT & ENHANCED OPENFIGI INTEGRATION
 
@@ -122,64 +106,40 @@ All notable changes to the MarketDataAPI project will be documented in this file
 - **Updated Import References**: All modules now use unified OpenFIGI service
 - **Removed Prototype Files**: Cleaned up test files and development artifacts
 
-## [2025-09-14] - CFI STANDARD COMPLIANCE & PERFORMANCE OPTIMIZATION: ISO 10962 Implementation with Critical Performance Fixes
+## [2025-09-14] - CFI Compliance and Performance Optimization
 
-### ⚡ CRITICAL PERFORMANCE IMPROVEMENTS
-- **90+ SECOND → <8 SECOND SEARCHES**: Resolved critical performance bottleneck in instrument searches
-  - **Targeted FIRDS Searching**: CFI-validated business type mapping prevents exhaustive file scanning
-  - **Immediate Termination**: Stop searching when CFI type doesn't match, eliminating 90+ second waits
-  - **Real Performance Results**: HK0435036626 (collective_investment→C): 7.8s, EZ05XJYN89V6 (forward→J): 6.2s
+### Critical Performance Improvements
+- Resolved instrument search bottleneck: 90+ seconds to <8 seconds
+- Implemented CFI-validated business type mapping to prevent exhaustive file scanning
+- Added immediate search termination when CFI type doesn't match
+- Real performance results: HK0435036626 (7.8s), EZ05XJYN89V6 (6.2s)
 
-### 🏛️ CFI ISO 10962 STANDARD COMPLIANCE
-- **CFIInstrumentTypeManager Integration**: Full ISO 10962 CFI code compliance throughout backend
-  - **Consistent Type Mapping**: Eliminated inconsistent business type mappings (hybrid→structured, interest_rate→spot)
-  - **FIRDS_TO_CFI_MAPPING**: Authoritative letter-to-CFI code mapping (C→Collective Investment, J→Futures/Forwards)
-  - **CFI_TO_BUSINESS_TYPE**: Standard-compliant type validation preventing non-standard classifications
+### CFI ISO 10962 Standard Compliance
+- Integrated CFIInstrumentTypeManager for full ISO 10962 compliance
+- Eliminated inconsistent business type mappings (hybrid→structured, interest_rate→spot)
+- Added authoritative FIRDS-to-CFI mapping and validation
+- Ensured consistent type classification across all instruments
 
-### 🔧 TRANSPARENCY DATA FIXES
-- **Smart Liquidity Display**: Fixed liquidity flag interpretation using comprehensive FITRS analysis
-  - **FULECR vs FULNCR Logic**: Proper handling of explicit flags (FULNCR) vs trading-derived data (FULECR_E)
-  - **None Value Handling**: Graceful display of missing liquidity data with professional formatting
-  - **CLI Enhancement**: Updated transparency get command to use ISIN instead of database ID
+### Transparency and Code Cleanup
+- Fixed liquidity flag interpretation with proper FULECR vs FULNCR logic
+- Enhanced CLI transparency command to use ISIN instead of database ID
+- Removed unused methods and imports from service layer
+- Consolidated instrument retrieval through unified get_instrument() method
 
-### 🎯 COMPREHENSIVE VALIDATION
-- **Multi-Type Testing**: Validated across collective_investment, forward, structured, debt instruments
-- **CFI Compliance**: All instruments now follow ISO 10962 standard for consistent type classification
-- **Performance Metrics**: Documented improvement from performance crisis to production-ready speeds
+## [2025-09-13] - Professional CLI Implementation
 
-### 🧹 CODE CLEANUP & OPTIMIZATION
-- **Service Layer Cleanup**: Removed unused imports and legacy code from services
-  - **Removed Redundant Methods**: Eliminated unused `get_instrument_by_id()` and `get_instrument_by_isin()` from interface and SQLite implementation
-  - **Import Optimization**: Removed unused imports (`fetch_lei_info`, `InstrumentTypes`, `jsonify`)
-  - **Bytecode Cleanup**: Removed orphaned `firds.cpython-313.pyc` from deleted service
-- **Method Consolidation**: Unified instrument retrieval through main `get_instrument()` method with proper session management
+### CLI Framework Overhaul
+- Replaced 1,410-line legacy CLI with modern Click-based interface
+- Added Rich library for professional terminal output with tables, panels, and color styling
+- Implemented hierarchical command groups with automatic help generation
+- Added proper setup.py configuration with console script entry points
 
-## [2025-09-13] - PROFESSIONAL CLI IMPLEMENTATION: Modern Command-Line Interface with Comprehensive CFI Analysis
-
-### 🚀 PROFESSIONAL CLI FRAMEWORK
-- **COMPLETE CLI OVERHAUL**: Replaced 1,410-line legacy CLI with modern Click-based professional interface
-  - **Click Framework**: Hierarchical command groups with automatic help generation and parameter validation
-  - **Rich Library**: Beautiful terminal output with tables, panels, progress indicators, and color styling
-  - **Package Installation**: Proper setup.py configuration with console script entry points for global access
-
-### 📊 COMPREHENSIVE FUNCTIONALITY COVERAGE
-- **INSTRUMENTS MANAGEMENT** (`instruments`):
-  - `list` - Browse instruments with filtering (type, currency, limit) using Rich tables
-  - `get [ISIN]` - Detailed instrument information with comprehensive panels
-  - `create [ISIN] [type]` - Create instruments from FIRDS data sources
-  - `venues [identifier]` - Get trading venues with formatted output
-- **TRANSPARENCY OPERATIONS** (`transparency`):
-  - `list` - Browse transparency calculations with pagination and Rich formatting
-  - `get [ID]` - Detailed transparency calculation information
-- **MARKET IDENTIFICATION CODES** (`mic`):
-  - `list` - Browse MIC codes with country filtering and professional tables
-  - `get [MIC]` - Detailed MIC information with comprehensive panels
-  - `remote lookup [MIC]` - Real-time ISO registry lookup with official data
-- **LEGAL ENTITIES** (`entities`):
-  - `get [LEI]` - Legal entity information lookup with detailed formatting
-- **UTILITIES**:
-  - `stats` - Database statistics overview with Rich panels
-  - `cfi [CODE]` - **Enhanced comprehensive CFI analysis** (see CFI improvements below)
+### Command Coverage
+- Instruments: list, get, create, venues with Rich table formatting
+- Transparency: list and get operations with pagination
+- MIC codes: list, get, remote lookup with country filtering
+- Legal entities: LEI lookup with detailed formatting
+- Utilities: database stats and enhanced CFI code analysis
 
 ### 🔍 ENHANCED CFI ANALYSIS SYSTEM
 - **COMPREHENSIVE CFI DECODING**: Upgraded CFI command to use `CFIInstrumentTypeManager.get_cfi_info()`

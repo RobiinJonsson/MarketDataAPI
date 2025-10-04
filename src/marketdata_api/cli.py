@@ -39,6 +39,7 @@ try:
         MICStatus,
     )
     from marketdata_api.models.sqlite.transparency import TransparencyCalculation
+    from marketdata_api.models.sqlite.figi import FigiMapping
     from marketdata_api.services.file_management_service import FileManagementService
     from marketdata_api.services.mic_data_loader import MICDataLoader, remote_mic_service
     from marketdata_api.services.sqlite.instrument_service import SqliteInstrumentService
@@ -321,7 +322,8 @@ def enrich(ctx, isin):
             # Show enrichment results
             enrichment_info = []
             if hasattr(enriched_instrument, "figi_mappings") and enriched_instrument.figi_mappings:
-                enrichment_info.append("[green]FIGI data[/green]")
+                figi_count = len(enriched_instrument.figi_mappings)
+                enrichment_info.append(f"[green]{figi_count} FIGI mapping(s)[/green]")
             if hasattr(enriched_instrument, "legal_entity") and enriched_instrument.legal_entity:
                 enrichment_info.append("[green]Legal entity data[/green]")
 
@@ -1727,14 +1729,36 @@ def stats(ctx):
                 "transparency": 129,
                 "mics": 2794,
                 "legal_entities": 246,
+                "figi_mappings": 150,
+                "instruments_with_figi": 25,
+                "instruments_with_lei": 35,
+                "instruments_with_transparency": 28,
             }
         else:
             with console.status("[bold green]Gathering statistics..."):
                 with get_session() as session:
+                    from sqlalchemy import func
+                    
                     instrument_count = session.query(Instrument).count()
                     transparency_count = session.query(TransparencyCalculation).count()
                     mic_count = session.query(MarketIdentificationCode).count()
                     legal_entity_count = session.query(LegalEntity).count()
+                    
+                    # FIGI statistics
+                    figi_mapping_count = session.query(FigiMapping).count()
+                    instruments_with_figi_count = session.query(
+                        func.count(func.distinct(FigiMapping.isin))
+                    ).scalar() or 0
+                    
+                    # Legal entity coverage statistics
+                    instruments_with_lei_count = session.query(Instrument).filter(
+                        Instrument.lei_id.isnot(None)
+                    ).count()
+                    
+                    # Transparency coverage statistics
+                    instruments_with_transparency_count = session.query(
+                        func.count(func.distinct(TransparencyCalculation.isin))
+                    ).scalar() or 0
 
                     # Store counts for use outside session
                     stats_data = {
@@ -1742,12 +1766,27 @@ def stats(ctx):
                         "transparency": transparency_count,
                         "mics": mic_count,
                         "legal_entities": legal_entity_count,
+                        "figi_mappings": figi_mapping_count,
+                        "instruments_with_figi": instruments_with_figi_count,
+                        "instruments_with_lei": instruments_with_lei_count,
+                        "instruments_with_transparency": instruments_with_transparency_count,
                     }
 
+        # Calculate coverage percentages
+        figi_coverage = 0
+        lei_coverage = 0 
+        transparency_coverage = 0
+        
+        if stats_data['instruments'] > 0:
+            figi_coverage = (stats_data['instruments_with_figi'] / stats_data['instruments']) * 100
+            lei_coverage = (stats_data['instruments_with_lei'] / stats_data['instruments']) * 100
+            transparency_coverage = (stats_data['instruments_with_transparency'] / stats_data['instruments']) * 100
+
         stats_text = f"""[cyan]Instruments:[/cyan] {stats_data['instruments']:,}
-[cyan]Transparency Calculations:[/cyan] {stats_data['transparency']:,}
+[cyan]Transparency Calculations:[/cyan] {stats_data['transparency']:,} ([green]{stats_data['instruments_with_transparency']:,} instruments[/green] - {transparency_coverage:.1f}%)
 [cyan]MIC Codes:[/cyan] {stats_data['mics']:,}
-[cyan]Legal Entities:[/cyan] {stats_data['legal_entities']:,}"""
+[cyan]Legal Entities:[/cyan] {stats_data['legal_entities']:,} ([green]{stats_data['instruments_with_lei']:,} linked[/green] - {lei_coverage:.1f}%)
+[cyan]FIGI Mappings:[/cyan] {stats_data['figi_mappings']:,} ([green]{stats_data['instruments_with_figi']:,} instruments[/green] - {figi_coverage:.1f}%)"""
 
         console.print(Panel(stats_text, title="Database Statistics"))
 

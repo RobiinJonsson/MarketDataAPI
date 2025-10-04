@@ -376,40 +376,55 @@ def map_figi_data(data: list, isin: str):
         for item in data:
             figi_data = item
 
-            # Handle nested data structure from OpenFIGI
-            if "data" in item:
-                # If there are multiple FIGIs in the data array, create a mapping for each
-                for figi_item in item["data"]:
-                    if "warning" not in figi_item:  # Skip items with warnings
+            # Check if item is a dataclass (OpenFIGISearchResult) or dict
+            if hasattr(item, 'figi'):  # It's a dataclass
+                figi_mapping = FigiMapping(
+                    isin=isin,
+                    figi=item.figi,
+                    composite_figi=item.composite_figi,
+                    share_class_figi=item.share_class_figi,
+                    ticker=item.ticker,
+                    security_type=item.security_type,
+                    market_sector=item.market_sector,
+                    security_description=item.security_description,
+                )
+                figi_mappings.append(figi_mapping)
+            elif isinstance(item, dict):
+                # Handle nested data structure from OpenFIGI (old format)
+                if "data" in item:
+                    # If there are multiple FIGIs in the data array, create a mapping for each
+                    for figi_item in item["data"]:
+                        if "warning" not in figi_item:  # Skip items with warnings
+                            figi_mapping = FigiMapping(
+                                isin=isin,
+                                figi=figi_item.get("figi"),
+                                composite_figi=figi_item.get("compositeFIGI"),
+                                share_class_figi=figi_item.get("shareClassFIGI"),
+                                ticker=figi_item.get("ticker"),
+                                security_type=figi_item.get("securityType"),
+                                market_sector=figi_item.get("marketSector"),
+                                security_description=figi_item.get("securityDescription"),
+                            )
+                            figi_mappings.append(figi_mapping)
+                else:
+                    # Fallback to old structure - single FIGI (dict format)
+                    if "warning" not in figi_data:
                         figi_mapping = FigiMapping(
                             isin=isin,
-                            figi=figi_item.get("figi"),
-                            composite_figi=figi_item.get("compositeFIGI"),
-                            share_class_figi=figi_item.get("shareClassFIGI"),
-                            ticker=figi_item.get("ticker"),
-                            security_type=figi_item.get("securityType"),
-                            market_sector=figi_item.get("marketSector"),
-                            security_description=figi_item.get("securityDescription"),
+                            figi=figi_data.get("figi"),
+                            composite_figi=figi_data.get("compositeFIGI"),
+                            share_class_figi=figi_data.get("shareClassFIGI"),
+                            ticker=figi_data.get("ticker"),
+                            security_type=figi_data.get("securityType"),
+                            market_sector=figi_data.get("marketSector"),
+                            security_description=figi_data.get("securityDescription"),
                         )
                         figi_mappings.append(figi_mapping)
-            else:
-                # Fallback to old structure - single FIGI
-                if "warning" not in figi_data:
-                    figi_mapping = FigiMapping(
-                        isin=isin,
-                        figi=figi_data.get("figi"),
-                        composite_figi=figi_data.get("compositeFIGI"),
-                        share_class_figi=figi_data.get("shareClassFIGI"),
-                        ticker=figi_data.get("ticker"),
-                        security_type=figi_data.get("securityType"),
-                        market_sector=figi_data.get("marketSector"),
-                        security_description=figi_data.get("securityDescription"),
-                    )
-                    figi_mappings.append(figi_mapping)
 
         return figi_mappings
 
-    except (KeyError, IndexError, TypeError):
+    except (KeyError, IndexError, TypeError) as e:
+        print(f"Error mapping FIGI data: {e}")
         return []
 
 
