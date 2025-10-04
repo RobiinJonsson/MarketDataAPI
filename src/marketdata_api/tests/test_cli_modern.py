@@ -40,7 +40,7 @@ class TestCLIBasics:
         runner = CliRunner()
         result = runner.invoke(cli, ["--help"])
         assert result.exit_code == 0
-        assert "MarketDataAPI CLI" in result.output
+        assert "MarketDataAPI Professional CLI" in result.output
         assert "instruments" in result.output
         assert "mic" in result.output
         assert "stats" in result.output
@@ -67,41 +67,41 @@ class TestInstrumentsCommands:
     """Test instruments command group functionality."""
 
     @pytest.mark.cli
-    @patch("marketdata_api.cli.SqliteInstrumentService")
-    def test_instruments_list_success(self, mock_service):
+    def test_instruments_list_success(self):
         """Test successful instruments list command."""
-        # Mock service response
-        mock_service_instance = Mock()
-        mock_service.return_value = mock_service_instance
+        with patch("marketdata_api.services.sqlite.instrument_service.SqliteInstrumentService") as mock_service:
+            # Mock service response
+            mock_service_instance = Mock()
+            mock_service.return_value = mock_service_instance
 
-        # Use real test data for consistency
-        real_instrument1 = get_test_instrument()  # Gets SEB data
-        real_instrument2 = get_test_instrument()  # We'll modify this
+            # Use real test data for consistency
+            real_instrument1 = get_test_instrument()  # Gets SEB data
+            real_instrument2 = get_test_instrument()  # We'll modify this
 
-        # Mock instruments data using real ISINs and names
-        mock_instruments = [
-            Mock(
-                isin=real_instrument1["isin"],
-                full_name=real_instrument1["full_name"],
-                instrument_type=real_instrument1["instrument_type"],
-                currency=real_instrument1["currency"],
-            ),
-            Mock(
-                isin="CH0012221716", full_name="ABB Ltd", instrument_type="equity", currency="CHF"
-            ),
-        ]
-        mock_service_instance.list_instruments.return_value = (Mock(), mock_instruments, 2)
+            # Mock instruments data using real ISINs and names
+            mock_instruments = [
+                Mock(
+                    isin=real_instrument1["isin"],
+                    full_name=real_instrument1["full_name"],
+                    instrument_type=real_instrument1["instrument_type"],
+                    currency=real_instrument1["currency"],
+                ),
+                Mock(
+                    isin="CH0012221716", full_name="ABB Ltd", instrument_type="equity", currency="CHF"
+                ),
+            ]
+            mock_service_instance.list_instruments.return_value = (Mock(), mock_instruments, 2)
 
-        runner = CliRunner()
-        result = runner.invoke(cli, ["instruments", "list", "--limit", "2"])
+            runner = CliRunner()
+            result = runner.invoke(cli, ["instruments", "list", "--limit", "2"])
 
-        assert result.exit_code == 0
-        assert real_instrument1["isin"] in result.output  # SE0000120784
-        assert "Skandinaviska" in result.output or "SEB" in result.output
-        assert "CH0012221716" in result.output
+            assert result.exit_code == 0
+            assert real_instrument1["isin"] in result.output  # SE0000120784
+            assert "Skandinaviska" in result.output or "SEB" in result.output
+            assert "CH0012221716" in result.output
 
     @pytest.mark.cli
-    @patch("marketdata_api.cli.SqliteInstrumentService")
+    @patch("marketdata_api.services.sqlite.instrument_service.SqliteInstrumentService")
     def test_instruments_get_success(self, mock_service):
         """Test successful instrument get command."""
         # Mock service response
@@ -133,7 +133,7 @@ class TestInstrumentsCommands:
         assert real_instrument["short_name"] in result.output
 
     @pytest.mark.cli
-    @patch("marketdata_api.cli.SqliteInstrumentService")
+    @patch("marketdata_api.services.sqlite.instrument_service.SqliteInstrumentService")
     def test_instruments_get_not_found(self, mock_service):
         """Test instrument get command with non-existent ISIN."""
         # Mock service response for not found
@@ -148,7 +148,7 @@ class TestInstrumentsCommands:
         assert "not found" in result.output.lower()
 
     @pytest.mark.cli
-    @patch("marketdata_api.cli.get_session")
+    @patch("marketdata_api.database.session.get_session")
     def test_instruments_list_with_filters(self, mock_get_session):
         """Test instruments list with type and currency filters."""
         # Mock database session and query
@@ -193,7 +193,7 @@ class TestMICCommands:
     """Test MIC (Market Identification Code) commands."""
 
     @pytest.mark.cli
-    @patch("marketdata_api.cli.get_session")
+    @patch("marketdata_api.database.session.get_session")
     def test_mic_list_success(self, mock_get_session):
         """Test successful MIC list command."""
         # Mock database session and query
@@ -241,7 +241,7 @@ class TestMICCommands:
         assert "NASDAQ STOCKHOLM" in result.output or "STOCKHOLM" in result.output
 
     @pytest.mark.cli
-    @patch("marketdata_api.cli.get_session")
+    @patch("marketdata_api.database.session.get_session")
     def test_mic_get_success(self, mock_get_session):
         """Test successful MIC get command."""
         mock_session = Mock()
@@ -284,7 +284,7 @@ class TestStatsCommand:
     """Test database statistics command."""
 
     @pytest.mark.cli
-    @patch("marketdata_api.cli.get_session")
+    @patch("marketdata_api.database.session.get_session")
     def test_stats_command_success(self, mock_get_session):
         """Test successful stats command."""
         mock_session = Mock()
@@ -316,7 +316,7 @@ class TestCLIErrorHandling:
         assert "No such command" in result.output
 
     @pytest.mark.cli
-    @patch("marketdata_api.cli.get_session")
+    @patch("marketdata_api.database.session.get_session")
     def test_database_error_handling(self, mock_get_session):
         """Test graceful handling of database errors."""
         # Simulate database connection failure
@@ -347,7 +347,7 @@ class TestCLIOutputFormatting:
     """Test CLI output formatting and presentation."""
 
     @pytest.mark.cli
-    @patch("marketdata_api.cli.SqliteInstrumentService")
+    @patch("marketdata_api.services.sqlite.instrument_service.SqliteInstrumentService")
     def test_table_output_format(self, mock_service):
         """Test that list commands produce properly formatted tables."""
         mock_service_instance = Mock()
@@ -374,7 +374,7 @@ class TestCLIOutputFormatting:
         assert "ISIN" in result.output  # Column header
 
     @pytest.mark.cli
-    @patch("marketdata_api.cli.SqliteInstrumentService")
+    @patch("marketdata_api.services.sqlite.instrument_service.SqliteInstrumentService")
     def test_panel_output_format(self, mock_service):
         """Test that get commands produce properly formatted panels."""
         mock_service_instance = Mock()

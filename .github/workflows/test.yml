@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main, dev ]
 
+# Note: To disable GitHub Actions email notifications:
+# Go to GitHub Settings → Notifications → Actions and uncheck Email
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
