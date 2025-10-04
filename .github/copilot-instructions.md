@@ -147,3 +147,25 @@ from marketdata_api.services.sqlserver.instrument_service import SqlServerInstru
 - **Debug config**: `debug_config.py` for development troubleshooting
 
 When working with this codebase, always consider the CFI-driven architecture first - most decisions about instrument handling, file routing, and business logic stem from the CFI classification system.
+
+## Documentation Policy
+
+**CRITICAL**: Stop creating new .md files. The project has 68+ markdown files - this is documentation sprawl.
+
+### Documentation Rules
+- **Before creating ANY .md file**: Update existing files instead
+- **Target**: <10 total .md files maximum
+- **Core files only**: README.md, CHANGELOG.md, DEPLOYMENT.md, PROJECT_STRUCTURE.md, component READMEs
+- **Forbidden**: *_SUMMARY.md, *_ARCHITECTURE.md, *_PLAN.md, temporary analysis files
+- **Information hierarchy**: 
+  - Project info → README.md
+  - Changes → CHANGELOG.md  
+  - Setup → README.md or DEPLOYMENT.md
+  - Development notes → Issues/tickets, not files
+  - Architecture → Inline comments + README.md sections
+
+### Consolidation Priority
+1. Delete redundant summary/analysis files
+2. Merge related documentation into existing core files
+3. Move temporary content to issues or delete entirely
+4. Keep only essential, user-facing documentation

@@ -2,6 +2,8 @@
 
 This project follows modern Python packaging best practices with a clean, organized directory structure.
 
+**📋 Documentation Rule**: Before creating new .md files, update existing ones. Target: <10 total .md files.
+
 ## Directory Overview
 
 ```
