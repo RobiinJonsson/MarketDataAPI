@@ -436,15 +436,16 @@ MarketDataAPI/
 Complete ISO 10962 CFI code support:
 
 ### Supported Categories
-- **E** - Equities (Common shares, Preferred shares, etc.)
+- **C** - Collective Investment Vehicles (Funds, ETFs, etc.)
 - **D** - Debt instruments (Bonds, Notes, etc.) 
-- **R** - Entitlements (Rights, Warrants, etc.)
-- **O** - Options (Calls, Puts, etc.)
+- **E** - Equities (Common shares, Preferred shares, etc.)
 - **F** - Futures (Commodities, Financial, etc.)
-- **S** - Swaps (Credit Default 💳, Interest Rate 📊, Equity Total Return 📈, Foreign Exchange 💱, OIS 🏦)
 - **H** - Non-listed and complex products
 - **I** - Others (Interest rate instruments, etc.)
-- **J** - Collective investment vehicles
+- **J** - Forwards (Forward contracts, Warrants in FIRDS context)
+- **O** - Options (Calls, Puts, etc.)
+- **R** - Entitlements (Rights, Warrants, etc.)
+- **S** - Swaps (Credit Default 💳, Interest Rate 📊, Equity Total Return 📈, Foreign Exchange 💱, OIS 🏦)
 - **K** - Commodity derivatives
 - **L** - Structured products
 - **M** - Financing instruments
@@ -453,8 +454,7 @@ Complete ISO 10962 CFI code support:
 
 ### Business Type Mapping
 CFI codes automatically map to business instrument types:
-- E → `equity`, R → `rights`, D → `debt`, F → `future`, O → `option`
-- J → `collective_investment`, S → `structured`, etc.
+- C → `collective_investment`, D → `debt`, E → `equity`, F → `future`, J → `forward`, O → `option`, R → `rights`, S → `swap`
 
 ## Performance Metrics
 

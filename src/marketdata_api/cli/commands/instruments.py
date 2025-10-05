@@ -697,6 +697,113 @@ def _get_swap_classification(instrument, firds_data):
     return classification_info
 
 
+def _get_forward_classification(instrument, firds_data):
+    """Extract and format forward classification information from CFI code and FIRDS data"""
+    try:
+        cfi_code = instrument.cfi_code
+        
+        if not cfi_code or len(cfi_code) < 6:
+            return None
+        
+        classification_info = {
+            'icon': '⏩',
+            'display_name': 'Forward',
+            'additional_info': '',
+            'forward_details': {}
+        }
+    except Exception as e:
+        # Return basic info if there's an error
+        return {
+            'icon': '⏩',
+            'display_name': 'Forward',
+            'additional_info': f'Error in classification: {str(e)}',
+            'forward_details': {}
+        }
+    
+    # Analyze CFI structure: JEBXFC, JFTXFC, JRMXFP, JRMXSC
+    if len(cfi_code) >= 2:
+        second_char = cfi_code[1]
+        
+        # Equity Forwards (JE****) 
+        if second_char == 'E':
+            classification_info.update({
+                'icon': '📈',
+                'display_name': 'Equity Forward',
+                'additional_info': 'Forward contract on equity underlying'
+            })
+            
+            # Extract underlying basket information
+            if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN'):
+                basket_isin = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN']
+                classification_info['forward_details']['basket_isin'] = basket_isin
+                classification_info['additional_info'] += ' (basket)'
+        
+        # Foreign Exchange Forwards (JF****)
+        elif second_char == 'F':
+            classification_info.update({
+                'icon': '💱',
+                'display_name': 'FX Forward',
+                'additional_info': 'Foreign exchange forward contract'
+            })
+            
+            # Extract FX type and currency pair
+            fx_type = firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_FxTp')
+            other_currency = firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_OthrNtnlCcy')
+            
+            if fx_type:
+                if fx_type == 'FXCR':
+                    classification_info['additional_info'] = 'Non-Deliverable Forward (NDF)'
+                elif fx_type == 'FXSW':
+                    classification_info['additional_info'] = 'FX swap forward leg'
+                else:
+                    classification_info['forward_details']['fx_type'] = fx_type
+            
+            if other_currency and instrument.currency:
+                classification_info['forward_details']['currency_pair'] = f"{instrument.currency}/{other_currency}"
+        
+        # Rate Forwards (JR****)
+        elif second_char == 'R':
+            classification_info.update({
+                'icon': '📊',
+                'display_name': 'Rate Forward',
+                'additional_info': 'Interest rate forward contract'
+            })
+            
+            # Determine specific rate forward type from CFI position 3
+            if len(cfi_code) >= 3:
+                third_char = cfi_code[2]
+                if third_char == 'M':  # JRMXFP, JRMXSC pattern
+                    classification_info['display_name'] = 'Rate Forward (FRA)'
+                    classification_info['additional_info'] = 'Forward Rate Agreement'
+            
+            # Extract underlying instrument
+            underlying_isin = firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN')
+            if underlying_isin:
+                classification_info['forward_details']['underlying_isin'] = underlying_isin
+            
+            # Extract term information
+            term_val = firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Val')
+            term_unit = firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Unit')
+            if term_val and term_unit:
+                if term_unit == 'WEEK':
+                    term_display = f"{term_val} Week{'s' if int(term_val) != 1 else ''}"
+                elif term_unit == 'YEAR':
+                    term_display = f"{term_val} Year{'s' if int(term_val) != 1 else ''}"
+                else:
+                    term_display = f"{term_val} {term_unit}"
+                classification_info['forward_details']['forward_term'] = term_display
+        
+        # Commodity Forwards (JC****)
+        elif second_char == 'C':
+            classification_info.update({
+                'icon': '🌾',
+                'display_name': 'Commodity Forward',
+                'additional_info': 'Forward contract on commodity underlying'
+            })
+    
+    return classification_info
+
+
 def _format_type_specific_attributes(instrument):
     """Format instrument type-specific attributes from FIRDS data"""
     if not instrument.firds_data:
@@ -952,6 +1059,70 @@ def _format_type_specific_attributes(instrument):
         if firds.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Indx'):
             details.append(f"[bright_magenta]📋 Index:[/bright_magenta] {firds['DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Indx']}")
     
+    # Forward-specific attributes
+    elif instrument.instrument_type == "forward":
+        # Forward classification and type-specific details
+        forward_info = _get_forward_classification(instrument, firds)
+        if forward_info:
+            details.append(f"[bright_cyan]{forward_info['icon']} Forward Type:[/bright_cyan] {forward_info['display_name']}")
+            
+            # Add additional forward-specific info
+            if forward_info['additional_info']:
+                details.append(f"[bright_cyan]📝 Details:[/bright_cyan] {forward_info['additional_info']}")
+        
+        # Contract expiration
+        if firds.get('DerivInstrmAttrbts_XpryDt'):
+            details.append(f"[bright_cyan]📅 Expiration Date:[/bright_cyan] {firds['DerivInstrmAttrbts_XpryDt']}")
+        
+        # Settlement type
+        if firds.get('DerivInstrmAttrbts_DlvryTp'):
+            delivery_type = firds['DerivInstrmAttrbts_DlvryTp']
+            if delivery_type == 'CASH':
+                details.append(f"[bright_cyan]💰 Settlement:[/bright_cyan] Cash Settlement")
+            elif delivery_type == 'PHYS':
+                details.append(f"[bright_cyan]📦 Settlement:[/bright_cyan] Physical Delivery")
+            else:
+                details.append(f"[bright_cyan]🚚 Settlement:[/bright_cyan] {delivery_type}")
+        
+        # Price multiplier
+        if firds.get('DerivInstrmAttrbts_PricMltplr'):
+            multiplier = firds['DerivInstrmAttrbts_PricMltplr']
+            details.append(f"[bright_cyan]⚖️ Price Multiplier:[/bright_cyan] {multiplier}")
+        
+        # Type-specific forward details
+        if forward_info and forward_info['forward_details']:
+            forward_details = forward_info['forward_details']
+            
+            # Equity Forward details
+            if 'basket_isin' in forward_details:
+                details.append(f"[bright_cyan]📦 Basket ISIN:[/bright_cyan] {forward_details['basket_isin']}")
+            
+            # FX Forward details
+            if 'currency_pair' in forward_details:
+                details.append(f"[bright_cyan]💱 Currency Pair:[/bright_cyan] {forward_details['currency_pair']}")
+            
+            if 'fx_type' in forward_details:
+                details.append(f"[bright_cyan]🔄 FX Type:[/bright_cyan] {forward_details['fx_type']}")
+            
+            # Rate Forward details
+            if 'underlying_isin' in forward_details:
+                details.append(f"[bright_cyan]🎯 Underlying ISIN:[/bright_cyan] {forward_details['underlying_isin']}")
+            
+            if 'forward_term' in forward_details:
+                details.append(f"[bright_cyan]📈 Forward Term:[/bright_cyan] {forward_details['forward_term']}")
+        
+        # Interest rate information for rate forwards
+        if firds.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_RefRate_Indx'):
+            details.append(f"[bright_cyan]📊 Interest Rate Index:[/bright_cyan] {firds['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_RefRate_Indx']}")
+        
+        # General underlying instrument information (single ISIN)
+        if firds.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'):
+            details.append(f"[bright_cyan]🔗 Single Underlying:[/bright_cyan] {firds['DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN']}")
+        
+        # Index/reference rate information
+        if firds.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm'):
+            details.append(f"[bright_cyan]📋 Reference Rate:[/bright_cyan] {firds['DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm']}")
+    
     # Other derivative types
     elif instrument.instrument_type == "convertible":
         if firds.get('DerivInstrmAttrbts_XprtnDt'):
@@ -1160,9 +1331,9 @@ def _get_cfi_description(cfi_code):
         'O': 'Options',
         'H': 'Hybrid Securities',
         'I': 'Interest Rate Derivatives',
-        'J': 'Convertible Securities',
+        'J': 'Forwards',
         'R': 'Rights',
-        'S': 'Structured Products'
+        'S': 'Swaps'
     }
     
     return cfi_descriptions.get(cfi_code[0], f"Type {cfi_code[0]}")
