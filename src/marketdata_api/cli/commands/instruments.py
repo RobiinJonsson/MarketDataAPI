@@ -200,6 +200,78 @@ def enrich(ctx, isin):
 
 
 @instruments.command()
+@click.argument("isin")
+@click.option("--cascade", is_flag=True, help="Delete related data (venues, FIGI mappings, etc.)")
+@click.option("--force", is_flag=True, help="Skip confirmation prompt")
+@click.pass_context
+@handle_database_error
+def delete(ctx, isin, cascade, force):
+    """Delete an instrument and optionally its related data"""
+    try:
+        from marketdata_api.services.sqlite.instrument_service import SqliteInstrumentService
+        
+        service = SqliteInstrumentService()
+
+        # First verify the instrument exists
+        with console.status(f"[bold green]Looking up instrument {isin}..."):
+            session, instrument = service.get_instrument(isin)
+
+        if not instrument:
+            console.print(f"[red]❌ Instrument not found: {isin}[/red]")
+            return
+
+        # Show what will be deleted
+        console.print(f"[yellow]⚠️  About to delete instrument:[/yellow]")
+        console.print(f"  ISIN: [bold]{instrument.isin}[/bold]")
+        console.print(f"  Name: {instrument.full_name or 'N/A'}")
+        console.print(f"  Type: {instrument.instrument_type}")
+        
+        # Show related data that exists
+        related_data = []
+        if hasattr(instrument, 'trading_venues') and instrument.trading_venues:
+            related_data.append(f"{len(instrument.trading_venues)} trading venue(s)")
+        if hasattr(instrument, 'figi_mappings') and instrument.figi_mappings:
+            related_data.append(f"{len(instrument.figi_mappings)} FIGI mapping(s)")
+        if hasattr(instrument, 'legal_entity') and instrument.legal_entity:
+            related_data.append("legal entity data")
+        if hasattr(instrument, 'transparency_calculations') and instrument.transparency_calculations:
+            related_data.append(f"{len(instrument.transparency_calculations)} transparency calculation(s)")
+        
+        if related_data:
+            console.print(f"  Related data: {', '.join(related_data)}")
+            if cascade:
+                console.print("[red]  → Related data will also be deleted (--cascade)[/red]")
+            else:
+                console.print("[yellow]  → Related data will be preserved (use --cascade to delete)[/yellow]")
+        
+        session.close()
+
+        # Confirmation prompt
+        if not force:
+            import click
+            if not click.confirm(f"\n[red]Are you sure you want to delete {isin}?[/red]", abort=True):
+                console.print("[yellow]Deletion cancelled[/yellow]")
+                return
+
+        # Perform deletion
+        with console.status(f"[bold red]Deleting instrument {isin}..."):
+            success = service.delete_instrument(isin, cascade=cascade)
+
+        if success:
+            console.print(f"[green]✓[/green] Successfully deleted instrument: {isin}")
+            if cascade:
+                console.print("  [green]✓[/green] Related data also removed")
+        else:
+            console.print(f"[red]❌ Failed to delete instrument: {isin}[/red]")
+
+    except Exception as e:
+        console.print(f"[red]❌ Error: {str(e)}[/red]")
+        if ctx.obj.get("verbose"):
+            import traceback
+            traceback.print_exc()
+
+
+@instruments.command()
 @click.option("--jurisdiction", default="SE", help="Filter by competent authority jurisdiction")
 @click.option("--type", default="equity", help="Instrument type to create")
 @click.option("--limit", type=int, help="Maximum number of instruments to create")
@@ -804,6 +876,172 @@ def _get_forward_classification(instrument, firds_data):
     return classification_info
 
 
+def _get_structured_classification(instrument, firds_data):
+    """Extract and format structured product classification information from CFI code and FIRDS data"""
+    try:
+        cfi_code = instrument.cfi_code
+        
+        if not cfi_code or len(cfi_code) < 6:
+            return None
+        
+        classification_info = {
+            'icon': '🏗️',
+            'display_name': 'Structured Product',
+            'additional_info': '',
+            'structured_details': {}
+        }
+    except Exception as e:
+        # Return basic info if there's an error
+        return {
+            'icon': '🏗️',
+            'display_name': 'Structured Product',
+            'additional_info': f'Error in classification: {str(e)}',
+            'structured_details': {}
+        }
+    
+    # Analyze CFI structure for H-category instruments
+    if len(cfi_code) >= 2:
+        second_char = cfi_code[1]  # Group character
+        
+        # Certificates and Capital Protection (HC****)
+        if second_char == 'C':
+            classification_info.update({
+                'icon': '🏛️',
+                'display_name': 'Capital Protection Certificate',
+                'additional_info': 'Structured product with capital protection features'
+            })
+            
+            # Extract certificate type from CFI 3rd character
+            if len(cfi_code) >= 3:
+                cert_type = cfi_code[2]
+                if cert_type == 'A':
+                    classification_info['display_name'] = 'Tracker Certificate'
+                    classification_info['additional_info'] = '1:1 participation in underlying performance'
+                elif cert_type == 'B':
+                    classification_info['display_name'] = 'Outperformance Certificate'
+                    classification_info['additional_info'] = 'Leveraged participation above strike level'
+                elif cert_type == 'C':
+                    classification_info['display_name'] = 'Bonus Certificate'
+                    classification_info['additional_info'] = 'Minimum redemption with barrier protection'
+                elif cert_type == 'D':
+                    classification_info['display_name'] = 'Outperformance Bonus Certificate'
+                    classification_info['additional_info'] = 'Leveraged upside with barrier protection'
+                elif cert_type == 'E':
+                    classification_info['display_name'] = 'Twin-Win Certificate'
+                    classification_info['additional_info'] = 'Profits from both rising and falling markets'
+        
+        # Partial Protection (HP****)
+        elif second_char == 'P':
+            classification_info.update({
+                'icon': '🛡️',
+                'display_name': 'Partial Protection Product',
+                'additional_info': 'Limited downside protection with upside participation'
+            })
+        
+        # Yield Enhancement (HY****)
+        elif second_char == 'Y':
+            classification_info.update({
+                'icon': '💰',
+                'display_name': 'Yield Enhancement Product',
+                'additional_info': 'Income-focused structured product'
+            })
+            
+            # Common yield enhancement types
+            if firds_data.get('DerivInstrmAttrbts_OptnTp'):
+                option_type = firds_data['DerivInstrmAttrbts_OptnTp']
+                if option_type in ['CALL', 'PUTO']:
+                    classification_info['display_name'] = 'Reverse Convertible'
+                    classification_info['additional_info'] = 'High coupon with potential equity delivery'
+        
+        # Leverage Products (HL****)
+        elif second_char == 'L':
+            classification_info.update({
+                'icon': '⚡',
+                'display_name': 'Leverage Product',
+                'additional_info': 'Leveraged exposure to underlying asset'
+            })
+            
+            # Extract leverage type
+            if len(cfi_code) >= 3:
+                leverage_type = cfi_code[2]
+                if leverage_type == 'T':
+                    classification_info['display_name'] = 'Turbo Warrant'
+                    classification_info['additional_info'] = 'Knock-out leverage product'
+                elif leverage_type == 'C':
+                    classification_info['display_name'] = 'Call Warrant'
+                elif leverage_type == 'P':
+                    classification_info['display_name'] = 'Put Warrant'
+        
+        # Warrants (HW****)
+        elif second_char == 'W':
+            classification_info.update({
+                'icon': '📜',
+                'display_name': 'Structured Warrant',
+                'additional_info': 'Complex warrant with structured features'
+            })
+            
+            # Extract warrant specifics
+            if firds_data.get('DerivInstrmAttrbts_OptnTp'):
+                option_type = firds_data['DerivInstrmAttrbts_OptnTp']
+                if option_type == 'CALL':
+                    classification_info['display_name'] = 'Call Warrant'
+                elif option_type == 'PUTO':
+                    classification_info['display_name'] = 'Put Warrant'
+        
+        # Notes (HN****)
+        elif second_char == 'N':
+            classification_info.update({
+                'icon': '📝',
+                'display_name': 'Structured Note',
+                'additional_info': 'Note with embedded derivative features'
+            })
+        
+        # Structured Securities (HS****)
+        elif second_char == 'S':
+            classification_info.update({
+                'icon': '🔗',
+                'display_name': 'Structured Security',
+                'additional_info': 'Security with complex payoff structure'
+            })
+    
+    # Extract common structured product details
+    
+    # Underlying asset information
+    underlying_details = []
+    if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'):
+        underlying_isin = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN']
+        classification_info['structured_details']['underlying_isin'] = underlying_isin
+        underlying_details.append(f'Single: {underlying_isin}')
+    
+    if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN'):
+        basket_isins = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN']
+        if isinstance(basket_isins, list) and len(basket_isins) > 0:
+            classification_info['structured_details']['basket_size'] = len(basket_isins)
+            underlying_details.append(f'Basket ({len(basket_isins)} assets)')
+        elif isinstance(basket_isins, str):
+            underlying_details.append(f'Basket: {basket_isins}')
+    
+    if underlying_details:
+        classification_info['structured_details']['underlying_summary'] = ' | '.join(underlying_details)
+    
+    # Barrier information
+    if firds_data.get('DerivInstrmAttrbts_StrkPric'):
+        strike_price = firds_data['DerivInstrmAttrbts_StrkPric']
+        classification_info['structured_details']['strike_barrier'] = strike_price
+    
+    # Settlement information  
+    if firds_data.get('DerivInstrmAttrbts_DlvryTp'):
+        settlement_type = firds_data['DerivInstrmAttrbts_DlvryTp']
+        classification_info['structured_details']['settlement'] = settlement_type
+    
+    # Expiration
+    if firds_data.get('DerivInstrmAttrbts_XpryDt'):
+        expiry_date = firds_data['DerivInstrmAttrbts_XpryDt']
+        classification_info['structured_details']['expiry_date'] = expiry_date
+    
+    return classification_info
+
+
 def _format_type_specific_attributes(instrument):
     """Format instrument type-specific attributes from FIRDS data"""
     if not instrument.firds_data:
@@ -1059,6 +1297,79 @@ def _format_type_specific_attributes(instrument):
         if firds.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Indx'):
             details.append(f"[bright_magenta]📋 Index:[/bright_magenta] {firds['DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Indx']}")
     
+    # Structured/Hybrid-specific attributes (H-category)
+    elif instrument.instrument_type == "structured":
+        # Structured product classification and type-specific details
+        structured_info = _get_structured_classification(instrument, firds)
+        if structured_info:
+            details.append(f"[bright_yellow]{structured_info['icon']} Product Type:[/bright_yellow] {structured_info['display_name']}")
+            
+            # Add additional structured-specific info
+            if structured_info['additional_info']:
+                details.append(f"[bright_yellow]📝 Details:[/bright_yellow] {structured_info['additional_info']}")
+        
+        # Contract expiration
+        if firds.get('DerivInstrmAttrbts_XpryDt'):
+            details.append(f"[bright_yellow]📅 Expiration Date:[/bright_yellow] {firds['DerivInstrmAttrbts_XpryDt']}")
+        
+        # Settlement type
+        if firds.get('DerivInstrmAttrbts_DlvryTp'):
+            delivery_type = firds['DerivInstrmAttrbts_DlvryTp']
+            if delivery_type == 'CASH':
+                details.append(f"[bright_yellow]💰 Settlement:[/bright_yellow] Cash Settlement")
+            elif delivery_type == 'PHYS':
+                details.append(f"[bright_yellow]📦 Settlement:[/bright_yellow] Physical Delivery")
+            else:
+                details.append(f"[bright_yellow]🚚 Settlement:[/bright_yellow] {delivery_type}")
+        
+        # Strike price / Barrier levels
+        if firds.get('DerivInstrmAttrbts_StrkPric'):
+            strike_price = firds['DerivInstrmAttrbts_StrkPric']
+            details.append(f"[bright_yellow]🎯 Strike/Barrier:[/bright_yellow] {strike_price} {instrument.currency or ''}")
+        
+        # Participation rate / Multiplier
+        if firds.get('DerivInstrmAttrbts_PricMltplr'):
+            multiplier = firds['DerivInstrmAttrbts_PricMltplr']
+            details.append(f"[bright_yellow]⚖️ Participation Rate:[/bright_yellow] {multiplier}")
+        
+        # Type-specific structured details
+        if structured_info and structured_info['structured_details']:
+            struct_details = structured_info['structured_details']
+            
+            # Underlying summary
+            if 'underlying_summary' in struct_details:
+                details.append(f"[bright_yellow]🔗 Underlying:[/bright_yellow] {struct_details['underlying_summary']}")
+            
+            # Individual underlying ISIN
+            if 'underlying_isin' in struct_details:
+                details.append(f"[bright_yellow]🎯 Underlying ISIN:[/bright_yellow] {struct_details['underlying_isin']}")
+            
+            # Basket information
+            if 'basket_size' in struct_details:
+                details.append(f"[bright_yellow]📊 Basket Size:[/bright_yellow] {struct_details['basket_size']} instruments")
+        
+        # Option-type information (for warrant-like products)
+        if firds.get('DerivInstrmAttrbts_OptnTp'):
+            option_type = 'Call' if firds['DerivInstrmAttrbts_OptnTp'] == 'CALL' else 'Put' if firds['DerivInstrmAttrbts_OptnTp'] == 'PUTO' else firds['DerivInstrmAttrbts_OptnTp']
+            option_icon = '📈' if option_type == 'Call' else '📉'
+            details.append(f"[bright_yellow]{option_icon} Option Component:[/bright_yellow] {option_type}")
+        
+        # Exercise style for warrant-like products
+        if firds.get('DerivInstrmAttrbts_OptnExrcStyle'):
+            exercise_style = 'American' if firds['DerivInstrmAttrbts_OptnExrcStyle'] == 'AMER' else 'European' if firds['DerivInstrmAttrbts_OptnExrcStyle'] == 'EURO' else firds['DerivInstrmAttrbts_OptnExrcStyle']
+            exercise_icon = '🇺🇸' if exercise_style == 'American' else '🇪🇺' if exercise_style == 'European' else '⚙️'
+            details.append(f"[bright_yellow]{exercise_icon} Exercise Style:[/bright_yellow] {exercise_style}")
+        
+        # Interest rate or coupon information
+        if firds.get('DebtInstrmAttrbts_IntrstRate_Fxd'):
+            fixed_rate = firds['DebtInstrmAttrbts_IntrstRate_Fxd']
+            details.append(f"[bright_yellow]💹 Fixed Coupon:[/bright_yellow] {fixed_rate}%")
+        
+        # Currency information for quanto products
+        if firds.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_OthrNtnlCcy'):
+            other_currency = firds['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_OthrNtnlCcy']
+            details.append(f"[bright_yellow]💱 Reference Currency:[/bright_yellow] {other_currency}")
+    
     # Forward-specific attributes
     elif instrument.instrument_type == "forward":
         # Forward classification and type-specific details
@@ -1185,96 +1496,134 @@ def _format_legal_entity_panel(entity):
 
 
 def _format_trading_venues_table(venues):
-    """Format trading venues as a rich table with comprehensive MIC data and FIRDS venue attributes"""
+    """Format trading venues as an adaptive table showing only meaningful data columns"""
     if not venues:
         return "No trading venues available"
     
     from rich.table import Table
+    from marketdata_api.database.session import get_session
+    from marketdata_api.models.sqlite.market_identification_code import MarketIdentificationCode
     
-    table = Table(show_header=True, header_style="bold blue", width=140)
+    # First pass: analyze what data is actually available
+    venue_data = []
+    has_mic_data = False
+    has_admission = False
+    has_termination = False
+    
+    with get_session() as session:
+        for venue in venues[:10]:  # Limit to first 10
+            # Get MIC code - try mic_code field first, then fall back to venue_id
+            mic_lookup_code = venue.mic_code or venue.venue_id
+            
+            # Direct MIC lookup (more reliable than relationship)
+            mic_data = None
+            if mic_lookup_code:
+                mic_data = session.query(MarketIdentificationCode).filter(
+                    MarketIdentificationCode.mic == mic_lookup_code
+                ).first()
+            
+            # Build venue row data
+            row_data = {
+                'mic_code': venue.venue_id or "N/A",
+                'market_name': "N/A",
+                'market_type': "N/A", 
+                'country': "N/A",
+                'status': "N/A",
+                'first_trade': "N/A",
+                'admission_date': "N/A",
+                'termination_date': "N/A"
+            }
+            
+            # Populate MIC data if found
+            if mic_data:
+                has_mic_data = True
+                row_data['market_name'] = mic_data.market_name or mic_data.acronym or "N/A"
+                row_data['market_type'] = mic_data.operation_type.value if mic_data.operation_type else "N/A"
+                row_data['country'] = mic_data.iso_country_code or "N/A"
+                # Store raw status for later color formatting
+                row_data['status'] = mic_data.status.value if mic_data.status else "N/A"
+                row_data['status_raw'] = row_data['status']  # Keep raw for comparison
+            else:
+                # Fallback to venue-specific names
+                row_data['market_name'] = venue.venue_full_name or venue.venue_short_name or "N/A"
+            
+            # Format first trade date
+            if venue.first_trade_date:
+                row_data['first_trade'] = venue.first_trade_date.strftime("%Y-%m-%d")
+            
+            # Check for additional dates in processed attributes or promoted fields
+            if venue.admission_approval_date:
+                row_data['admission_date'] = venue.admission_approval_date.strftime("%Y-%m-%d")
+                has_admission = True
+            elif venue.request_for_admission_date:
+                row_data['admission_date'] = venue.request_for_admission_date.strftime("%Y-%m-%d") 
+                has_admission = True
+            
+            if venue.termination_date:
+                row_data['termination_date'] = venue.termination_date.strftime("%Y-%m-%d")
+                has_termination = True
+            
+            venue_data.append(row_data)
+    
+    # Create adaptive table with only meaningful columns
+    table = Table(show_header=True, header_style="bold blue")
     table.add_column("MIC", style="bold cyan", width=4)
-    table.add_column("Market Name", style="white", width=30)
-    table.add_column("Type", style="yellow", width=8)
-    table.add_column("Country", style="bright_green", width=7)
+    table.add_column("Market Name", style="white", width=32)
+    
+    # Only add MIC-derived columns if we have MIC data
+    if has_mic_data:
+        table.add_column("Country", style="bright_green", width=7)
+        table.add_column("Status", style="magenta", width=8)
+    
+    # Always show first trade (it has data)
     table.add_column("First Trade", style="green", width=11)
-    table.add_column("Admission", style="blue", width=11)
-    table.add_column("Termination", style="red", width=11)
-    table.add_column("Status", style="magenta", width=8)
     
-    for venue in venues[:10]:  # Limit to first 10
-        # Get MIC code (venue_id is the MIC)
-        mic_code = venue.venue_id or "N/A"
-        
-        # Extract rich MIC information from relationship
-        market_name = "N/A"
-        market_type = "N/A"
-        country = "N/A"
-        mic_status = "N/A"
-        
-        # Check if we have MIC relationship data
-        if hasattr(venue, 'market_identification_code') and venue.market_identification_code:
-            mic_data = venue.market_identification_code
-            market_name = mic_data.market_name or mic_data.acronym or "N/A"
-            market_type = mic_data.operation_type.value if mic_data.operation_type else "N/A"
-            country = mic_data.iso_country_code or "N/A"
-            mic_status = mic_data.status.value if mic_data.status else "N/A"
-        else:
-            # Fallback to venue-specific name if no MIC data
-            market_name = venue.venue_full_name or venue.venue_short_name or "N/A"
-        
+    # Only add date columns if they have actual data
+    if has_admission:
+        table.add_column("Admission", style="blue", width=11)
+    if has_termination:
+        table.add_column("Termination", style="red", width=11)
+    
+    # Add rows with adaptive columns
+    for row_data in venue_data:
         # Truncate long market names
-        if len(market_name) > 28:
-            market_name = market_name[:25] + "..."
-            
-        # Color-code status
-        if mic_status == "ACTIVE":
-            status_display = f"[green]{mic_status}[/green]"
-        elif mic_status in ["EXPIRED", "SUSPENDED"]:
-            status_display = f"[red]{mic_status}[/red]"
-        else:
-            status_display = f"[yellow]{mic_status}[/yellow]"
+        market_name = row_data['market_name']
+        if len(market_name) > 30:
+            market_name = market_name[:27] + "..."
         
-        # Format dates from FIRDS venue attributes
-        first_trade = "N/A"
-        if venue.first_trade_date:
-            first_trade = venue.first_trade_date.strftime("%Y-%m-%d")
+        # Build row based on which columns we're showing
+        row = [
+            row_data['mic_code'],
+            market_name
+        ]
         
-        # Extract additional FIRDS venue dates from processed attributes
-        admission_date = "N/A"
-        termination_date = "N/A"
-        
-        if hasattr(venue, 'processed_attributes') and venue.processed_attributes:
-            attrs = venue.processed_attributes
-            if isinstance(attrs, dict):
-                # Request for admission date
-                if attrs.get('TradgVnRltdAttrbts_ReqForAdmssnDt'):
-                    admission_date = attrs['TradgVnRltdAttrbts_ReqForAdmssnDt'][:10] if len(attrs['TradgVnRltdAttrbts_ReqForAdmssnDt']) > 10 else attrs['TradgVnRltdAttrbts_ReqForAdmssnDt']
-                elif attrs.get('TradgVnRltdAttrbts_AdmssnApprvlDtByIssr'):
-                    admission_date = attrs['TradgVnRltdAttrbts_AdmssnApprvlDtByIssr'][:10] if len(attrs['TradgVnRltdAttrbts_AdmssnApprvlDtByIssr']) > 10 else attrs['TradgVnRltdAttrbts_AdmssnApprvlDtByIssr']
+        if has_mic_data:
+            # Simple status display without color codes (tables strip formatting)
+            status = row_data['status_raw'] if 'status_raw' in row_data else row_data['status']
+            status_display = status if status != "N/A" else "N/A"
                 
-                # Termination date
-                if attrs.get('TradgVnRltdAttrbts_TermntnDt'):
-                    termination_date = attrs['TradgVnRltdAttrbts_TermntnDt'][:10] if len(attrs['TradgVnRltdAttrbts_TermntnDt']) > 10 else attrs['TradgVnRltdAttrbts_TermntnDt']
-            
-        table.add_row(
-            mic_code,
-            market_name,
-            market_type,
-            country,
-            first_trade,
-            admission_date,
-            termination_date,
-            status_display
-        )
+            row.extend([row_data['country'], status_display])
+        
+        row.append(row_data['first_trade'])
+        
+        if has_admission:
+            row.append(row_data['admission_date'])
+        if has_termination:
+            row.append(row_data['termination_date'])
+        
+        table.add_row(*row)
     
-    # Add summary if more than 10 venues
-    if len(venues) > 10:
-        table.caption = f"Showing first 10 of {len(venues)} trading venues"
+    # Add summary
+    total_venues = len(venues)
+    if total_venues > 10:
+        table.caption = f"Showing first 10 of {total_venues} trading venues"
+    elif not has_mic_data:
+        table.caption = "Note: MIC registry data not linked for these venues"
     
     # Render table to string for panel
     from rich.console import Console
     from io import StringIO
-    temp_console = Console(file=StringIO(), width=140)
+    temp_console = Console(file=StringIO(), width=120)
     temp_console.print(table)
     return temp_console.file.getvalue()
 

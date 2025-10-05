@@ -277,7 +277,7 @@ class EntityAddress(Base):
     country = Column(String(5))
     city = Column(String(100))
     region = Column(String(100))
-    postal_code = Column(String(20), nullable=False)
+    postal_code = Column(String(20), nullable=True)
 
     entity = relationship(lambda: LegalEntity, back_populates="addresses")
 

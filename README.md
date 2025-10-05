@@ -18,6 +18,12 @@ Comprehensive market data management system with CFI-based instrument classifica
 
 ## Recent Major Improvements
 
+### CLI Delete Command & Enrichment Fixes (October 2025)
+- **New Delete Command**: Complete instrument deletion with `--cascade` and `--force` options
+- **LEI Enrichment Fix**: Resolved postal_code constraint errors for real-world addresses (Hong Kong, etc.)
+- **Structured Products**: Full H-category analysis with 500k+ products and real CFI pattern support
+- **Database Migration**: SQLite-compatible table recreation for schema changes
+
 ### Comprehensive Swap CLI Enhancement (October 2025)
 - **Complete Swap Classification System**: Intelligent CFI-driven detection for all 5 major swap types
 - **Professional Display**: Enhanced CLI with type-specific icons (💳📊📈💱🏦) and comprehensive FIRDS data integration
@@ -168,6 +174,13 @@ mapi.bat instruments create US0378331005 equity
 
 # Show trading venues
 mapi.bat instruments venues SE0000120784
+
+# Delete instruments with cascade options
+mapi.bat instruments delete EZ0F1SLFNWJ8 --force
+mapi.bat instruments delete US0378331005 --cascade  # Delete with related data
+
+# Enrich existing instruments with external data
+mapi.bat instruments enrich SE0000120784
 
 # Comprehensive derivative support with intelligent type detection
 mapi.bat instruments get EZ0XX8PK3511  # Credit Default Swap with full classification

@@ -4,11 +4,39 @@ All notable changes to the MarketDataAPI project will be documented in this file
 
 ## Recent Highlights
 
-- **[2025-10-05]**: 🔄 **Comprehensive Swap CLI Enhancement** - Complete swap classification system with intelligent type detection and professional display
+- **[2025-10-05]**: �️ **CLI Delete Command & Enrichment Fix** - Added instrument deletion with cascade options and fixed LEI enrichment postal code constraints
+- **[2025-10-05]**: 🏗️ **Structured Products Analysis** - Complete H-category FIRDS analysis with real-world CFI patterns and CLI implementation
+- **[2025-10-05]**: �🔄 **Comprehensive Swap CLI Enhancement** - Complete swap classification system with intelligent type detection and professional display
 - **[2025-10-04]**: 🔥 **MAJOR CLI Refactoring** - Transformed monolithic CLI into modular architecture (39% code reduction, zero breaking changes)
 - **[2025-10-04]**: Fixed FIGI enrichment system with enhanced statistics
 - **[2025-09-21]**: Health monitoring system with detailed API endpoints
 - **[2025-09-20]**: Complete Azure SQL production deployment with dual database support
+
+## [2025-10-05] - CLI Delete Command & Enrichment Fixes
+
+### 🛠️ Instrument Delete Command
+- **New CLI Command**: Added `instruments delete` command with comprehensive functionality
+  - **ISIN/ID Lookup**: Supports deletion by both ISIN and instrument ID
+  - **Cascade Deletion**: `--cascade` flag to delete related data (venues, FIGI mappings, transparency calculations)
+  - **Force Mode**: `--force` flag to skip confirmation prompts for automation
+  - **Rich Display**: Shows instrument details and related data before deletion
+  - **Database Compatibility**: Works with both SQLite and Azure SQL backends
+
+### 🔧 LEI Enrichment Database Fix
+- **Postal Code Constraint Resolution**: Fixed NOT NULL constraint error in `entity_addresses.postal_code`
+  - **Root Cause**: Real-world addresses (Hong Kong, etc.) legitimately have null postal codes
+  - **Solution**: Made postal_code column nullable with proper SQLite migration
+  - **Migration**: Created table recreation migration for SQLite compatibility
+- **Enhanced Error Handling**: LEI enrichment now handles missing address fields gracefully
+- **Data Integrity**: Maintains referential integrity while allowing real-world address variations
+
+### 🏗️ Structured Products Implementation
+- **H-Category Analysis**: Comprehensive FIRDS analysis of 500,000+ structured products
+  - **Real CFI Patterns**: Updated decoder with actual patterns (HRCAVC, HESBBC, HCAXFC, etc.)
+  - **Type Classification**: Capital Protection Certificates, Leverage Products, Yield Enhancement, etc.
+  - **CLI Display**: Professional structured product attributes with type-specific formatting
+- **Service Integration**: Full service layer support for structured product creation and enrichment
+- **Real Data Validation**: Tested with actual FIRDS instruments (EZ1QS2X4HGQ3, EZ5D7B4G6CW2, etc.)
 
 ## [2025-10-05] - Comprehensive Swap CLI Enhancement
 

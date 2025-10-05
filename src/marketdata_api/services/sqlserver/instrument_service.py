@@ -274,10 +274,38 @@ class SqlServerInstrumentService(InstrumentServiceInterface):
         finally:
             session.close()
 
-    def delete_instrument(self, instrument_id: str) -> bool:
-        """Delete an instrument."""
+    def delete_instrument(self, identifier: str, cascade: bool = False) -> bool:
+        """Delete an instrument by ISIN or ID, optionally with cascade deletion of related data."""
         session = self._get_session()
         try:
+            # Try ISIN first, then ID
+            result = session.execute(
+                text("SELECT id FROM instruments WHERE isin = :identifier OR id = :identifier"), 
+                {"identifier": identifier}
+            )
+            instrument_row = result.fetchone()
+            
+            if not instrument_row:
+                return False
+                
+            instrument_id = instrument_row[0]
+            
+            if cascade:
+                # Delete related data first
+                session.execute(
+                    text("DELETE FROM trading_venues WHERE instrument_id = :id"), 
+                    {"id": instrument_id}
+                )
+                session.execute(
+                    text("DELETE FROM figi_mappings WHERE instrument_id = :id"), 
+                    {"id": instrument_id}
+                )
+                session.execute(
+                    text("DELETE FROM transparency_calculations WHERE instrument_id = :id"), 
+                    {"id": instrument_id}
+                )
+            
+            # Delete the instrument
             result = session.execute(
                 text("DELETE FROM instruments WHERE id = :id"), {"id": instrument_id}
             )

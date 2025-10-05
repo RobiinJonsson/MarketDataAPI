@@ -363,6 +363,67 @@ class AttributeDecoder:
                     "security_type": cls.CIV_SECURITY_TYPE.get(attrs[3], f"Unknown ({attrs[3]})"),
                 }
 
+        # Non-standard derivatives (H) - Real-world FIRDS patterns
+        elif category == "H":
+            if group == "R":  # Interest Rate Options (HRCAVC pattern)
+                return {
+                    "option_type": (
+                        "Call Swaption" if attrs[0] == "C"
+                        else "Put Swaption" if attrs[0] == "P"
+                        else f"Rate Option ({attrs[0]})"
+                    ),
+                    "underlying_type": (
+                        "Rate Index/Swap" if attrs[1] == "A"
+                        else "Bond" if attrs[1] == "B"
+                        else f"Rate instrument ({attrs[1]})"
+                    ),
+                    "exercise_style": (
+                        "European" if attrs[2] == "V"
+                        else "American" if attrs[2] == "A"
+                        else f"Exercise ({attrs[2]})"
+                    ),
+                    "form": cls.EQUITY_FORM.get(attrs[3], f"Unknown ({attrs[3]})"),
+                }
+            elif group == "E":  # Equity Options (HESBBC, HESEBC, etc.)
+                return {
+                    "underlying_type": (
+                        "Single Name" if attrs[0] == "S"
+                        else "Index" if attrs[0] == "I"
+                        else "Basket" if attrs[0] == "B"
+                        else f"Equity type ({attrs[0]})"
+                    ),
+                    "option_type": (
+                        "Call" if attrs[1] == "B"
+                        else "Put" if attrs[1] == "E"
+                        else "Straddle" if attrs[1] == "S"
+                        else f"Option ({attrs[1]})"
+                    ),
+                    "exercise_style": (
+                        "American" if attrs[2] == "B"
+                        else "European" if attrs[2] == "E"
+                        else f"Exercise ({attrs[2]})"
+                    ),
+                    "form": cls.EQUITY_FORM.get(attrs[3], f"Unknown ({attrs[3]})"),
+                }
+            elif group == "C":  # Credit Options/Derivatives
+                return {
+                    "credit_type": (
+                        "Index Swaption" if attrs[0] == "I"
+                        else "Single Name" if attrs[0] == "S"
+                        else f"Credit ({attrs[0]})"
+                    ),
+                    "option_feature": f"Feature ({attrs[1]})",
+                    "settlement_style": f"Settlement ({attrs[2]})",
+                    "form": cls.EQUITY_FORM.get(attrs[3], f"Unknown ({attrs[3]})"),
+                }
+            else:  # Other H-category products (F, M, L, S, N, W, Y)
+                return {
+                    "product_feature_1": f"Feature ({attrs[0]})",
+                    "product_feature_2": f"Feature ({attrs[1]})", 
+                    "product_feature_3": f"Feature ({attrs[2]})",
+                    "form": cls.EQUITY_FORM.get(attrs[3], f"Unknown ({attrs[3]})"),
+                }
+
         # Default for unknown patterns
         return {
             "attribute_1": f"Unknown ({attrs[0]})",
@@ -458,6 +519,20 @@ class CFI:
                 "F": "Funds of funds",
                 "P": "Private equity funds",
                 "M": "Others (miscellaneous)",
+            }
+        # Non-standard/Structured products groups (Real-world FIRDS patterns)
+        elif self.category == "H":
+            groups = {
+                "R": "Interest Rate Options (Swaptions)",
+                "E": "Equity Options (Single-name and Index)", 
+                "C": "Credit Options/Derivatives",
+                "F": "Foreign Exchange Options",
+                "M": "Commodity Options/Derivatives",
+                "L": "Leverage products (Warrants, Turbos)",
+                "S": "Structured securities (Bonds with embedded derivatives)",
+                "N": "Notes (Structured notes and certificates)",
+                "W": "Warrants (Covered warrants, Barrier warrants)",
+                "Y": "Others (miscellaneous structured products)",
             }
         else:
             groups = {}

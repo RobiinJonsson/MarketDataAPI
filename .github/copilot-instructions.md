@@ -115,6 +115,7 @@ from marketdata_api.services.sqlserver.instrument_service import SqlServerInstru
 - **Error handling**: Use Rich console for user-facing errors
 - **Logging**: Use the configured logger, never print() statements
 - **Database**: Always use service layer, never direct model access in routes
+- **Real data only**: Never use mock/fake ISINs or test data - always use actual FIRDS data
 
 ### Architecture Rules
 - **CFI-first**: All instrument logic must start with CFI code validation

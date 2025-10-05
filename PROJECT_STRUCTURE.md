@@ -62,8 +62,30 @@ deployment\upgrade.bat 1.0.1
 # Install in development mode
 pip install -e .
 
-# Or run CLI directly
-python src/marketdata_api/cli.py --help
+# Run CLI with wrapper script (recommended - sets environment)
+deployment\mapi.bat --help
+deployment\mapi.bat instruments --help
+
+# Or run CLI directly  
+python -m marketdata_api.cli --help
+```
+
+### CLI Command Structure
+```
+mapi.bat [command-group] [command] [options]
+
+Command Groups:
+├── instruments    # Create, list, get, delete, enrich instruments
+├── transparency   # MiFID II transparency calculations
+├── mic           # Market Identification Code operations
+├── figi          # Financial Instrument Global Identifier
+├── entities      # Legal entity operations
+└── files         # File management operations
+
+New Features:
+├── instruments delete [ISIN] [--cascade] [--force]  # Delete with related data
+├── instruments enrich [ISIN]                        # External data enrichment
+└── Enhanced structured products support (H-category CFI codes)
 ```
 
 ### Running Tests

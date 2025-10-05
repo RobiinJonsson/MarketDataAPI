@@ -1255,15 +1255,43 @@ class SqliteInstrumentService(InstrumentServiceInterface):
         finally:
             session.close()
 
-    def delete_instrument(self, instrument_id: str) -> bool:
-        """Delete an instrument."""
+    def delete_instrument(self, identifier: str, cascade: bool = False) -> bool:
+        """Delete an instrument by ISIN or ID, optionally with cascade deletion of related data."""
         with get_session() as session:
-            instrument = session.query(Instrument).filter(Instrument.id == instrument_id).first()
-            if instrument:
+            try:
+                # Try to find by ISIN first, then by ID
+                instrument = session.query(Instrument).filter(Instrument.isin == identifier).first()
+                if not instrument:
+                    instrument = session.query(Instrument).filter(Instrument.id == identifier).first()
+                
+                if not instrument:
+                    return False
+                
+                if cascade:
+                    # Delete related data manually to ensure proper cleanup
+                    from marketdata_api.models.sqlite.instrument import TradingVenue
+                    from marketdata_api.models.sqlite.figi import FigiMapping
+                    from marketdata_api.models.sqlite.transparency import TransparencyCalculation
+                    
+                    # Delete trading venues
+                    session.query(TradingVenue).filter(TradingVenue.instrument_id == instrument.id).delete()
+                    
+                    # Delete FIGI mappings
+                    session.query(FigiMapping).filter(FigiMapping.instrument_id == instrument.id).delete()
+                    
+                    # Delete transparency calculations
+                    session.query(TransparencyCalculation).filter(TransparencyCalculation.instrument_id == instrument.id).delete()
+                    
+                    # Legal entity is handled by foreign key relationship
+                
+                # Delete the instrument itself
                 session.delete(instrument)
                 session.commit()
                 return True
-            return False
+                
+            except Exception as e:
+                session.rollback()
+                raise e
 
     def search_instruments(self, query: str, limit: int = 100) -> List[InstrumentInterface]:
         """Search instruments by name, symbol, or ISIN."""

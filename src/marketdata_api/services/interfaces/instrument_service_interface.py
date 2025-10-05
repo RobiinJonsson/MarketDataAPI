@@ -26,8 +26,8 @@ class InstrumentServiceInterface:
         """Update an existing instrument."""
         raise NotImplementedError("Subclasses must implement this method")
 
-    def delete_instrument(self, instrument_id: str) -> bool:
-        """Delete an instrument."""
+    def delete_instrument(self, identifier: str, cascade: bool = False) -> bool:
+        """Delete an instrument by ISIN or ID, optionally with cascade deletion of related data."""
         raise NotImplementedError("Subclasses must implement this method")
 
     def search_instruments(self, query: str, limit: int = 100) -> List[InstrumentInterface]:
