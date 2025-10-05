@@ -240,105 +240,278 @@ def create(ctx, isin, type):
 
 @transparency.command("get")
 @click.argument("isin")
+@click.option("--full", is_flag=True, help="Show detailed analysis and comparisons")
 @click.pass_context
 @handle_database_error
-def get_transparency(ctx, isin):
-    """Get transparency calculations by ISIN"""
+def get_transparency(ctx, isin, full):
+    """Get transparency calculations by ISIN with enhanced analysis"""
     try:
         from marketdata_api.services.sqlite.transparency_service import TransparencyService
+        from marketdata_api.services.sqlite.instrument_service import SqliteInstrumentService
         
         service = TransparencyService()
+        instrument_service = SqliteInstrumentService()
 
         with console.status(f"[bold green]Looking up transparency calculations for {isin}..."):
             calculations = service.get_transparency_by_isin(isin.upper())
 
         if not calculations:
-            console.print(f"[red]No transparency calculations found for ISIN: {isin}[/red]")
+            console.print(f"[red]❌ No transparency calculations found for ISIN: {isin}[/red]")
             return
 
-        console.print(
-            f"\n[bold]Found {len(calculations)} transparency calculation(s) for {isin}:[/bold]\n"
-        )
-
-        for i, calculation in enumerate(calculations, 1):
-            # Handle None values safely
-            from_date = calculation.from_date or "N/A"
-            to_date = calculation.to_date or "N/A"
-            transactions = (
-                calculation.total_transactions_executed
-                if calculation.total_transactions_executed is not None
-                else 0
-            )
-            volume = (
-                calculation.total_volume_executed
-                if calculation.total_volume_executed is not None
-                else 0
-            )
-
-            # Common details
-            details = f"""[cyan]ID:[/cyan] {calculation.id or 'N/A'}
-[cyan]ISIN:[/cyan] {calculation.isin or 'N/A'}
-[cyan]File Type:[/cyan] {calculation.file_type or 'N/A'}
-[cyan]Source File:[/cyan] {calculation.source_file or 'N/A'}
-[cyan]Period:[/cyan] {from_date} to {to_date}
-[cyan]Liquidity:[/cyan] {'Yes' if calculation.liquidity else 'No' if calculation.liquidity is not None else 'Unknown'}
-[cyan]Transactions:[/cyan] {transactions:,}
-[cyan]Volume:[/cyan] {volume:,.2f}
-[cyan]Tech Record ID:[/cyan] {calculation.tech_record_id or 'N/A'}
-[cyan]Created:[/cyan] {calculation.created_at or 'N/A'}"""
-
-            # Add asset-type-specific details from raw_data
-            raw_data = calculation.raw_data or {}
-
-            # Check if this is equity data (FULECR files)
-            is_equity = calculation.file_type and calculation.file_type.startswith("FULECR")
-
-            if is_equity:
-                # Equity-specific fields
-                details += f"""
-
-[yellow]Equity-Specific Data:[/yellow]
-[cyan]Primary ID (ISIN):[/cyan] {raw_data.get('Id', 'N/A')}
-[cyan]Secondary ID (Venue):[/cyan] {raw_data.get('Id_2', 'N/A')}
-[cyan]Methodology:[/cyan] {raw_data.get('Mthdlgy', 'N/A')}
-[cyan]Average Daily Turnover:[/cyan] {raw_data.get('AvrgDalyTrnvr', 'N/A')}
-[cyan]Large in Scale:[/cyan] {raw_data.get('LrgInScale', 'N/A')}
-[cyan]Avg Daily No. of Transactions:[/cyan] {raw_data.get('AvrgDalyNbOfTxs', 'N/A')}
-[cyan]Avg Daily No. of Transactions (2nd):[/cyan] {raw_data.get('AvrgDalyNbOfTxs_2', 'N/A')}
-[cyan]Average Transaction Value:[/cyan] {raw_data.get('AvrgTxVal', 'N/A')}
-[cyan]Standard Market Size:[/cyan] {raw_data.get('StdMktSz', 'N/A')}
-[cyan]Statistics:[/cyan] {raw_data.get('Sttstcs', 'N/A')}"""
-            else:
-                # Non-equity specific fields (FULNCR files)
-                details += f"""
-
-[yellow]Non-Equity Data:[/yellow]
-[cyan]Description:[/cyan] {raw_data.get('Desc', 'N/A')}
-[cyan]Classification:[/cyan] {raw_data.get('FinInstrmClssfctn', 'N/A')}"""
-
-                # Show criteria fields (up to 7 for futures)
-                for j in range(1, 8):
-                    crit_name_key = f"CritNm_{j}" if j > 1 else "CritNm"
-                    crit_val_key = f"CritVal_{j}" if j > 1 else "CritVal"
-
-                    crit_name = raw_data.get(crit_name_key)
-                    crit_val = raw_data.get(crit_val_key)
-
-                    if crit_name or crit_val:
-                        details += f"""
-[cyan]Criterion {j}:[/cyan] {crit_name or 'N/A'} = {crit_val or 'N/A'}"""
-
-            console.print(
-                Panel(
-                    details, title=f"[bold]Transparency Calculation {i}[/bold]", border_style="cyan"
-                )
-            )
+        # Get instrument info for context
+        instrument_session, instrument = instrument_service.get_instrument(isin.upper())
+        
+        # Display comprehensive transparency analysis
+        _display_transparency_rich(calculations, instrument, full)
+        
+        if instrument_session:
+            instrument_session.close()
 
     except Exception as e:
-        console.print(f"[red]Error: {str(e)}[/red]")
+        console.print(f"[red]❌ Error: {str(e)}[/red]")
         if ctx.obj.get("verbose"):
             import traceback
             traceback.print_exc()
+
+
+def _display_transparency_rich(calculations, instrument, show_full=False):
+    """Display transparency calculations with rich formatting and analysis"""
+    from rich.columns import Columns
+    from rich.text import Text
+    import datetime
+    
+    # Header with instrument context
+    header_info = _format_transparency_header(calculations, instrument)
+    console.print(Panel(header_info, title=f"📈 Transparency Analysis: {calculations[0].isin}", border_style="blue"))
+    
+    # Summary analysis
+    summary_info = _format_transparency_summary(calculations)
+    console.print(Panel(summary_info, title="📊 Summary Analysis", border_style="green"))
+    
+    if show_full:
+        # Period comparison
+        comparison_info = _format_period_comparison(calculations)
+        if comparison_info.strip():
+            console.print(Panel(comparison_info, title="📈 Period Comparison", border_style="yellow"))
+        
+        # Risk and liquidity analysis
+        risk_info = _format_risk_analysis(calculations)
+        if risk_info.strip():
+            console.print(Panel(risk_info, title="⚠️ Risk & Liquidity Analysis", border_style="magenta"))
+    
+    # Individual calculation details
+    console.print(f"\n[bold cyan]Individual Calculations ({len(calculations)} found):[/bold cyan]")
+    for i, calculation in enumerate(calculations, 1):
+
+        _display_calculation_details(calculation, i)
+
+
+def _format_transparency_header(calculations, instrument):
+    """Format header with instrument and transparency context"""
+    if not calculations:
+        return "No calculations available"
+    
+    calc = calculations[0]  # Use first calculation for context
+    
+    # Instrument context
+    instrument_info = ""
+    if instrument:
+        instrument_info = f"""[bold white]{instrument.full_name or 'N/A'}[/bold white]
+[dim]{instrument.instrument_type.title() if instrument.instrument_type else 'Unknown Type'} • {instrument.currency or 'N/A'}[/dim]
+
+"""
+    
+    # Calculate date range across all calculations
+    all_dates = []
+    for calc in calculations:
+        if calc.from_date:
+            all_dates.append(calc.from_date)
+        if calc.to_date:
+            all_dates.append(calc.to_date)
+    
+    date_range = ""
+    if all_dates:
+        min_date = min(all_dates)
+        max_date = max(all_dates)
+        date_range = f"Data Period: {min_date.strftime('%Y-%m-%d') if hasattr(min_date, 'strftime') else min_date} to {max_date.strftime('%Y-%m-%d') if hasattr(max_date, 'strftime') else max_date}"
+    
+    return f"""{instrument_info}[cyan]ISIN:[/cyan] [bold]{calc.isin}[/bold]
+[cyan]Calculations Found:[/cyan] {len(calculations)}
+[cyan]{date_range}[/cyan]
+[cyan]File Types:[/cyan] {', '.join(set(c.file_type for c in calculations if c.file_type))}"""
+
+
+def _format_transparency_summary(calculations):
+    """Format summary analysis of all calculations"""
+    if not calculations:
+        return "No data available"
+    
+    # Aggregate statistics
+    total_volume = sum(c.total_volume_executed or 0 for c in calculations)
+    total_transactions = sum(c.total_transactions_executed or 0 for c in calculations)
+    
+    # Find latest/most relevant calculation (with actual data)
+    active_calcs = [c for c in calculations if c.total_transactions_executed and c.total_transactions_executed > 0]
+    
+    summary = []
+    summary.append(f"[cyan]Total Volume (All Periods):[/cyan] {total_volume:,.2f}")
+    summary.append(f"[cyan]Total Transactions:[/cyan] {total_transactions:,}")
+    
+    if active_calcs:
+        avg_transaction_size = total_volume / total_transactions if total_transactions > 0 else 0
+        summary.append(f"[cyan]Average Transaction Size:[/cyan] {avg_transaction_size:,.2f}")
+        
+        # Liquidity assessment
+        liquid_count = sum(1 for c in calculations if c.liquidity is True)
+        if liquid_count > 0:
+            summary.append(f"[green]✅ Liquid Periods:[/green] {liquid_count}/{len(calculations)}")
+        else:
+            summary.append(f"[yellow]⚠️ Limited Liquidity Data Available[/yellow]")
+    
+    # Market activity insight
+    if active_calcs:
+        latest_active = max(active_calcs, key=lambda x: x.to_date or x.from_date or x.created_at)
+        raw_data = latest_active.raw_data or {}
+        
+        if raw_data.get('AvrgDalyTrnvr'):
+            daily_turnover = float(raw_data['AvrgDalyTrnvr'])
+            summary.append(f"[cyan]Latest Avg Daily Turnover:[/cyan] {daily_turnover:,.2f}")
+        
+        if raw_data.get('LrgInScale'):
+            lis_threshold = float(raw_data['LrgInScale'])
+            summary.append(f"[cyan]Large-in-Scale Threshold:[/cyan] {lis_threshold:,.0f}")
+    
+    return "\n".join(summary)
+
+
+def _format_period_comparison(calculations):
+    """Format comparison between different periods"""
+    if len(calculations) < 2:
+        return "Not enough periods for comparison"
+    
+    # Sort by period end date
+    sorted_calcs = sorted(calculations, key=lambda x: x.to_date or x.from_date or x.created_at, reverse=True)
+    
+    comparison = []
+    comparison.append("[bold]Period-over-Period Analysis:[/bold]")
+    
+    for i, calc in enumerate(sorted_calcs[:3]):  # Show top 3 periods
+        period = f"{calc.from_date or 'N/A'} to {calc.to_date or 'N/A'}"
+        volume = calc.total_volume_executed or 0
+        transactions = calc.total_transactions_executed or 0
+        
+        volume_str = f"{volume:,.0f}" if volume > 0 else "No trading"
+        tx_str = f"{transactions:,}" if transactions > 0 else "0"
+        
+        comparison.append(f"[cyan]Period {i+1}:[/cyan] {period}")
+        comparison.append(f"  Volume: {volume_str} | Transactions: {tx_str}")
+        
+        # Calculate growth if possible
+        if i < len(sorted_calcs) - 1:
+            prev_calc = sorted_calcs[i + 1]
+            prev_volume = prev_calc.total_volume_executed or 0
+            
+            if prev_volume > 0 and volume > 0:
+                growth = ((volume - prev_volume) / prev_volume) * 100
+                growth_color = "green" if growth > 0 else "red"
+                comparison.append(f"  [{growth_color}]Volume Change: {growth:+.1f}%[/{growth_color}]")
+    
+    return "\n".join(comparison)
+
+
+def _format_risk_analysis(calculations):
+    """Format risk and liquidity analysis"""
+    if not calculations:
+        return "No data available"
+    
+    analysis = []
+    analysis.append("[bold]Risk & Liquidity Assessment:[/bold]")
+    
+    # Find calculations with actual trading data
+    active_calcs = [c for c in calculations if c.total_transactions_executed and c.total_transactions_executed > 0]
+    
+    if not active_calcs:
+        analysis.append("[yellow]⚠️ No active trading periods found[/yellow]")
+        return "\n".join(analysis)
+    
+    # Analyze trading patterns
+    volumes = [c.total_volume_executed for c in active_calcs if c.total_volume_executed]
+    if volumes and len(volumes) > 1:
+        import statistics
+        vol_std = statistics.stdev(volumes)
+        vol_mean = statistics.mean(volumes)
+        vol_cv = (vol_std / vol_mean) * 100 if vol_mean > 0 else 0
+        
+        analysis.append(f"[cyan]Volume Volatility (CV):[/cyan] {vol_cv:.1f}%")
+        
+        if vol_cv > 50:
+            analysis.append("[red]🔴 High volume volatility - irregular trading[/red]")
+        elif vol_cv > 25:
+            analysis.append("[yellow]🟡 Moderate volume volatility[/yellow]")
+        else:
+            analysis.append("[green]🟢 Stable trading pattern[/green]")
+    
+    # Liquidity classification
+    liquid_periods = sum(1 for c in calculations if c.liquidity is True)
+    total_periods = len(calculations)
+    
+    if liquid_periods == 0:
+        analysis.append("[red]🔴 No liquid periods identified[/red]")
+    elif liquid_periods == total_periods:
+        analysis.append("[green]🟢 Consistently liquid across all periods[/green]")
+    else:
+        liquidity_ratio = (liquid_periods / total_periods) * 100
+        analysis.append(f"[yellow]🟡 Partially liquid: {liquidity_ratio:.0f}% of periods[/yellow]")
+    
+    return "\n".join(analysis)
+
+
+def _display_calculation_details(calculation, index):
+    """Display individual calculation details"""
+    # Handle None values safely
+    from_date = calculation.from_date or "N/A"
+    to_date = calculation.to_date or "N/A"
+    transactions = (
+        calculation.total_transactions_executed
+        if calculation.total_transactions_executed is not None
+        else 0
+    )
+    volume = (
+        calculation.total_volume_executed
+        if calculation.total_volume_executed is not None
+        else 0
+    )
+
+    # Common details
+    details = f"""[cyan]ID:[/cyan] {calculation.id or 'N/A'}
+[cyan]Period:[/cyan] {from_date} to {to_date}
+[cyan]File Type:[/cyan] {calculation.file_type or 'N/A'}
+[cyan]Liquidity:[/cyan] {'Yes' if calculation.liquidity else 'No' if calculation.liquidity is not None else 'Unknown'}
+[cyan]Transactions:[/cyan] {transactions:,}
+[cyan]Volume:[/cyan] {volume:,.2f}"""
+
+    # Add asset-type-specific details from raw_data
+    raw_data = calculation.raw_data or {}
+
+    # Check if this is equity data (FULECR files)
+    is_equity = calculation.file_type and calculation.file_type.startswith("FULECR")
+
+    if is_equity and raw_data:
+        # Key equity metrics only
+        details += f"""
+
+[yellow]Key Metrics:[/yellow]
+[cyan]Methodology:[/cyan] {raw_data.get('Mthdlgy', 'N/A')}
+[cyan]Average Daily Turnover:[/cyan] {raw_data.get('AvrgDalyTrnvr', 'N/A')}
+[cyan]Large in Scale Threshold:[/cyan] {raw_data.get('LrgInScale', 'N/A')}
+[cyan]Standard Market Size:[/cyan] {raw_data.get('StdMktSz', 'N/A')}"""
+
+    console.print(
+        Panel(
+            details, title=f"[bold]Calculation {index}[/bold]", border_style="cyan", padding=(0, 1)
+        )
+    )
 
 
 @transparency.command()

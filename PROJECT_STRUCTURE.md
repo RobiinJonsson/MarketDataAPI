@@ -57,6 +57,40 @@ python -m build
 deployment\upgrade.bat 1.0.1
 ```
 
+### 🚀 Release Workflow (Order of Operations)
+```bash
+# Step 1: Version upgrade on dev branch
+deployment\upgrade.bat 1.0.2
+# (Script will pause - manually update setup.py and pyproject.toml versions)
+
+# Step 2: Commit version changes
+git add setup.py pyproject.toml build/dist/
+git commit -m "Release version 1.0.2"
+
+# Step 3: Create tag
+git tag v1.0.2
+
+# Step 4: Push dev with tags
+git push origin dev --tags
+
+# Step 5: Merge to main
+git checkout main
+git pull origin main          # Ensure main is up to date  
+git merge dev                 # Merge dev into main
+
+# Step 6: Push main with all tags
+git push origin main --tags
+
+# Step 7: Return to dev for continued development
+git checkout dev
+```
+
+**Key Points:**
+- ✅ Always upgrade version on `dev` branch first
+- ✅ `upgrade.bat` is semi-manual - you handle git operations
+- ✅ Main branch becomes the "release" branch
+- ✅ Tags move with the merge from dev to main
+
 ### Running from Source (Development)
 ```bash
 # Install in development mode

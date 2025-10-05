@@ -4,17 +4,17 @@ All notable changes to the MarketDataAPI project will be documented in this file
 
 ## Recent Highlights
 
-- **[2025-10-05]**: �️ **CLI Delete Command & Enrichment Fix** - Added instrument deletion with cascade options and fixed LEI enrichment postal code constraints
-- **[2025-10-05]**: 🏗️ **Structured Products Analysis** - Complete H-category FIRDS analysis with real-world CFI patterns and CLI implementation
-- **[2025-10-05]**: �🔄 **Comprehensive Swap CLI Enhancement** - Complete swap classification system with intelligent type detection and professional display
+- **[2025-10-05]**: 🏛️ **Enhanced CLI Commands** - Comprehensive CLI improvements across instruments, entities, transparency, and MIC commands with professional displays
+- **[2025-10-05]**: 🏗️ **Structured Products Analysis** - Complete H-category FIRDS analysis with real-world CFI patterns and CLI implementation  
+- **[2025-10-05]**: 🔄 **Comprehensive Swap CLI Enhancement** - Complete swap classification system with intelligent type detection and professional display
 - **[2025-10-04]**: 🔥 **MAJOR CLI Refactoring** - Transformed monolithic CLI into modular architecture (39% code reduction, zero breaking changes)
 - **[2025-10-04]**: Fixed FIGI enrichment system with enhanced statistics
 - **[2025-09-21]**: Health monitoring system with detailed API endpoints
 - **[2025-09-20]**: Complete Azure SQL production deployment with dual database support
 
-## [2025-10-05] - CLI Delete Command & Enrichment Fixes
+## [2025-10-05] - Comprehensive CLI Enhancements
 
-### 🛠️ Instrument Delete Command
+### 🛠️ Instrument Delete Command  
 - **New CLI Command**: Added `instruments delete` command with comprehensive functionality
   - **ISIN/ID Lookup**: Supports deletion by both ISIN and instrument ID
   - **Cascade Deletion**: `--cascade` flag to delete related data (venues, FIGI mappings, transparency calculations)
@@ -28,6 +28,27 @@ All notable changes to the MarketDataAPI project will be documented in this file
   - **Solution**: Made postal_code column nullable with proper SQLite migration
   - **Migration**: Created table recreation migration for SQLite compatibility
 - **Enhanced Error Handling**: LEI enrichment now handles missing address fields gracefully
+
+### 🏢 Enhanced Entities CLI
+- **Complete Rewrite**: Rebuilt entities CLI with service layer integration and comprehensive display
+- **Rich Formatting**: Professional display with addresses, corporate structure, and related instruments
+- **Service Integration**: Proper use of LegalEntityService for data access
+- **Field Mappings**: Fixed field mapping issues (legal_name vs name, country vs jurisdiction)
+- **Corporate Structure**: Display subsidiaries with 10-item limit and professional formatting
+
+### 📊 Enhanced Transparency CLI  
+- **Analysis Features**: Added comprehensive analysis with `--full` flag support
+- **Market Insights**: Summary statistics, period comparisons, and risk assessment
+- **Professional Display**: Rich panels with color-coded indicators and detailed breakdowns
+- **Comparative Analysis**: Multi-period analysis with trend indicators and insights
+
+### 🏛️ Enhanced MIC CLI
+- **Comprehensive Display**: Complete redesign with rich formatting and detailed market information
+- **Market Relationships**: Shows related MICs (segments/parent relationships) with status indicators
+- **LEI Integration**: Displays linked legal entity information when available
+- **Market Activity**: Statistics about instruments traded on the market
+- **Professional Panels**: Organized display with icons, status indicators, and comprehensive details
+- **Full Analysis Mode**: `--full` flag for complete market ecosystem view
 - **Data Integrity**: Maintains referential integrity while allowing real-world address variations
 
 ### 🏗️ Structured Products Implementation
