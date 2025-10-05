@@ -51,7 +51,7 @@ def read_requirements():
 
 setup(
     name="marketdata-api",
-    version="1.0.1",
+    version="1.0.2",
     author="Robin Jonsson",
     author_email="robin_j88@hotmail.com",  # Update with your email
     description="Professional Financial Market Data Platform with CLI and API",
