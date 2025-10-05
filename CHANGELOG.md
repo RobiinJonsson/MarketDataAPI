@@ -4,10 +4,39 @@ All notable changes to the MarketDataAPI project will be documented in this file
 
 ## Recent Highlights
 
+- **[2025-10-05]**: 🔄 **Comprehensive Swap CLI Enhancement** - Complete swap classification system with intelligent type detection and professional display
 - **[2025-10-04]**: 🔥 **MAJOR CLI Refactoring** - Transformed monolithic CLI into modular architecture (39% code reduction, zero breaking changes)
 - **[2025-10-04]**: Fixed FIGI enrichment system with enhanced statistics
 - **[2025-09-21]**: Health monitoring system with detailed API endpoints
 - **[2025-09-20]**: Complete Azure SQL production deployment with dual database support
+
+## [2025-10-05] - Comprehensive Swap CLI Enhancement
+
+### 🔄 Complete Swap Classification and Display System
+- **Intelligent Swap Type Detection**: Added comprehensive CFI-driven swap classification for all major swap categories
+  - **Credit Default Swaps (SCBCCA)**: 💳 with basket ISIN information and credit protection details
+  - **Interest Rate Swaps (SRCCSP)**: 📊 with reference rate, floating term, and fixed-float derivative information
+  - **Equity Total Return Swaps (SESTXC)**: 📈 with underlying equity exposure details
+  - **Foreign Exchange Swaps (SFCXXP)**: 💱 with currency pair information
+  - **OIS Interest Rate Swaps (SRHCSC)**: 🏦 with overnight indexed swap specifications
+- **Professional CLI Display**: Enhanced swap attributes panel with bright_magenta color scheme and type-specific icons
+- **FIRDS Data Integration**: Smart extraction of swap-specific attributes from regulatory data including:
+  - Expiration dates, settlement types (cash/physical/optional)
+  - Price multipliers, reference rates, floating terms
+  - Underlying assets, basket ISINs, currency pairs
+  - Compound periods for OIS swaps
+
+### 🔧 Technical Improvements
+- **CFI-Based Classification**: Uses ISO 10962 codes for accurate swap type identification
+- **Error Handling**: Fixed isinstance() compatibility issues with list type checking
+- **Rich Formatting**: Comprehensive swap information display with contextual details
+- **Real-World Testing**: Validated with actual swap instruments (Credit Default and Interest Rate swaps)
+
+### 🎯 Swap Analysis Results
+- **5 Swap Types Identified**: Complete coverage of ESMA FIRDS swap categories
+- **Type-Specific Icons**: Visual distinction with appropriate emoji indicators
+- **Detailed Attribute Extraction**: Comprehensive FIRDS data processing for each swap type
+- **Professional Output**: Consistent with existing derivative display patterns (futures, options)
 
 ## [2025-10-04] - CLI Modular Architecture and FIGI Enrichment Fixes
 

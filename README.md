@@ -4,17 +4,25 @@ Comprehensive market data management system with CFI-based instrument classifica
 
 ## Key Features
 
-- **MIC Code Integration**: Complete IS**Complete API Documentation**: Available at `/api/v1/swagger` (interactive) and `docs/api/` 10383 Market Identification Code system with dual-mode operations
+- **Enhanced Derivatives Support**: Comprehensive swap classification with intelligent CFI-driven type detection for all major categories
+- **MIC Code Integration**: Complete ISO 10383 Market Identification Code system with dual-mode operations
 - **CFI-Based Classification**: ISO 10962 compliant CFI code system as single source of truth for instrument types
 - **Unified Architecture**: JSON-based models supporting all 10 FIRDS instrument types (C,D,E,F,H,I,J,O,R,S)
 - **Performance Optimized**: CFI-driven file filtering reduces I/O operations by 90%
 - **Dual Database Support**: SQLite (development) / Azure SQL (production) with unified transparency calculations
 - **Complete Data Integration**: FIRDS/FITRS integration with intelligent type detection
 - **RESTful API**: Modular Swagger UI with comprehensive endpoint documentation
-- **Professional CLI**: Modern command-line interface with Rich formatting
+- **Professional CLI**: Modern command-line interface with Rich formatting and type-specific displays
 - **Smart File Management**: Precise regex-based pattern matching for FIRDS/FITRS files
+- **Complete API Documentation**: Available at `/api/v1/swagger` (interactive) and `docs/api/`
 
 ## Recent Major Improvements
+
+### Comprehensive Swap CLI Enhancement (October 2025)
+- **Complete Swap Classification System**: Intelligent CFI-driven detection for all 5 major swap types
+- **Professional Display**: Enhanced CLI with type-specific icons (💳📊📈💱🏦) and comprehensive FIRDS data integration
+- **Smart Attribute Extraction**: Reference rates, floating terms, currency pairs, basket ISINs, settlement types
+- **Real-World Validation**: Tested with Credit Default and Interest Rate swaps from live data
 
 ### Modular CLI Architecture (October 2025)
 - **Complete Modular Refactoring**: Transformed monolithic CLI into maintainable modular structure
@@ -160,6 +168,11 @@ mapi.bat instruments create US0378331005 equity
 
 # Show trading venues
 mapi.bat instruments venues SE0000120784
+
+# Comprehensive derivative support with intelligent type detection
+mapi.bat instruments get EZ0XX8PK3511  # Credit Default Swap with full classification
+mapi.bat instruments get EZ8SPFL0BM66  # Interest Rate Swap with reference rate details
+mapi.bat instruments create [ISIN] swap  # Create swap with automatic CFI classification
 ```
 
 **CFI Analysis**
@@ -428,7 +441,7 @@ Complete ISO 10962 CFI code support:
 - **R** - Entitlements (Rights, Warrants, etc.)
 - **O** - Options (Calls, Puts, etc.)
 - **F** - Futures (Commodities, Financial, etc.)
-- **S** - Swaps (Interest rate, Currency, etc.)
+- **S** - Swaps (Credit Default 💳, Interest Rate 📊, Equity Total Return 📈, Foreign Exchange 💱, OIS 🏦)
 - **H** - Non-listed and complex products
 - **I** - Others (Interest rate instruments, etc.)
 - **J** - Collective investment vehicles

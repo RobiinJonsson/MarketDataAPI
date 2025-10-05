@@ -674,6 +674,64 @@ class SqliteInstrumentService(InstrumentServiceInterface):
 
         return attributes
 
+    def _extract_clean_strike_price(self, firds_record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Extract and clean strike price information from FIRDS record."""
+        import re
+        
+        strike_info = {}
+        
+        # Handle percentage strike price
+        if firds_record.get("DerivInstrmAttrbts_StrkPric_Pric_Pctg"):
+            pctg_value = firds_record["DerivInstrmAttrbts_StrkPric_Pric_Pctg"]
+            try:
+                if isinstance(pctg_value, bool):
+                    # Convert boolean to numeric (True=1, False=0)
+                    strike_info["percentage"] = 1.0 if pctg_value else 0.0
+                elif isinstance(pctg_value, str):
+                    # Try to parse as float, handling boolean strings
+                    cleaned = re.sub(r'^(true|false)', '', pctg_value.lower())
+                    if cleaned:
+                        strike_info["percentage"] = float(cleaned)
+                    else:
+                        strike_info["percentage"] = 1.0 if pctg_value.lower().startswith('true') else 0.0
+                else:
+                    strike_info["percentage"] = float(pctg_value)
+            except (ValueError, TypeError):
+                pass
+
+        # Handle monetary amount strike price  
+        if firds_record.get("DerivInstrmAttrbts_StrkPric_Pric_MntryVal_Amt"):
+            amount_raw = firds_record["DerivInstrmAttrbts_StrkPric_Pric_MntryVal_Amt"]
+            sign = firds_record.get("DerivInstrmAttrbts_StrkPric_Pric_MntryVal_Sgn", "")
+            
+            try:
+                if isinstance(amount_raw, str):
+                    # Remove boolean prefixes like "true" or "false" 
+                    amount_clean = re.sub(r'^(true|false)', '', str(amount_raw))
+                    if amount_clean:
+                        amount_numeric = float(amount_clean)
+                        if amount_numeric != 0:
+                            strike_info["monetary_amount"] = amount_numeric
+                            if sign:
+                                strike_info["monetary_sign"] = sign
+                elif isinstance(amount_raw, (int, float)) and amount_raw != 0:
+                    strike_info["monetary_amount"] = float(amount_raw)
+                    if sign:
+                        strike_info["monetary_sign"] = sign
+            except (ValueError, TypeError):
+                pass
+
+        # Handle basis points strike price
+        if firds_record.get("DerivInstrmAttrbts_StrkPric_Pric_BsisPts"):
+            bps_value = firds_record["DerivInstrmAttrbts_StrkPric_Pric_BsisPts"]
+            try:
+                if isinstance(bps_value, (int, float)) and bps_value != 0:
+                    strike_info["basis_points"] = float(bps_value)
+            except (ValueError, TypeError):
+                pass
+
+        return strike_info if strike_info else None
+
     def _process_option_attributes(self, firds_record: Dict[str, Any]) -> Dict[str, Any]:
         """Process option (Type O) specific attributes."""
         attributes = {}
@@ -692,6 +750,30 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             attributes["option_type"] = "call"
         elif "P" in cfi_code:
             attributes["option_type"] = "put"
+
+        # Process strike price information - clean and validate data
+        strike_price_info = self._extract_clean_strike_price(firds_record)
+        if strike_price_info:
+            attributes["strike_price"] = strike_price_info
+
+        # Exercise style
+        if firds_record.get("DerivInstrmAttrbts_OptnExrcStyle"):
+            exercise_style = firds_record["DerivInstrmAttrbts_OptnExrcStyle"]
+            if exercise_style == "AMER":
+                attributes["exercise_style"] = "american"
+            elif exercise_style == "EURO":
+                attributes["exercise_style"] = "european"
+            else:
+                attributes["exercise_style"] = exercise_style.lower()
+
+        # Settlement type
+        if firds_record.get("DerivInstrmAttrbts_DlvryTp"):
+            delivery_type = firds_record["DerivInstrmAttrbts_DlvryTp"]
+            attributes["settlement_type"] = "physical" if delivery_type == "PHYS" else "cash"
+
+        # Underlying index information
+        if firds_record.get("DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm"):
+            attributes["underlying_index"] = firds_record["DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm"]
 
         return attributes
 

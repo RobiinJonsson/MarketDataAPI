@@ -1,0 +1,5 @@
+timestamp: 20251005_091203
+backup_type: pre-op
+description: Pre-operation backup before: auto_cleanup_outdated_patterns
+original_db_path: C:\Users\robin\Projects\MarketDataAPI\src\marketdata_api\database\marketdata.db
+backup_size: 4001792
