@@ -104,6 +104,268 @@ def get_entity(ctx, lei, full):
             traceback.print_exc()
 
 
+@entities.command()
+@click.argument("lei")
+@click.option("--force", is_flag=True, help="Overwrite existing entity if it exists")
+@click.pass_context
+@handle_database_error
+def create(ctx, lei, force):
+    """Create a new legal entity from GLEIF API data"""
+    try:
+        from marketdata_api.services.sqlite.legal_entity_service import LegalEntityService
+        from marketdata_api.database.session import get_session
+        
+        # Validate LEI format
+        if not _validate_lei_format(lei):
+            console.print(f"[red]❌ Invalid LEI format: {lei}[/red]")
+            console.print("[dim]LEI must be 20 characters: 4 char prefix + 2 char country + 12 char identifier + 2 char checksum[/dim]")
+            return
+        
+        service = LegalEntityService()
+        
+        # Check if entity already exists
+        with console.status(f"[bold blue]Checking if LEI {lei} already exists..."):
+            session, existing_entity = service.get_entity(lei)
+            if existing_entity and not force:
+                session.close()
+                console.print(f"[yellow]⚠️  Entity with LEI {lei} already exists[/yellow]")
+                console.print("[dim]Use --force to overwrite existing entity[/dim]")
+                return
+            if session:
+                session.close()
+        
+        # Create or update entity from GLEIF API
+        with console.status(f"[bold green]Fetching LEI data from GLEIF API and creating entity..."):
+            session, entity = service.create_or_update_entity(lei)
+            
+        if not entity:
+            console.print(f"[red]❌ Failed to create entity for LEI: {lei}[/red]")
+            console.print("[dim]LEI may not exist in GLEIF database or API may be unavailable[/dim]")
+            return
+        
+        try:
+            # Display the created entity
+            action = "Updated" if existing_entity and force else "Created"
+            console.print(f"[green]✅ {action} legal entity successfully![/green]")
+            console.print()
+            
+            # Show comprehensive entity details
+            _display_entity_rich(entity, show_full=True)
+            
+        finally:
+            session.close()
+            
+    except Exception as e:
+        console.print(f"[red]❌ Error creating entity: {str(e)}[/red]")
+        if ctx.obj.get("verbose"):
+            import traceback
+            traceback.print_exc()
+
+
+@entities.command("get-remote")
+@click.argument("lei")
+@click.option("--include-relationships", "-r", is_flag=True, help="Include parent/child relationships")
+@click.pass_context
+@handle_database_error
+def get_remote(ctx, lei, include_relationships):
+    """Get legal entity information directly from GLEIF API (no database storage)"""
+    try:
+        # Validate LEI format
+        if not _validate_lei_format(lei):
+            console.print(f"[red]❌ Invalid LEI format: {lei}[/red]")
+            console.print("[dim]LEI must be 20 characters: 4 char prefix + 2 char country + 12 char identifier + 2 char checksum[/dim]")
+            return
+        
+        # Import here to avoid issues with module loading
+        from marketdata_api.services.gleif import fetch_lei_info
+        
+        # Fetch basic entity information
+        with console.status(f"[bold green]Fetching LEI {lei} from GLEIF API..."):
+            gleif_data = fetch_lei_info(lei)
+            
+        if not gleif_data or 'error' in gleif_data:
+            error_msg = gleif_data.get('error', 'Unknown error') if gleif_data else 'No data returned'
+            console.print(f"[red]❌ Failed to fetch LEI data: {error_msg}[/red]")
+            return
+        
+        # Display the actual entity data from GLEIF API
+        _display_gleif_data_rich(gleif_data)
+        
+        # Fetch relationship data if requested
+        if include_relationships:
+            try:
+                from marketdata_api.services.gleif import fetch_direct_parent, fetch_ultimate_parent
+                console.print()
+                with console.status(f"[bold blue]Fetching relationship data..."):
+                    # Fetch parent relationships
+                    direct_parent_data = fetch_direct_parent(lei)
+                    ultimate_parent_data = fetch_ultimate_parent(lei)
+                
+                _display_gleif_relationships_rich(direct_parent_data, ultimate_parent_data)
+            except ImportError:
+                console.print("[yellow]⚠️  Relationship data functions not available[/yellow]")
+            except Exception as rel_e:
+                console.print(f"[red]❌ Error fetching relationships: {str(rel_e)}[/red]")
+            
+    except Exception as e:
+        console.print(f"[red]❌ Error fetching remote data: {str(e)}[/red]")
+        if ctx.obj.get("verbose"):
+            import traceback
+            traceback.print_exc()
+
+
+def _validate_lei_format(lei):
+    """Validate LEI format (20 characters)"""
+    return lei and len(lei) == 20 and lei.isalnum()
+
+
+def _display_gleif_data_rich(gleif_data):
+    """Display GLEIF API data with rich formatting"""
+    try:
+        # Parse GLEIF API response structure
+            
+        # Use the same mapping approach as the create command
+        lei_info = "N/A"
+        legal_name = "N/A"
+        status = "N/A"
+        jurisdiction = "N/A" 
+        legal_form = "N/A"
+        
+        if gleif_data and not gleif_data.get('error'):
+            try:
+                from marketdata_api.database.model_mapper import map_lei_record
+                mapped_data = map_lei_record(gleif_data)
+                
+                # Extract from the correct nested structure
+                lei_record = mapped_data.get('lei_record', {})
+                addresses = mapped_data.get('addresses', [])
+                registration = mapped_data.get('registration', {})
+                
+                # Extract mapped information from lei_record
+                lei_info = lei_record.get('lei', lei_info)
+                legal_name = lei_record.get('name', legal_name)
+                status = lei_record.get('status', status)
+                jurisdiction = lei_record.get('jurisdiction', jurisdiction)
+                legal_form = lei_record.get('legal_form', legal_form)
+                
+                # Additional fields for richer display
+                bic = lei_record.get('bic', None)
+                creation_date = lei_record.get('creation_date', None)
+                registration_status = lei_record.get('registration_status', None)
+                managing_lou = lei_record.get('managing_lou', None)
+                
+            except Exception as mapping_error:
+                console.print(f"[yellow]⚠️  Mapping failed: {str(mapping_error)}[/yellow]")
+                import traceback
+                traceback.print_exc()
+        
+        # Display formatted information
+        details = f"""[cyan]LEI:[/cyan] [bold]{lei_info}[/bold]
+[cyan]Legal Name:[/cyan] [bold white]{legal_name}[/bold white]
+[cyan]Status:[/cyan] [bold green]{status}[/bold green] 
+[cyan]Jurisdiction:[/cyan] {jurisdiction}
+[cyan]Legal Form:[/cyan] {legal_form}
+
+[dim]🌐 Data source: GLEIF API (live data, not stored locally)[/dim]"""
+        
+        console.print(Panel(details, title=f"� Remote Entity Information", border_style="blue"))
+        
+    except Exception as e:
+        console.print(f"[red]❌ Error displaying GLEIF data: {str(e)}[/red]")
+
+
+def _display_gleif_relationships_rich(direct_parent_data, ultimate_parent_data):
+    """Display GLEIF relationship data with rich formatting"""
+    relationship_info = []
+    
+    # Direct parent information
+    if direct_parent_data and 'error' not in direct_parent_data:
+        try:
+            if 'data' in direct_parent_data:
+                data_field = direct_parent_data['data']
+                # Handle both list and single object responses
+                if hasattr(data_field, '__len__'):
+                    data_len = len(data_field)
+                    if data_len > 0:
+                        parent_data = data_field[0] if hasattr(data_field, '__getitem__') else data_field
+                    else:
+                        relationship_info.append(f"[cyan]Direct Parent:[/cyan] [dim]No parent relationship records (empty data array)[/dim]")
+                        parent_data = None
+                else:
+                    parent_data = data_field
+                
+                if parent_data:
+                    parent_attrs = parent_data.get('attributes', {})
+                    
+                    if 'directParent' in parent_attrs:
+                        parent_lei = parent_attrs['directParent'].get('lei', 'N/A')
+                        parent_name = parent_attrs['directParent'].get('name', 'N/A')
+                        relationship_info.append(f"[cyan]Direct Parent:[/cyan] {parent_name} ({parent_lei})")
+                    elif 'exceptionCategory' in parent_attrs:
+                        exception_cat = parent_attrs['exceptionCategory']
+                        exception_reason = parent_attrs.get('exceptionReason', 'Not specified')
+                        relationship_info.append(f"[cyan]Direct Parent:[/cyan] [yellow]Exception - {exception_cat}[/yellow]")
+                        relationship_info.append(f"[cyan]Reason:[/cyan] {exception_reason}")
+                    else:
+                        relationship_info.append(f"[cyan]Direct Parent:[/cyan] [dim]No parent information available[/dim]")
+            else:
+                relationship_info.append(f"[cyan]Direct Parent:[/cyan] [dim]No data field in response[/dim]")
+        except Exception as e:
+            # For debugging - show what data we actually received
+            relationship_info.append(f"[yellow]Debug - Direct parent data type: {type(direct_parent_data)}[/yellow]")
+            if hasattr(direct_parent_data, 'keys'):
+                relationship_info.append(f"[yellow]Debug - Keys: {list(direct_parent_data.keys())}[/yellow]")
+            relationship_info.append(f"[red]Error parsing direct parent data: {str(e)}[/red]")
+    else:
+        error_msg = direct_parent_data.get('error', 'No direct parent data available') if direct_parent_data else 'No data returned'
+        relationship_info.append(f"[cyan]Direct Parent:[/cyan] [dim]{error_msg}[/dim]")
+    
+    # Ultimate parent information
+    if ultimate_parent_data and 'error' not in ultimate_parent_data:
+        try:
+            if 'data' in ultimate_parent_data:
+                data_field = ultimate_parent_data['data']
+                # Handle both list and single object responses
+                if hasattr(data_field, '__len__'):
+                    data_len = len(data_field)
+                    if data_len > 0:
+                        parent_data = data_field[0] if hasattr(data_field, '__getitem__') else data_field
+                    else:
+                        relationship_info.append(f"[cyan]Ultimate Parent:[/cyan] [dim]No parent relationship records (empty data array)[/dim]")
+                        parent_data = None
+                else:
+                    parent_data = data_field
+                
+                if parent_data:
+                    parent_attrs = parent_data.get('attributes', {})
+                    
+                    if 'ultimateParent' in parent_attrs:
+                        parent_lei = parent_attrs['ultimateParent'].get('lei', 'N/A')
+                        parent_name = parent_attrs['ultimateParent'].get('name', 'N/A')
+                        relationship_info.append(f"[cyan]Ultimate Parent:[/cyan] {parent_name} ({parent_lei})")
+                    elif 'exceptionCategory' in parent_attrs:
+                        exception_cat = parent_attrs['exceptionCategory']
+                        exception_reason = parent_attrs.get('exceptionReason', 'Not specified')
+                        relationship_info.append(f"[cyan]Ultimate Parent:[/cyan] [yellow]Exception - {exception_cat}[/yellow]")
+                        relationship_info.append(f"[cyan]Reason:[/cyan] {exception_reason}")
+                    else:
+                        relationship_info.append(f"[cyan]Ultimate Parent:[/cyan] [dim]No parent information available[/dim]")
+            else:
+                relationship_info.append(f"[cyan]Ultimate Parent:[/cyan] [dim]No data field in response[/dim]")
+        except Exception as e:
+            # For debugging - show what data we actually received
+            relationship_info.append(f"[yellow]Debug - Ultimate parent data type: {type(ultimate_parent_data)}[/yellow]")
+            if hasattr(ultimate_parent_data, 'keys'):
+                relationship_info.append(f"[yellow]Debug - Keys: {list(ultimate_parent_data.keys())}[/yellow]")
+            relationship_info.append(f"[red]Error parsing ultimate parent data: {str(e)}[/red]")
+    else:
+        error_msg = ultimate_parent_data.get('error', 'No ultimate parent data available') if ultimate_parent_data else 'No data returned'
+        relationship_info.append(f"[cyan]Ultimate Parent:[/cyan] [dim]{error_msg}[/dim]")
+    
+    if relationship_info:
+        console.print(Panel("\n".join(relationship_info), title="🔗 Corporate Relationships", border_style="cyan"))
+
+
 def _display_entity_rich(entity, show_full=False):
     """Display legal entity with rich formatting and comprehensive details"""
     from rich.columns import Columns

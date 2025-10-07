@@ -4,6 +4,7 @@ All notable changes to the MarketDataAPI project will be documented in this file
 
 ## Recent Highlights
 
+- **[2025-10-07]**: 🏢 **GLEIF API Integration** - Added entities create and get-remote commands for live GLEIF API integration with comprehensive error handling
 - **[2025-10-05]**: 🏛️ **Enhanced CLI Commands** - Comprehensive CLI improvements across instruments, entities, transparency, and MIC commands with professional displays
 - **[2025-10-05]**: 🏗️ **Structured Products Analysis** - Complete H-category FIRDS analysis with real-world CFI patterns and CLI implementation  
 - **[2025-10-05]**: 🔄 **Comprehensive Swap CLI Enhancement** - Complete swap classification system with intelligent type detection and professional display
@@ -35,6 +36,23 @@ All notable changes to the MarketDataAPI project will be documented in this file
 - **Service Integration**: Proper use of LegalEntityService for data access
 - **Field Mappings**: Fixed field mapping issues (legal_name vs name, country vs jurisdiction)
 - **Corporate Structure**: Display subsidiaries with 10-item limit and professional formatting
+
+## [2025-10-07] - GLEIF API Integration
+
+### 🌐 New GLEIF API Commands
+- **entities create**: Create legal entities directly from GLEIF API data
+  - **Live Data Integration**: Fetches real-time entity data from GLEIF public API
+  - **Force Mode**: `--force` flag to overwrite existing entities
+  - **Comprehensive Display**: Shows full entity details after creation including addresses and corporate structure
+  - **Error Handling**: Validates LEI format and handles API failures gracefully
+  - **Service Integration**: Uses existing LegalEntityService for consistent data handling
+
+- **entities get-remote**: Query GLEIF API without database storage
+  - **Live Validation**: Verify LEI existence and data availability without local storage
+  - **Relationship Support**: `--include-relationships` flag for parent/child corporate structure
+  - **Format Validation**: 20-character LEI format validation with helpful error messages
+  - **API Integration**: Direct GLEIF API queries with proper error handling for 404s and network issues
+  - **User Guidance**: Suggests using 'create' command to store validated entities locally
 
 ### 📊 Enhanced Transparency CLI  
 - **Analysis Features**: Added comprehensive analysis with `--full` flag support
