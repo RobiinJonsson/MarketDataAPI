@@ -4,7 +4,7 @@ All notable changes to the MarketDataAPI project will be documented in this file
 
 ## Recent Highlights
 
-- **[2025-10-07]**: 🏢 **GLEIF API Integration** - Added entities create and get-remote commands for live GLEIF API integration with comprehensive error handling
+- **[2025-10-07]**: 🏢 **GLEIF API Integration** - Added entities create and get-remote commands for live GLEIF API integration with comprehensive error handling and professional display
 - **[2025-10-05]**: 🏛️ **Enhanced CLI Commands** - Comprehensive CLI improvements across instruments, entities, transparency, and MIC commands with professional displays
 - **[2025-10-05]**: 🏗️ **Structured Products Analysis** - Complete H-category FIRDS analysis with real-world CFI patterns and CLI implementation  
 - **[2025-10-05]**: 🔄 **Comprehensive Swap CLI Enhancement** - Complete swap classification system with intelligent type detection and professional display
@@ -48,6 +48,17 @@ All notable changes to the MarketDataAPI project will be documented in this file
   - **Service Integration**: Uses existing LegalEntityService for consistent data handling
 
 - **entities get-remote**: Query GLEIF API without database storage
+  - **Live Display**: Shows real-time LEI data directly from GLEIF API
+  - **Professional Formatting**: Rich panels with entity details (LEI, name, status, jurisdiction, legal form)
+  - **No Database Impact**: Queries external API without local storage
+  - **Relationship Support**: `--include-relationships` flag (displays "not implemented yet" message)
+  - **Data Source Transparency**: Clear indication that data comes from live GLEIF API
+
+### 🔧 Technical Improvements
+- **LEI Format Validation**: 20-character alphanumeric validation with user-friendly error messages
+- **Model Mapping Integration**: Uses existing `map_lei_record` function for consistent data structure
+- **Clean Error Handling**: Graceful handling of invalid LEIs, API timeouts, and network errors
+- **Code Cleanup**: Removed unused relationship display functions to maintain clean codebase
   - **Live Validation**: Verify LEI existence and data availability without local storage
   - **Relationship Support**: `--include-relationships` flag for parent/child corporate structure
   - **Format Validation**: 20-character LEI format validation with helpful error messages

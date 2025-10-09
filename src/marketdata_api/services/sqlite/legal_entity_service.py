@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 
-from ...database.model_mapper import flatten_address, map_lei_record
+from ..gleif import flatten_address, map_lei_record
 from ...database.session import SessionLocal, get_session
 
 # Direct model imports at module level - importing only what this service needs

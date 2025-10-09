@@ -21,7 +21,8 @@ from sqlalchemy.orm import Session
 
 # Removed old OpenFIGI import - now using enhanced service for both primary and fallback
 from ...config import esmaConfig
-from ...constants import FirdsTypes
+from ...constants import FirdsFieldMappings
+from ...models.utils.cfi_instrument_manager import CFIInstrumentTypeManager
 from ...database.session import SessionLocal, get_session
 from ...models.interfaces.instrument_interface import InstrumentInterface
 from ...models.sqlite.figi import FigiMapping
@@ -261,7 +262,8 @@ class SqliteInstrumentService(InstrumentServiceInterface):
 
             # Only search all types if no preferred type was given OR it was a legacy/unknown type
             if not preferred_type or preferred_type not in business_to_firds:
-                types_to_search = list(FirdsTypes.MAPPING.keys())
+                # Use CFI manager to get all valid FIRDS types
+                types_to_search = list(CFIInstrumentTypeManager.FIRDS_TO_CFI_MAPPING.keys())
                 self.logger.info(
                     f"🔄 Fallback: Searching {len(types_to_search)} FIRDS types: {types_to_search}"
                 )
@@ -935,7 +937,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
         """Get updated list of fields that are mapped to specific columns."""
         return {
             # Use the FIRDS column mapping from constants
-            *FirdsTypes.COLUMN_MAPPING.keys(),
+            *FirdsFieldMappings.COLUMN_MAPPING.keys(),
             # Additional commonly mapped fields
             "original_firds_record",
             "venue_attributes",
@@ -995,7 +997,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
 
     def _enrich_figi(self, session: Session, instrument: InstrumentInterface) -> None:
         """Helper method to handle FIGI enrichment with enhanced OpenFIGI service and multiple FIGI support."""
-        from ...database.model_mapper import map_figi_data
+        from ...services.openfigi import map_figi_data
         from ...models.sqlite.figi import FigiMapping
 
         self.logger.debug(f"Starting FIGI enrichment for {instrument.isin}")

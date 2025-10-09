@@ -1,5 +1,6 @@
 import logging
 from datetime import UTC, datetime
+from typing import Any, Dict
 
 import requests
 
@@ -53,7 +54,7 @@ def _create_or_update_child_entity(session, child_data):
         session: SQLAlchemy database session
         child_data: Child entity data from GLEIF API response
     """
-    from ..database.model_mapper import map_lei_record
+    # Using local map_lei_record function
     from ..models.sqlite.legal_entity import EntityAddress, EntityRegistration, LegalEntity
 
     try:
@@ -585,3 +586,89 @@ def sync_entity_relationships(session, lei_code, batch_size=100):
     # Ultimate children can be extensive and are often not needed for most use cases
 
     return results
+
+
+# GLEIF Data Mapping Functions
+def parse_iso_date(date_str: str) -> datetime:
+    """Parse ISO format datetime string"""
+    if not date_str:
+        return None
+    try:
+        return datetime.fromisoformat(date_str.replace("Z", "+00:00"))
+    except (ValueError, TypeError):
+        return None
+
+
+def flatten_address(address: Dict[str, Any], address_type: str, lei: str) -> Dict[str, Any]:
+    """Flatten GLEIF address data for database storage"""
+    return {
+        "lei": lei,
+        "type": address_type,
+        "language": address.get("language"),
+        "addressLines": ", ".join(address.get("addressLines", [])),
+        "city": address.get("city"),
+        "region": address.get("region"),
+        "country": address.get("country"),
+        "postalCode": address.get("postalCode"),
+    }
+
+
+def map_lei_record(response: Dict[str, Any]) -> Dict[str, Any]:
+    """Maps GLEIF API response to structured data for database storage"""
+    data = response.get("data", {})
+    attributes = data.get("attributes", {})
+    entity = attributes.get("entity", {})
+    registration = attributes.get("registration", {})
+
+    def safe_list_to_str(value):
+        if isinstance(value, list):
+            return ", ".join(str(item) for item in value)
+        return value
+
+    return {
+        "lei_record": {
+            "lei": data.get("id"),  # Using id from data as LEI
+            "name": entity.get("legalName", {}).get("name"),
+            "jurisdiction": entity.get("jurisdiction"),
+            "legal_form": entity.get("legalForm", {}).get("id"),
+            "registered_as": entity.get("registeredAs")
+            or entity.get("legalName", {}).get("name")
+            or "Not Available",
+            "status": entity.get("status"),
+            "creation_date": parse_iso_date(registration.get("initialRegistrationDate")),
+            "bic": safe_list_to_str(attributes.get("bic")),
+            "next_renewal_date": parse_iso_date(registration.get("nextRenewalDate")),
+            "registration_status": registration.get("status"),
+            "managing_lou": registration.get("managingLou"),
+        },
+        "addresses": [
+            {
+                "lei": data.get("id"),
+                "type": "legal",
+                "address_lines": ", ".join(entity.get("legalAddress", {}).get("addressLines", [])),
+                "city": entity.get("legalAddress", {}).get("city"),
+                "region": entity.get("legalAddress", {}).get("region"),
+                "country": entity.get("legalAddress", {}).get("country"),
+                "postal_code": entity.get("legalAddress", {}).get("postalCode"),
+            },
+            {
+                "lei": data.get("id"),
+                "type": "headquarters",
+                "address_lines": ", ".join(
+                    entity.get("headquartersAddress", {}).get("addressLines", [])
+                ),
+                "city": entity.get("headquartersAddress", {}).get("city"),
+                "region": entity.get("headquartersAddress", {}).get("region"),
+                "country": entity.get("headquartersAddress", {}).get("country"),
+                "postal_code": entity.get("headquartersAddress", {}).get("postalCode"),
+            },
+        ],
+        "registration": {
+            "lei": data.get("id"),
+            "last_update": parse_iso_date(registration.get("lastUpdateDate")),
+            "status": registration.get("status"),
+            "next_renewal": parse_iso_date(registration.get("nextRenewalDate")),
+            "managing_lou": registration.get("managingLou"),
+            "validation_sources": registration.get("validatedAt", {}).get("id"),
+        },
+    }

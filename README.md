@@ -11,6 +11,7 @@ Comprehensive market data management system with CFI-based instrument classifica
 - **Performance Optimized**: CFI-driven file filtering reduces I/O operations by 90%
 - **Dual Database Support**: SQLite (development) / Azure SQL (production) with unified transparency calculations
 - **Complete Data Integration**: FIRDS/FITRS integration with intelligent type detection
+- **GLEIF API Integration**: Live LEI data retrieval and entity creation from GLEIF public API
 - **RESTful API**: Modular Swagger UI with comprehensive endpoint documentation
 - **Professional CLI**: Modern command-line interface with Rich formatting and type-specific displays
 - **Smart File Management**: Precise regex-based pattern matching for FIRDS/FITRS files
@@ -221,9 +222,15 @@ deployment\mapi.bat transparency create SE0000108656
 
 **Legal Entities & FIGI Operations**
 ```bash
-# Legal entity lookup
+# Legal entity lookup (database)
 deployment\mapi.bat entities list --country US --limit 10
 deployment\mapi.bat entities get [LEI_CODE]
+
+# GLEIF API integration (live data)
+deployment\mapi.bat entities get-remote M312WZV08Y7LYUC71685  # Live GLEIF data without storage
+deployment\mapi.bat entities get-remote M312WZV08Y7LYUC71685 --include-relationships  # With parent/child info (upcoming)
+deployment\mapi.bat entities create M312WZV08Y7LYUC71685  # Create from GLEIF API data
+deployment\mapi.bat entities create M312WZV08Y7LYUC71685 --force  # Overwrite existing
 
 # FIGI operations
 deployment\mapi.bat figi get US0378331005

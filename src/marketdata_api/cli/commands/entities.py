@@ -193,19 +193,9 @@ def get_remote(ctx, lei, include_relationships):
         
         # Fetch relationship data if requested
         if include_relationships:
-            try:
-                from marketdata_api.services.gleif import fetch_direct_parent, fetch_ultimate_parent
-                console.print()
-                with console.status(f"[bold blue]Fetching relationship data..."):
-                    # Fetch parent relationships
-                    direct_parent_data = fetch_direct_parent(lei)
-                    ultimate_parent_data = fetch_ultimate_parent(lei)
-                
-                _display_gleif_relationships_rich(direct_parent_data, ultimate_parent_data)
-            except ImportError:
-                console.print("[yellow]⚠️  Relationship data functions not available[/yellow]")
-            except Exception as rel_e:
-                console.print(f"[red]❌ Error fetching relationships: {str(rel_e)}[/red]")
+            console.print()
+            console.print("[yellow]⚠️  Corporate relationship display feature not yet implemented[/yellow]")
+            console.print("[dim]   This feature will show parent/child entity relationships from GLEIF API[/dim]")
             
     except Exception as e:
         console.print(f"[red]❌ Error fetching remote data: {str(e)}[/red]")
@@ -233,7 +223,7 @@ def _display_gleif_data_rich(gleif_data):
         
         if gleif_data and not gleif_data.get('error'):
             try:
-                from marketdata_api.database.model_mapper import map_lei_record
+                from marketdata_api.services.gleif import map_lei_record
                 mapped_data = map_lei_record(gleif_data)
                 
                 # Extract from the correct nested structure
@@ -272,98 +262,6 @@ def _display_gleif_data_rich(gleif_data):
         
     except Exception as e:
         console.print(f"[red]❌ Error displaying GLEIF data: {str(e)}[/red]")
-
-
-def _display_gleif_relationships_rich(direct_parent_data, ultimate_parent_data):
-    """Display GLEIF relationship data with rich formatting"""
-    relationship_info = []
-    
-    # Direct parent information
-    if direct_parent_data and 'error' not in direct_parent_data:
-        try:
-            if 'data' in direct_parent_data:
-                data_field = direct_parent_data['data']
-                # Handle both list and single object responses
-                if hasattr(data_field, '__len__'):
-                    data_len = len(data_field)
-                    if data_len > 0:
-                        parent_data = data_field[0] if hasattr(data_field, '__getitem__') else data_field
-                    else:
-                        relationship_info.append(f"[cyan]Direct Parent:[/cyan] [dim]No parent relationship records (empty data array)[/dim]")
-                        parent_data = None
-                else:
-                    parent_data = data_field
-                
-                if parent_data:
-                    parent_attrs = parent_data.get('attributes', {})
-                    
-                    if 'directParent' in parent_attrs:
-                        parent_lei = parent_attrs['directParent'].get('lei', 'N/A')
-                        parent_name = parent_attrs['directParent'].get('name', 'N/A')
-                        relationship_info.append(f"[cyan]Direct Parent:[/cyan] {parent_name} ({parent_lei})")
-                    elif 'exceptionCategory' in parent_attrs:
-                        exception_cat = parent_attrs['exceptionCategory']
-                        exception_reason = parent_attrs.get('exceptionReason', 'Not specified')
-                        relationship_info.append(f"[cyan]Direct Parent:[/cyan] [yellow]Exception - {exception_cat}[/yellow]")
-                        relationship_info.append(f"[cyan]Reason:[/cyan] {exception_reason}")
-                    else:
-                        relationship_info.append(f"[cyan]Direct Parent:[/cyan] [dim]No parent information available[/dim]")
-            else:
-                relationship_info.append(f"[cyan]Direct Parent:[/cyan] [dim]No data field in response[/dim]")
-        except Exception as e:
-            # For debugging - show what data we actually received
-            relationship_info.append(f"[yellow]Debug - Direct parent data type: {type(direct_parent_data)}[/yellow]")
-            if hasattr(direct_parent_data, 'keys'):
-                relationship_info.append(f"[yellow]Debug - Keys: {list(direct_parent_data.keys())}[/yellow]")
-            relationship_info.append(f"[red]Error parsing direct parent data: {str(e)}[/red]")
-    else:
-        error_msg = direct_parent_data.get('error', 'No direct parent data available') if direct_parent_data else 'No data returned'
-        relationship_info.append(f"[cyan]Direct Parent:[/cyan] [dim]{error_msg}[/dim]")
-    
-    # Ultimate parent information
-    if ultimate_parent_data and 'error' not in ultimate_parent_data:
-        try:
-            if 'data' in ultimate_parent_data:
-                data_field = ultimate_parent_data['data']
-                # Handle both list and single object responses
-                if hasattr(data_field, '__len__'):
-                    data_len = len(data_field)
-                    if data_len > 0:
-                        parent_data = data_field[0] if hasattr(data_field, '__getitem__') else data_field
-                    else:
-                        relationship_info.append(f"[cyan]Ultimate Parent:[/cyan] [dim]No parent relationship records (empty data array)[/dim]")
-                        parent_data = None
-                else:
-                    parent_data = data_field
-                
-                if parent_data:
-                    parent_attrs = parent_data.get('attributes', {})
-                    
-                    if 'ultimateParent' in parent_attrs:
-                        parent_lei = parent_attrs['ultimateParent'].get('lei', 'N/A')
-                        parent_name = parent_attrs['ultimateParent'].get('name', 'N/A')
-                        relationship_info.append(f"[cyan]Ultimate Parent:[/cyan] {parent_name} ({parent_lei})")
-                    elif 'exceptionCategory' in parent_attrs:
-                        exception_cat = parent_attrs['exceptionCategory']
-                        exception_reason = parent_attrs.get('exceptionReason', 'Not specified')
-                        relationship_info.append(f"[cyan]Ultimate Parent:[/cyan] [yellow]Exception - {exception_cat}[/yellow]")
-                        relationship_info.append(f"[cyan]Reason:[/cyan] {exception_reason}")
-                    else:
-                        relationship_info.append(f"[cyan]Ultimate Parent:[/cyan] [dim]No parent information available[/dim]")
-            else:
-                relationship_info.append(f"[cyan]Ultimate Parent:[/cyan] [dim]No data field in response[/dim]")
-        except Exception as e:
-            # For debugging - show what data we actually received
-            relationship_info.append(f"[yellow]Debug - Ultimate parent data type: {type(ultimate_parent_data)}[/yellow]")
-            if hasattr(ultimate_parent_data, 'keys'):
-                relationship_info.append(f"[yellow]Debug - Keys: {list(ultimate_parent_data.keys())}[/yellow]")
-            relationship_info.append(f"[red]Error parsing ultimate parent data: {str(e)}[/red]")
-    else:
-        error_msg = ultimate_parent_data.get('error', 'No ultimate parent data available') if ultimate_parent_data else 'No data returned'
-        relationship_info.append(f"[cyan]Ultimate Parent:[/cyan] [dim]{error_msg}[/dim]")
-    
-    if relationship_info:
-        console.print(Panel("\n".join(relationship_info), title="🔗 Corporate Relationships", border_style="cyan"))
 
 
 def _display_entity_rich(entity, show_full=False):

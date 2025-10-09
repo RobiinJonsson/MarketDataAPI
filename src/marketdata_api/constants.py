@@ -191,73 +191,10 @@ class DbFields:
     UPDATED_AT = "updated_at"
 
 
-# FIRDS Instrument Type Mappings
-class FirdsTypes:
-    """FIRDS instrument type mappings and metadata."""
-
-    MAPPING = {
-        "C": {
-            "instrument_type": "collective_investment",
-            "description": "Collective Investment Vehicles (CIVs)",
-            "cfi_category": "C",
-            "examples": ["Mutual funds", "ETFs", "REITs", "Hedge funds"],
-        },
-        "D": {
-            "instrument_type": "debt",
-            "description": "Debt Securities",
-            "cfi_category": "D",
-            "examples": ["Bonds", "Notes", "Commercial paper", "Asset-backed securities"],
-        },
-        "E": {
-            "instrument_type": "equity",
-            "description": "Equities",
-            "cfi_category": "E",
-            "examples": ["Common shares", "Preferred shares", "Depository receipts", "Rights"],
-        },
-        "F": {
-            "instrument_type": "future",
-            "description": "Futures",
-            "cfi_category": "F",
-            "examples": ["Commodity futures", "Financial futures", "Index futures"],
-        },
-        "H": {
-            "instrument_type": "hybrid",
-            "description": "Hybrid/Structured Instruments",
-            "cfi_category": "M",  # Miscellaneous/Others in CFI
-            "examples": ["Structured notes", "Barrier products", "Participation certificates"],
-        },
-        "I": {
-            "instrument_type": "interest_rate",
-            "description": "Interest Rate Derivatives",
-            "cfi_category": "H",  # Listed derivatives in CFI
-            "examples": ["Interest rate swaps", "FRAs", "Interest rate futures"],
-        },
-        "J": {
-            "instrument_type": "convertible",
-            "description": "Convertible Instruments",
-            "cfi_category": "D",  # Often debt with conversion features
-            "examples": ["Convertible bonds", "Convertible preferred shares"],
-        },
-        "O": {
-            "instrument_type": "option",
-            "description": "Options",
-            "cfi_category": "O",  # Options in CFI
-            "examples": ["Call options", "Put options", "Exotic options"],
-        },
-        "R": {
-            "instrument_type": "rights",
-            "description": "Rights and Warrants",
-            "cfi_category": "R",  # Rights in CFI
-            "examples": ["Subscription rights", "Warrants", "Purchase rights"],
-        },
-        "S": {
-            "instrument_type": "structured",
-            "description": "Structured Products and Swaps",
-            "cfi_category": "S",  # Swaps in CFI
-            "examples": ["Credit default swaps", "Structured products", "Total return swaps"],
-        },
-    }
-
+# FIRDS Field Mappings (Column mapping only - instrument types handled by CFI manager)
+class FirdsFieldMappings:
+    """FIRDS field mappings to database columns."""
+    
     # Common FIRDS column mappings to database fields
     COLUMN_MAPPING = {
         # Core identification
