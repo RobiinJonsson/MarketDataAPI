@@ -10,6 +10,12 @@ This project follows modern Python packaging best practices with a clean, organi
 MarketDataAPI/
 ├── 📁 src/                          # Source code
 │   └── marketdata_api/              # Main package
+│       ├── api/                     # Unified Flask-RESTX API (formerly swagger/)
+│       │   ├── resources/           # API endpoint implementations
+│       │   └── utils/               # Shared API utilities (instrument, MIC, response builders)
+│       ├── models/                  # Database models
+│       ├── services/                # Business logic layer  
+│       └── database/                # Database configuration
 ├── 📁 config/                       # Configuration files
 │   ├── alembic.ini                  # Database migrations config
 │   ├── pytest.ini                  # Testing configuration  
@@ -40,7 +46,8 @@ MarketDataAPI/
 ✅ **Clear Separation**: Code, config, deployment, and data are separated  
 ✅ **Build Isolation**: All build artifacts contained in `build/` directory  
 ✅ **Easy Deployment**: All deployment files organized in `deployment/`  
-✅ **Data Management**: Centralized data storage in `data/`  
+✅ **Data Management**: Centralized data storage in `data/`
+✅ **Unified API**: Single Flask-RESTX implementation with shared utilities (eliminated duplicate `routes/` system)  
 
 ## Development Workflow
 
@@ -90,6 +97,34 @@ git checkout dev
 - ✅ `upgrade.bat` is semi-manual - you handle git operations
 - ✅ Main branch becomes the "release" branch
 - ✅ Tags move with the merge from dev to main
+
+## API Architecture
+
+### Unified Flask-RESTX Implementation
+The project uses a **single, consolidated API system** in `src/marketdata_api/api/`:
+
+```
+api/
+├── config.py                   # Flask-RESTX app configuration
+├── models/                     # Swagger model definitions (organized by domain)
+├── resources/                  # API endpoint implementations
+│   ├── instruments.py          # Instrument operations
+│   ├── entities.py             # Legal entity operations  
+│   ├── transparency.py         # MiFID II transparency calculations
+│   ├── mic.py                  # MIC code operations
+│   └── files.py                # File management
+└── utils/                      # Shared utilities
+    ├── instrument_utils.py     # Instrument data processing
+    ├── mic_utils.py            # MIC operations
+    ├── response_builders.py    # Response formatting
+    └── generate_docs.py        # OpenAPI/Postman documentation generation
+```
+
+**Key Benefits:**
+- **No Code Duplication**: Eliminated previous dual `routes/` + `swagger/` systems
+- **Shared Utilities**: Common operations extracted to reusable utility functions  
+- **Domain Organization**: Resources grouped by business functionality
+- **CFI-Driven**: All instrument operations use CFI codes as primary classification
 
 ### Running from Source (Development)
 ```bash

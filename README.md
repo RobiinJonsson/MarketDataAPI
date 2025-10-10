@@ -19,6 +19,15 @@ Comprehensive market data management system with CFI-based instrument classifica
 
 ## Recent Major Improvements
 
+### Flask-RESTX API Consolidation (October 2025)
+- **Major Architecture Cleanup**: Eliminated dual API systems (routes/ + swagger/), consolidated into single `api/` folder
+- **Massive Code Reduction**: **Removed 2,658 lines** of duplicate endpoint code across 6 obsolete files
+- **Clean Organization**: All API code now properly organized in `api/` with utilities, models, and resources
+- **Zero Breaking Changes**: All endpoints maintain identical functionality and response formats
+- **Enhanced Utilities**: Extracted reusable functions for instrument processing, MIC operations, and response building
+- **Fixed Transparency**: Corrected field mappings and None value handling for all transparency endpoints
+- **Future Ready**: Solid foundation prepared for frontend integration and API enhancements
+
 ### CLI Delete Command & Enrichment Fixes (October 2025)
 - **New Delete Command**: Complete instrument deletion with `--cascade` and `--force` options
 - **LEI Enrichment Fix**: Resolved postal_code constraint errors for real-world addresses (Hong Kong, etc.)
@@ -311,6 +320,7 @@ The CLI features beautiful formatting with:
 - **Interactive Swagger UI**: http://127.0.0.1:5000/api/v1/swagger
 - **ReDoc Documentation**: http://127.0.0.1:5000/api/v1/docs
 - **Base URL**: `http://127.0.0.1:5000/api/v1`
+- **Architecture**: Unified Flask-RESTX API with consolidated resource organization and shared utilities
 
 ## Documentation Policy
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate comprehensive API documentation from the modular swagger structure.
+Generate comprehensive API documentation from the modular API structure.
 
 This script creates:
 1. Clean OpenAPI 3.0 YAML specification
@@ -8,7 +8,7 @@ This script creates:
 3. Validation of generated documentation
 
 The script handles encoding issues on Windows and provides fallback mechanisms.
-Uses the new modular swagger architecture from marketdata_api.swagger.
+Uses the consolidated API architecture from marketdata_api.api.
 """
 
 import sys
@@ -970,12 +970,12 @@ def validate_documentation():
     try:
         issues = []
         
-        # Check if swagger.py file exists and is importable
+        # Check if api module exists and is importable
         try:
-            from marketdata_api.swagger import create_swagger_blueprint
-            print("✅ Swagger module imported successfully (modular)")
+            from marketdata_api.api import create_swagger_blueprint
+            print("✅ API module imported successfully (consolidated)")
         except ImportError as e:
-            issues.append(f"Cannot import swagger module: {e}")
+            issues.append(f"Cannot import API module: {e}")
         
         # Check if main API routes are accessible
         try:

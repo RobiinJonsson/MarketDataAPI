@@ -232,9 +232,11 @@ def create_mic_resources(api, models):
         def get(self, mic_code):
             """Get segment MICs for operating MIC"""
             try:
-                from ...routes.mic_routes import get_mic_segments
+                from ...database.session import get_session
+                from ..utils.mic_utils import get_mic_segments_data
 
-                return get_mic_segments(mic_code)
+                with get_session() as session:
+                    return get_mic_segments_data(session, mic_code)
             except Exception as e:
                 logger.error(f"Error in MIC segments endpoint: {str(e)}")
                 return {
@@ -265,9 +267,11 @@ def create_mic_resources(api, models):
         def get(self):
             """Get countries with MIC statistics"""
             try:
-                from ...routes.mic_routes import list_countries
+                from ...database.session import get_session
+                from ..utils.mic_utils import get_countries_data
 
-                return list_countries()
+                with get_session() as session:
+                    return get_countries_data(session)
             except Exception as e:
                 logger.error(f"Error in MIC countries endpoint: {str(e)}")
                 return {
@@ -307,9 +311,35 @@ def create_mic_resources(api, models):
         def get(self):
             """Advanced MIC search"""
             try:
-                from ...routes.mic_routes import search_mics
+                from flask import request
+                from ...database.session import get_session
+                from ..utils.mic_utils import search_mics_data
 
-                return search_mics()
+                # Extract filters from request arguments
+                filters = {}
+                if request.args.get('name'):
+                    filters['market_name'] = request.args.get('name')
+                if request.args.get('entity'):
+                    filters['legal_entity_name'] = request.args.get('entity')
+                if request.args.get('mic'):
+                    filters['mic_code'] = request.args.get('mic')
+                if request.args.get('country'):
+                    filters['country'] = request.args.get('country')
+                if request.args.get('status'):
+                    filters['status'] = request.args.get('status')
+                if request.args.get('type'):
+                    filters['mic_type'] = request.args.get('type')
+                
+                # Pagination
+                try:
+                    filters['page'] = int(request.args.get('page', 1))
+                    filters['per_page'] = min(int(request.args.get('per_page', 50)), 1000)
+                except (ValueError, TypeError):
+                    filters['page'] = 1
+                    filters['per_page'] = 50
+
+                with get_session() as session:
+                    return search_mics_data(session, **filters)
             except Exception as e:
                 logger.error(f"Error in MIC search endpoint: {str(e)}")
                 return {
@@ -336,9 +366,11 @@ def create_mic_resources(api, models):
         def get(self):
             """Get MIC registry statistics"""
             try:
-                from ...routes.mic_routes import get_statistics
+                from ...database.session import get_session
+                from ..utils.mic_utils import get_mic_statistics_data
 
-                return get_statistics()
+                with get_session() as session:
+                    return get_mic_statistics_data(session)
             except Exception as e:
                 logger.error(f"Error in MIC statistics endpoint: {str(e)}")
                 return {
@@ -370,9 +402,11 @@ def create_mic_resources(api, models):
         def post(self):
             """Load MIC data from local file or remote source"""
             try:
-                from ...routes.mic_routes import load_mic_data
+                from ...database.session import get_session
+                from ..utils.mic_utils import load_mic_data_logic
 
-                return load_mic_data()
+                with get_session() as session:
+                    return load_mic_data_logic(session)
             except Exception as e:
                 logger.error(f"Error in MIC load data endpoint: {str(e)}")
                 return {
@@ -399,9 +433,11 @@ def create_mic_resources(api, models):
         def get(self):
             """Get available enum values for MIC fields"""
             try:
-                from ...routes.mic_routes import get_enums
+                from ...database.session import get_session
+                from ..utils.mic_utils import get_mic_enums
 
-                return get_enums()
+                with get_session() as session:
+                    return get_mic_enums(session)
             except Exception as e:
                 logger.error(f"Error in MIC enums endpoint: {str(e)}")
                 return {

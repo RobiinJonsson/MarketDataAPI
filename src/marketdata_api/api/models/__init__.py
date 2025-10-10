@@ -5,10 +5,12 @@ This module handles the registration of all Swagger models with the API instance
 """
 
 from .common import create_common_models
+from .files import create_file_models
 from .instruments import create_instrument_models
 from .legal_entities import create_legal_entity_models
 from .mic import create_mic_models
 from .relationships import create_relationship_models
+from .schema import create_schema_models
 from .transparency import create_transparency_models
 
 
@@ -32,6 +34,8 @@ def register_all_models(api):
     legal_entity_models = create_legal_entity_models(api, common_models)
     relationship_models = create_relationship_models(api, common_models)
     transparency_models = create_transparency_models(api, common_models)
+    schema_models = create_schema_models(api, common_models)
+    file_models = create_file_models(api, common_models)
 
     return {
         "common": common_models,
@@ -40,4 +44,6 @@ def register_all_models(api):
         "legal_entities": legal_entity_models,
         "relationships": relationship_models,
         "transparency": transparency_models,
+        "schema": schema_models,
+        "files": file_models,
     }

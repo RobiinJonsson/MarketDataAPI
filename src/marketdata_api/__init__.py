@@ -58,29 +58,19 @@ def create_app(config_override=None):
 
     from marketdata_api.routes.common_routes import common_bp, frontend_bp  # Import both blueprints
     from marketdata_api.routes.docs import docs_bp  # Import the Docs API blueprint
-    from marketdata_api.routes.file_management import (  # Import file management blueprint
-        file_management_bp,
-    )
-    from marketdata_api.routes.mic_routes import mic_bp  # Import MIC routes (separate from swagger)
-    from marketdata_api.routes.schema import schema_bp
-    from marketdata_api.swagger import (  # Import the modular Swagger blueprint
+    from marketdata_api.api import (  # Import the consolidated API blueprint
         create_swagger_blueprint,
     )
 
-    app.register_blueprint(schema_bp)
-
-    # Register the modular Swagger blueprint (instruments, legal entities, transparency)
-    # This provides both the API endpoints AND the SwaggerUI at /api/v1/swagger/
+    # Register the consolidated Swagger blueprint (all API endpoints)
+    # This provides: instruments, legal entities, transparency, MIC, schema, files
+    # AND the SwaggerUI at /api/v1/swagger/
     swagger_bp = create_swagger_blueprint()
     app.register_blueprint(swagger_bp)
-
-    # Register the separate MIC blueprint (keeps existing working MIC endpoints)
-    app.register_blueprint(mic_bp)
 
     app.register_blueprint(docs_bp)  # Register the Docs API blueprint
     app.register_blueprint(common_bp)  # Register the common API blueprint
     app.register_blueprint(frontend_bp)  # Register the frontend blueprint
-    app.register_blueprint(file_management_bp)  # Register file management blueprint
 
     return app
 

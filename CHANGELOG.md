@@ -4,6 +4,7 @@ All notable changes to the MarketDataAPI project will be documented in this file
 
 ## Recent Highlights
 
+- **[2025-10-10]**: 🚀 **Flask-RESTX API Consolidation** - Major architectural refactoring consolidating duplicate API systems, removing 2,658 lines of code, and reorganizing to clean api/ folder structure
 - **[2025-10-07]**: 🏢 **GLEIF API Integration** - Added entities create and get-remote commands for live GLEIF API integration with comprehensive error handling and professional display
 - **[2025-10-05]**: 🏛️ **Enhanced CLI Commands** - Comprehensive CLI improvements across instruments, entities, transparency, and MIC commands with professional displays
 - **[2025-10-05]**: 🏗️ **Structured Products Analysis** - Complete H-category FIRDS analysis with real-world CFI patterns and CLI implementation  
@@ -12,6 +13,52 @@ All notable changes to the MarketDataAPI project will be documented in this file
 - **[2025-10-04]**: Fixed FIGI enrichment system with enhanced statistics
 - **[2025-09-21]**: Health monitoring system with detailed API endpoints
 - **[2025-09-20]**: Complete Azure SQL production deployment with dual database support
+
+## [2025-10-10] - Flask-RESTX API Consolidation & Architecture Optimization
+
+### 🚀 **Major API Architecture Consolidation**
+- **Eliminated Dual API Systems**: Removed duplicate routes/ and swagger/ endpoint implementations
+- **Code Reduction**: **Removed 2,658 lines** of duplicate route code across 6 obsolete files
+  - Removed: `instrument_routes.py` (664 lines), `mic_routes.py` (476 lines), `entity_routes.py` (179 lines)
+  - Removed: `transparency_routes.py` (722 lines), `schema.py` (291 lines), `file_management.py` (326 lines)
+- **Retained Essential Routes**: Kept `common_routes.py` and `docs.py` for core functionality
+- **Zero Breaking Changes**: All API endpoints maintain exact same functionality and response formats
+
+### 🗂️ **Folder Structure Reorganization**
+- **Renamed**: `swagger/` → `api/` for better semantic clarity
+- **Consolidated Utilities**: Moved API utilities from `marketdata_api/utils/` to `api/utils/`
+- **Clean Organization**: All API-related code now properly contained within `api/` folder
+- **Import Cleanup**: Fixed all relative import paths for new structure
+
+### 🛠️ **Utility Function Architecture**
+- **Created Reusable Utilities**: Extracted shared functions from duplicate routes
+  - `api/utils/instrument_utils.py`: Instrument response building and validation
+  - `api/utils/mic_utils.py`: MIC data processing (6 core functions)
+  - `api/utils/response_builders.py`: Standardized response formatting
+- **Enhanced API Utils**: Consolidated all utility exports in `api/utils/__init__.py`
+- **Documentation Generator**: Moved and updated `generate_docs.py` to `api/utils/`
+
+### 🔧 **Technical Improvements**
+- **Fixed Transparency Endpoints**: Corrected field mappings and None value handling
+- **Database Session Management**: Proper session passing to utility functions  
+- **Response Model Alignment**: All endpoints return data matching Swagger model expectations
+- **Removed Leftover Files**: Cleaned up `*_working.py` files from previous refactoring
+
+### ✅ **Validation & Testing**
+- **All Endpoints Verified**: Complete test suite confirms all functionality preserved
+  - `/api/v1/instruments/` - 200 OK
+  - `/api/v1/legal-entities/` - 200 OK  
+  - `/api/v1/transparency/` - 200 OK (126 calculations)
+  - `/api/v1/mic/countries` - 200 OK (68 countries)
+  - `/api/v1/files/` - 200 OK (68 total files: 30 FIRDS + 38 FITRS)
+- **Flask App Stability**: 5 blueprints loaded successfully with new architecture
+- **Import Resolution**: All relative imports working correctly with reorganized structure
+
+### 📊 **Impact Summary**
+- **Code Reduction**: 2,658 lines removed (maintenance burden significantly reduced)
+- **Architecture Clarity**: Single consolidated API system vs. confusing dual system  
+- **Developer Experience**: Clean api/ folder structure with logical organization
+- **Future Development**: Solid foundation for frontend integration and API improvements
 
 ## [2025-10-05] - Comprehensive CLI Enhancements
 

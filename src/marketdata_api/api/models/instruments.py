@@ -268,6 +268,18 @@ def create_instrument_models(api, common_models):
         },
     )
 
+    # Query parameter models for better validation
+    instrument_list_params = api.model("InstrumentListParams", {
+        "type": fields.String(description="Filter by instrument type", example="equity"),
+        "currency": fields.String(description="Filter by currency code", example="USD"),
+        "mic_code": fields.String(description="Filter by MIC code", example="XNYS"),
+        "cfi_code": fields.String(description="Filter by CFI code", example="ESVUFR"),
+        "page": fields.Integer(description="Page number", min=1, default=1),
+        "per_page": fields.Integer(description="Items per page", min=1, max=1000, default=20),
+        "limit": fields.Integer(description="Maximum results", min=1, max=10000),
+        "offset": fields.Integer(description="Skip results", min=0, default=0),
+    })
+
     return {
         "instrument_base": instrument_base,
         "instrument_detailed": instrument_detailed,
@@ -282,4 +294,5 @@ def create_instrument_models(api, common_models):
         "classification_model": classification_model,
         "issuer_model": issuer_model,
         "venue_info": venue_info,
+        "instrument_list_params": instrument_list_params,
     }

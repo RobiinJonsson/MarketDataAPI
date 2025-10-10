@@ -54,4 +54,22 @@ def create_common_models(api):
         },
     )
 
-    return {"error_model": error_model, "pagination_meta": pagination_meta}
+    # Success model
+    success_model = api.model(
+        "Success",
+        {
+            ResponseFields.STATUS: fields.String(
+                required=True, description="Success status", enum=["success"]
+            ),
+            ResponseFields.MESSAGE: fields.String(
+                required=True, description="Success message"
+            ),
+            "data": fields.Raw(description="Response data (optional)"),
+        },
+    )
+
+    return {
+        "error_model": error_model, 
+        "pagination_meta": pagination_meta,
+        "success_model": success_model,
+    }

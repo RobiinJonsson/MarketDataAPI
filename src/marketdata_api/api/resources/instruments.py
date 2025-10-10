@@ -58,18 +58,27 @@ def create_instrument_resources(api, models):
         def get(self):
             """Retrieves a paginated list of instruments"""
             from ...database.session import get_session
+            from ..utils.api_utils import (
+                handle_api_errors,
+                validate_pagination_params,
+                validate_filter_params,
+                validate_currency_code,
+                validate_mic_code,
+                validate_cfi_code,
+            )
 
             try:
-                # Query parameters for filtering
-                instrument_type = request.args.get("type")
-                currency = request.args.get("currency")
-                limit = request.args.get("limit", Pagination.DEFAULT_LIMIT, type=int)
-                offset = request.args.get("offset", Pagination.DEFAULT_OFFSET, type=int)
-                page = request.args.get("page", Pagination.DEFAULT_PAGE, type=int)
-                per_page = min(
-                    request.args.get("per_page", Pagination.DEFAULT_PER_PAGE, type=int),
-                    Pagination.MAX_PER_PAGE,
-                )
+                # Validate pagination parameters
+                pagination = validate_pagination_params()
+                
+                # Validate filter parameters
+                allowed_filters = {
+                    'type': str,  # No specific validation for instrument type
+                    'currency': validate_currency_code,
+                    'mic_code': validate_mic_code,
+                    'cfi_code': validate_cfi_code,
+                }
+                filters = validate_filter_params(allowed_filters)
 
                 # Get models directly
                 from ...models.sqlite import Instrument
@@ -78,22 +87,30 @@ def create_instrument_resources(api, models):
                     query = session.query(Instrument)
 
                     # Apply filters
-                    logger.debug(
-                        f"Swagger: Filtering instruments with type={instrument_type}, currency={currency}"
-                    )
-                    if instrument_type:
-                        query = query.filter(Instrument.type == instrument_type)
+                    logger.debug(f"Swagger: Filtering instruments with filters={filters}")
+                    
+                    if 'type' in filters:
+                        query = query.filter(Instrument.type == filters['type'])
                         count = query.count()
-                        logger.debug(
-                            f"Swagger: Found {count} instruments with type={instrument_type}"
-                        )
-                    if currency:
-                        query = query.filter(Instrument.currency == currency)
+                        logger.debug(f"Swagger: Found {count} instruments with type={filters['type']}")
+                    
+                    if 'currency' in filters:
+                        query = query.filter(Instrument.currency == filters['currency'])
+                    
+                    if 'mic_code' in filters:
+                        # Filter by MIC code through trading venues
+                        from ...models.sqlite.instrument import TradingVenue
+                        query = query.join(TradingVenue).filter(TradingVenue.mic_code == filters['mic_code'])
+                    
+                    if 'cfi_code' in filters:
+                        query = query.filter(Instrument.cfi_code == filters['cfi_code'])
 
                     # Get total count for pagination
                     total_count = query.count()
 
                     # Apply pagination
+                    limit = pagination['limit'] or pagination['per_page']
+                    offset = pagination['offset'] or (pagination['page'] - 1) * pagination['per_page']
                     instruments = query.limit(limit).offset(offset).all()
 
                     result = []
@@ -140,8 +157,8 @@ def create_instrument_resources(api, models):
                         ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
                         ResponseFields.DATA: result,
                         ResponseFields.META: {
-                            ResponseFields.PAGE: page,
-                            ResponseFields.PER_PAGE: per_page,
+                            ResponseFields.PAGE: pagination['page'],
+                            ResponseFields.PER_PAGE: pagination['per_page'],
                             ResponseFields.TOTAL: total_count,
                         },
                     }
@@ -322,7 +339,7 @@ def create_instrument_resources(api, models):
                     }, HTTPStatus.NOT_FOUND
 
                 # Build detailed response using the helper function from instrument_routes
-                from ...routes.instrument_routes import build_instrument_response
+                from ..utils.instrument_utils import build_instrument_response
 
                 result = build_instrument_response(instrument)
                 session.close()
