@@ -54,7 +54,7 @@ def create_legal_entity_resources(api, models):
                 HTTPStatus.UNAUTHORIZED: ("Unauthorized", common_models["error_model"]),
             },
         )
-        @legal_entities_ns.marshal_with(legal_entity_models["legal_entity_list_response"])
+        # @legal_entities_ns.marshal_with(legal_entity_models["legal_entity_list_response"])  # Removed to allow rich response
         def get(self):
             """Retrieves a paginated list of legal entities"""
             from ...interfaces.factory.services_factory import ServicesFactory
@@ -78,22 +78,25 @@ def create_legal_entity_resources(api, models):
                 if jurisdiction:
                     filters["jurisdiction"] = jurisdiction
 
+                # Use rich legal entity response builder like CLI
+                from ..utils.legal_entity_utils import build_legal_entity_response
+                
                 service = ServicesFactory.get_legal_entity_service()
                 session, entities = service.get_all_entities(
                     limit=limit, offset=offset, filters=filters if filters else None
                 )
 
+                logger.info(f"Building rich responses for {len(entities)} legal entities")
                 result = []
                 for entity in entities:
-                    result.append(
-                        {
-                            "lei": entity.lei,
-                            "name": entity.name,
-                            "jurisdiction": entity.jurisdiction,
-                            "legal_form": entity.legal_form,
-                            "status": entity.status,
-                        }
-                    )
+                    try:
+                        rich_response = build_legal_entity_response(entity, include_rich_details=True)
+                        logger.info(f"Rich response for {entity.lei} has keys: {list(rich_response.keys())}")
+                        result.append(rich_response)
+                    except Exception as e:
+                        logger.error(f"Error building rich response for {entity.lei}: {e}")
+                        # Fallback to basic response
+                        result.append(entity.to_api_response())
 
                 session.close()
                 return {
@@ -132,6 +135,9 @@ def create_legal_entity_resources(api, models):
             from ...interfaces.factory.services_factory import ServicesFactory
 
             try:
+                # Use rich legal entity response builder with full details
+                from ..utils.legal_entity_utils import build_legal_entity_response
+                
                 service = ServicesFactory.get_legal_entity_service()
                 session, entity = service.get_entity(lei)
 
@@ -144,10 +150,17 @@ def create_legal_entity_resources(api, models):
                         },
                     }, HTTPStatus.NOT_FOUND
 
-                # Use the model's comprehensive API response method
-                result = entity.to_api_response(
-                    include_relationships=False, include_addresses=True, include_registration=True
-                )
+                logger.info(f"Building detailed rich response for entity {lei}")
+                try:
+                    rich_response = build_legal_entity_response(entity, include_rich_details=True)
+                    logger.info(f"Rich response for {lei} has keys: {list(rich_response.keys())}")
+                    result = rich_response
+                except Exception as e:
+                    logger.error(f"Error building rich response for {lei}: {e}")
+                    # Fallback to basic response
+                    result = entity.to_api_response(
+                        include_relationships=False, include_addresses=True, include_registration=True
+                    )
 
                 session.close()
 

@@ -8,31 +8,44 @@ Extracted from routes/instrument_routes.py for reusability across the applicatio
 from ...models.utils.cfi import CFI
 
 
-def build_instrument_response(instrument):
+def build_instrument_response(instrument, include_rich_details=True):
     """
-    Build comprehensive response with all instrument details using unified architecture.
+    Build comprehensive response with CLI-style rich data extraction using unified architecture.
     
     Args:
         instrument: SQLAlchemy Instrument model instance
+        include_rich_details: Whether to include rich FIRDS data extraction and analysis
         
     Returns:
-        dict: Comprehensive instrument response with CFI decoding, FIGI mappings, etc.
+        dict: Comprehensive instrument response with CFI decoding, FIGI mappings, rich FIRDS data, etc.
     """
     # Start with the model's built-in serialization method
     response = instrument.to_api_response()
 
-    # Add trading venues count
+    if include_rich_details:
+        # Add CLI-style rich data extraction
+        response.update(_extract_rich_financial_details(instrument))
+        response.update(_extract_rich_status_indicators(instrument))
+        response.update(_extract_rich_type_specific_data(instrument))
+
+    # Add trading venues count and details
     response["trading_venues_count"] = (
         len(instrument.trading_venues) if instrument.trading_venues else 0
     )
+    
+    if instrument.trading_venues:
+        response["trading_venues"] = _format_trading_venues_data(instrument.trading_venues)
 
-    # Add CFI decoding if available
+    # Add enhanced CFI decoding with business context
     if instrument.cfi_code and len(instrument.cfi_code) == 6:
         try:
             cfi = CFI(instrument.cfi_code)
-            response["cfi_decoded"] = cfi.describe()
+            cfi_description = cfi.describe()
+            response["cfi_decoded"] = cfi_description
+            response["cfi_display"] = f"{instrument.cfi_code} ({cfi_description.get('description', 'N/A')})"
         except Exception as e:
             response["cfi_decoded"] = {"error": str(e)}
+            response["cfi_display"] = f"{instrument.cfi_code} (decoding error)"
 
     # Add related entity info if available
     if instrument.legal_entity:
@@ -141,3 +154,263 @@ def format_instrument_list_response(instruments, total_count, page=1, per_page=2
             "has_prev": page > 1,
         },
     }
+
+
+def _extract_rich_financial_details(instrument):
+    """Extract rich financial details like CLI formatting"""
+    details = {}
+    
+    # Enhanced primary venue display with MIC lookup
+    if instrument.relevant_trading_venue:
+        details["primary_venue_display"] = _format_primary_venue_with_mic(instrument.relevant_trading_venue)
+    
+    # Extract financial data from FIRDS fields
+    if instrument.firds_data and isinstance(instrument.firds_data, dict):
+        firds = instrument.firds_data
+        financial_data = {}
+        
+        # Price multiplier (common across derivatives)
+        if firds.get('DerivInstrmAttrbts_PricMltplr'):
+            financial_data['price_multiplier'] = firds['DerivInstrmAttrbts_PricMltplr']
+            
+        # Debt-specific financial fields
+        if firds.get('DebtInstrmAttrbts_TtlIssdNmnlAmt'):
+            amount = firds['DebtInstrmAttrbts_TtlIssdNmnlAmt']
+            financial_data['total_issued_nominal'] = {
+                'amount': float(amount),
+                'formatted': f"{int(amount):,} {instrument.currency or ''}",
+                'currency': instrument.currency
+            }
+            
+        if firds.get('DebtInstrmAttrbts_NmnlValPerUnit'):
+            financial_data['nominal_per_unit'] = firds['DebtInstrmAttrbts_NmnlValPerUnit']
+            
+        if firds.get('DebtInstrmAttrbts_IntrstRate_Fxd'):
+            financial_data['fixed_interest_rate'] = {
+                'rate': float(firds['DebtInstrmAttrbts_IntrstRate_Fxd']),
+                'formatted': f"{firds['DebtInstrmAttrbts_IntrstRate_Fxd']}%"
+            }
+        
+        if financial_data:
+            details["financial_data"] = financial_data
+    
+    return details
+
+
+def _extract_rich_status_indicators(instrument):
+    """Extract status indicators like CLI formatting"""
+    status_info = {
+        "status_indicators": [],
+        "display_status": ""
+    }
+    
+    # Status indicators
+    status_icons = []
+    if instrument.commodity_derivative_indicator:
+        status_icons.append("🌾 Commodity Derivative")
+    if instrument.legal_entity:
+        status_icons.append("✅ Issuer Verified")
+    if instrument.figi_mappings:
+        status_icons.append("🏷️ FIGI Mapped")
+    
+    status_info["status_indicators"] = status_icons
+    status_info["display_status"] = " • ".join(status_icons) if status_icons else "ℹ️ Basic Information"
+    
+    return status_info
+
+
+def _extract_rich_type_specific_data(instrument):
+    """Extract type-specific rich data based on instrument classification"""
+    type_data = {}
+    
+    # Extract commodity classification if applicable
+    if instrument.firds_data and instrument.commodity_derivative_indicator:
+        commodity_info = _get_commodity_classification(instrument.firds_data)
+        if commodity_info:
+            type_data["commodity_classification"] = commodity_info
+    
+    # Extract swap classification if CFI indicates swap
+    if instrument.cfi_code and len(instrument.cfi_code) >= 2 and instrument.cfi_code[0] == 'S':
+        swap_info = _get_swap_classification(instrument, instrument.firds_data or {})
+        if swap_info:
+            type_data["swap_classification"] = swap_info
+    
+    # Extract forward classification if CFI indicates forward
+    if instrument.cfi_code and len(instrument.cfi_code) >= 2 and instrument.cfi_code[0] == 'J':
+        forward_info = _get_forward_classification(instrument, instrument.firds_data or {})
+        if forward_info:
+            type_data["forward_classification"] = forward_info
+    
+    return type_data
+
+
+def _format_trading_venues_data(trading_venues):
+    """Format trading venues data like CLI tables"""
+    return [
+        {
+            "venue_id": venue.venue_id if hasattr(venue, 'venue_id') else None,
+            "mic_code": venue.mic_code if hasattr(venue, 'mic_code') else None,
+            "first_trade_date": venue.first_trade_date.isoformat() if hasattr(venue, 'first_trade_date') and venue.first_trade_date else None,
+            "venue_status": venue.venue_status if hasattr(venue, 'venue_status') else None,
+        }
+        for venue in trading_venues
+    ]
+
+
+def _format_primary_venue_with_mic(mic_code):
+    """Format primary venue with rich MIC data lookup like CLI"""
+    try:
+        from ...database.session import get_session
+        from ...models.sqlite.market_identification_code import MarketIdentificationCode
+        
+        with get_session() as session:
+            mic_data = session.query(MarketIdentificationCode).filter(
+                MarketIdentificationCode.mic == mic_code
+            ).first()
+            
+            if mic_data:
+                # Build rich display with MIC information
+                venue_display = {
+                    "mic_code": mic_code,
+                    "market_name": mic_data.market_name,
+                    "country_code": mic_data.iso_country_code,
+                    "status": mic_data.status.value if mic_data.status else None,
+                    "formatted": f"{mic_code}"
+                }
+                
+                if mic_data.market_name:
+                    # Truncate long market names for display
+                    market_name = mic_data.market_name
+                    if len(market_name) > 40:
+                        market_name = market_name[:40] + "..."
+                    venue_display["formatted"] += f" ({market_name})"
+                
+                return venue_display
+            else:
+                return {
+                    "mic_code": mic_code,
+                    "market_name": None,
+                    "country_code": None,
+                    "status": None,
+                    "formatted": f"{mic_code} (MIC not found in registry)"
+                }
+                
+    except Exception:
+        # Fallback to basic display if lookup fails
+        return {
+            "mic_code": mic_code,
+            "formatted": mic_code
+        }
+
+
+def _get_commodity_classification(firds_data):
+    """Extract and format commodity classification information from FIRDS data like CLI"""
+    classification_info = {
+        'icon': '🌾',
+        'display_name': 'Commodity',
+        'additional_info': ''
+    }
+    
+    # Natural Gas futures
+    if (firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_NtrlGas_BasePdct') or
+        firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_NtrlGas_SubPdct')):
+        classification_info.update({
+            'icon': '⛽',
+            'display_name': 'Natural Gas',
+            'additional_info': firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Nrgy_NtrlGas_AddtlSubPdct', '')
+        })
+    
+    # Agricultural - Seafood
+    elif (firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Sfd_BasePdct') or
+          firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Cmmdty_Pdct_Agrcltrl_Sfd_SubPdct')):
+        classification_info.update({
+            'icon': '🐟',
+            'display_name': 'Seafood',
+            'additional_info': 'Agricultural derivative'
+        })
+    
+    # Only return if we found actual commodity classification
+    base_product_found = any([
+        firds_data.get(key) for key in firds_data.keys() 
+        if '_BasePdct' in key and firds_data.get(key)
+    ])
+    
+    return classification_info if base_product_found else None
+
+
+def _get_swap_classification(instrument, firds_data):
+    """Extract and format swap classification information from CFI code and FIRDS data like CLI"""
+    try:
+        cfi_code = instrument.cfi_code
+        
+        if not cfi_code or len(cfi_code) < 6:
+            return None
+        
+        classification_info = {
+            'icon': '🔄',
+            'display_name': 'Swap',
+            'additional_info': '',
+            'swap_details': {}
+        }
+        
+        # Credit Default Swaps (SCBCCA)
+        if cfi_code == 'SCBCCA':
+            classification_info.update({
+                'icon': '💳',
+                'display_name': 'Credit Default Swap',
+                'additional_info': 'Credit protection derivative'
+            })
+        
+        # Interest Rate Swaps - Standard (SRCCSP)
+        elif cfi_code == 'SRCCSP':
+            classification_info.update({
+                'icon': '📊',
+                'display_name': 'Interest Rate Swap',
+                'additional_info': 'Fixed-float interest rate derivative'
+            })
+        
+        return classification_info
+    except Exception as e:
+        return {
+            'icon': '🔄',
+            'display_name': 'Swap',
+            'additional_info': f'Error in classification: {str(e)}',
+            'swap_details': {}
+        }
+
+
+def _get_forward_classification(instrument, firds_data):
+    """Extract and format forward classification information from CFI code and FIRDS data like CLI"""
+    try:
+        cfi_code = instrument.cfi_code
+        
+        if not cfi_code or len(cfi_code) < 2:
+            return None
+        
+        classification_info = {
+            'icon': '📈',
+            'display_name': 'Forward',
+            'additional_info': '',
+            'forward_details': {}
+        }
+        
+        # Basic forward classification based on CFI pattern
+        if cfi_code.startswith('JE'):
+            classification_info.update({
+                'display_name': 'Equity Forward',
+                'additional_info': 'Equity-based forward contract'
+            })
+        elif cfi_code.startswith('JF'):
+            classification_info.update({
+                'display_name': 'Foreign Exchange Forward',
+                'additional_info': 'Currency forward contract'
+            })
+        
+        return classification_info
+    except Exception as e:
+        return {
+            'icon': '📈',
+            'display_name': 'Forward',
+            'additional_info': f'Error in classification: {str(e)}',
+            'forward_details': {}
+        }

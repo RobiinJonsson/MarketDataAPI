@@ -54,7 +54,7 @@ def create_instrument_resources(api, models):
                 HTTPStatus.UNAUTHORIZED: ("Unauthorized", common_models["error_model"]),
             },
         )
-        @instruments_ns.marshal_with(instrument_models["instrument_list_response"])
+        # @instruments_ns.marshal_with(instrument_models["instrument_list_response"])  # Removed to allow rich response
         def get(self):
             """Retrieves a paginated list of instruments"""
             from ...database.session import get_session
@@ -90,7 +90,7 @@ def create_instrument_resources(api, models):
                     logger.debug(f"Swagger: Filtering instruments with filters={filters}")
                     
                     if 'type' in filters:
-                        query = query.filter(Instrument.type == filters['type'])
+                        query = query.filter(Instrument.instrument_type == filters['type'])
                         count = query.count()
                         logger.debug(f"Swagger: Found {count} instruments with type={filters['type']}")
                     
@@ -113,45 +113,20 @@ def create_instrument_resources(api, models):
                     offset = pagination['offset'] or (pagination['page'] - 1) * pagination['per_page']
                     instruments = query.limit(limit).offset(offset).all()
 
+                    # Use rich instrument response builder like CLI
+                    from ..utils.instrument_utils import build_instrument_response
+                    
+                    logger.info(f"Building rich responses for {len(instruments)} instruments")
                     result = []
                     for instrument in instruments:
-                        # Get MIC codes from trading venues
-                        mic_codes = (
-                            [venue.mic_code for venue in instrument.trading_venues]
-                            if instrument.trading_venues
-                            else []
-                        )
-                        primary_mic = mic_codes[0] if mic_codes else None
-
-                        result.append(
-                            {
-                                "id": instrument.id,
-                                "type": getattr(instrument, "instrument_type", None),
-                                "isin": instrument.isin,
-                                "symbol": instrument.short_name,
-                                "full_name": instrument.full_name,
-                                "currency": instrument.currency,
-                                "mic_code": primary_mic,
-                                "mic_codes": mic_codes,
-                                "maturity_date": (
-                                    getattr(instrument, "maturity_date", None).isoformat()
-                                    if getattr(instrument, "maturity_date", None)
-                                    else None
-                                ),
-                                "issue_date": (
-                                    getattr(instrument, "issue_date", None).isoformat()
-                                    if getattr(instrument, "issue_date", None)
-                                    else None
-                                ),
-                                "nominal_value": (
-                                    float(getattr(instrument, "nominal_value", None))
-                                    if getattr(instrument, "nominal_value", None)
-                                    else None
-                                ),
-                                "cfi_code": instrument.cfi_code,
-                                "lei": instrument.lei_id,
-                            }
-                        )
+                        try:
+                            rich_response = build_instrument_response(instrument, include_rich_details=True)
+                            logger.info(f"Rich response for {instrument.isin} has keys: {list(rich_response.keys())}")
+                            result.append(rich_response)
+                        except Exception as e:
+                            logger.error(f"Error building rich response for {instrument.isin}: {e}")
+                            # Fallback to basic response
+                            result.append(instrument.to_api_response())
 
                     return {
                         ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,

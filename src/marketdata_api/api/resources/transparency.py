@@ -53,7 +53,7 @@ def create_transparency_resources(api, models):
                 HTTPStatus.UNAUTHORIZED: ("Unauthorized", common_models["error_model"]),
             },
         )
-        @transparency_ns.marshal_with(transparency_models["transparency_list_response"])
+        # @transparency_ns.marshal_with(transparency_models["transparency_list_response"])  # Removed to allow rich response
         def get(self):
             """Get all transparency calculations with optional filtering"""
             from sqlalchemy.orm import joinedload
@@ -93,27 +93,26 @@ def create_transparency_resources(api, models):
                     offset = (page - 1) * per_page
                     calculations = query.offset(offset).limit(per_page).all()
 
-                    # Format results
+                    # Use rich transparency response builder like CLI
+                    from ..utils.transparency_utils import build_transparency_response
+                    
+                    logger.info(f"Building rich responses for {len(calculations)} transparency calculations")
                     result = []
                     for calc in calculations:
-                        result.append(
-                            {
+                        try:
+                            rich_response = build_transparency_response(calc, include_rich_details=True)
+                            logger.info(f"Rich response for {calc.id} has keys: {list(rich_response.keys())}")
+                            result.append(rich_response)
+                        except Exception as e:
+                            logger.error(f"Error building rich response for {calc.id}: {e}")
+                            # Fallback to basic response
+                            result.append({
                                 "id": calc.id,
                                 "isin": calc.isin,
-                                "instrument_name": calc.description or "N/A",  # Use description or default
                                 "file_type": calc.file_type,
-                                "calculation_date": (
-                                    calc.from_date.isoformat()
-                                    if calc.from_date
-                                    else None
-                                ),
-                                "instrument_type": calc.instrument_category,
-                                "currency": "N/A",  # Not available in current model
-                                "trading_venue": "N/A",  # Not available in current model
-                                "has_transaction_data": (calc.total_transactions_executed or 0) > 0,
-                                "has_threshold_data": len(calc.thresholds or []) > 0,
-                            }
-                        )
+                                "transactions": calc.total_transactions_executed,
+                                "volume": float(calc.total_volume_executed) if calc.total_volume_executed else 0.0,
+                            })
 
                     return {
                         ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
@@ -176,28 +175,22 @@ def create_transparency_resources(api, models):
                             },
                         }, HTTPStatus.NOT_FOUND
 
-                    # Build detailed response
-                    result = {
-                        "id": calculation.id,
-                        "isin": calculation.isin,
-                        "instrument_name": calculation.description or "N/A",
-                        "file_type": calculation.file_type,
-                        "calculation_date": (
-                            calculation.from_date.isoformat()
-                            if calculation.from_date
-                            else None
-                        ),
-                        "instrument_type": calculation.instrument_category,
-                        "currency": "N/A",  # Not available in current model
-                        "trading_venue": "N/A",  # Not available in current model
-                        "has_transaction_data": (calculation.total_transactions_executed or 0) > 0,
-                        "has_threshold_data": len(calculation.thresholds or []) > 0,
-                        "created_at": (
-                            calculation.created_at.isoformat() if calculation.created_at else None
-                        ),
-                        "updated_at": (
-                            calculation.updated_at.isoformat() if calculation.updated_at else None
-                        ),
+                    # Use rich transparency response builder with full details
+                    from ..utils.transparency_utils import build_transparency_response
+                    
+                    logger.info(f"Building detailed rich response for transparency calculation {transparency_id}")
+                    try:
+                        result = build_transparency_response(calculation, include_rich_details=True)
+                        logger.info(f"Rich response for {transparency_id} has keys: {list(result.keys())}")
+                    except Exception as e:
+                        logger.error(f"Error building rich response for {transparency_id}: {e}")
+                        # Fallback to basic response
+                        result = {
+                            "id": calculation.id,
+                            "isin": calculation.isin,
+                            "file_type": calculation.file_type,
+                            "transactions": calculation.total_transactions_executed,
+                            "volume": float(calculation.total_volume_executed) if calculation.total_volume_executed else 0.0,
                     }
 
                     return {
@@ -256,29 +249,31 @@ def create_transparency_resources(api, models):
                             },
                         }, HTTPStatus.NOT_FOUND
 
-                    # Format results
-                    result = []
-                    for calc in calculations:
-                        result.append(
-                            {
+                    # Use rich transparency analysis response like CLI
+                    from ..utils.transparency_utils import format_transparency_analysis_response
+                    
+                    logger.info(f"Building transparency analysis for ISIN {isin} with {len(calculations)} calculations")
+                    try:
+                        analysis_response = format_transparency_analysis_response(isin, calculations)
+                        return analysis_response
+                    except Exception as e:
+                        logger.error(f"Error building transparency analysis for {isin}: {e}")
+                        # Fallback to basic list format
+                        result = []
+                        for calc in calculations:
+                            result.append({
                                 "id": calc.id,
                                 "isin": calc.isin,
-                                "tech_record_id": calc.tech_record_id,
                                 "file_type": calc.file_type,
-                                "from_date": calc.from_date.isoformat() if calc.from_date else None,
-                                "to_date": calc.to_date.isoformat() if calc.to_date else None,
-                                "liquidity": calc.liquidity,
-                                "total_transactions_executed": calc.total_transactions_executed,
-                                "total_volume_executed": calc.total_volume_executed,
-                                "source_file": calc.source_file,
-                            }
-                        )
-
-                    return {
-                        ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
-                        ResponseFields.DATA: result,
-                        ResponseFields.META: {ResponseFields.TOTAL: len(result)},
-                    }
+                                "transactions": calc.total_transactions_executed,
+                                "volume": float(calc.total_volume_executed) if calc.total_volume_executed else 0.0,
+                            })
+                        
+                        return {
+                            ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                            ResponseFields.DATA: result,
+                            ResponseFields.META: {ResponseFields.TOTAL: len(result)},
+                        }
 
                 finally:
                     session.close()
