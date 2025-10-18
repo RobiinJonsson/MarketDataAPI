@@ -4,20 +4,37 @@ Comprehensive market data management system with CFI-based instrument classifica
 
 ## Key Features
 
-- **Enhanced Derivatives Support**: Comprehensive swap classification with intelligent CFI-driven type detection for all major categories
-- **MIC Code Integration**: Complete ISO 10383 Market Identification Code system with dual-mode operations
-- **CFI-Based Classification**: ISO 10962 compliant CFI code system as single source of truth for instrument types
-- **Unified Architecture**: JSON-based models supporting all 10 FIRDS instrument types (C,D,E,F,H,I,J,O,R,S)
-- **Performance Optimized**: CFI-driven file filtering reduces I/O operations by 90%
-- **Dual Database Support**: SQLite (development) / Azure SQL (production) with unified transparency calculations
-- **Complete Data Integration**: FIRDS/FITRS integration with intelligent type detection
-- **GLEIF API Integration**: Live LEI data retrieval and entity creation from GLEIF public API
-- **RESTful API**: Modular Swagger UI with comprehensive endpoint documentation
-- **Professional CLI**: Modern command-line interface with Rich formatting and type-specific displays
-- **Smart File Management**: Precise regex-based pattern matching for FIRDS/FITRS files
-- **Complete API Documentation**: Available at `/api/v1/swagger` (interactive) and `docs/api/`
+- **🎯 Type-Specific Intelligence**: Comprehensive attribute extractors for all 10 CFI instrument types with intelligent field mapping from 254 FIRDS data elements
+- **🚀 Rich API Responses**: Enterprise-grade endpoints delivering detailed instrument analysis with contract specifications, risk metrics, and business intelligence
+- **🏗️ Advanced Classification**: CFI-driven smart categorization with automatic sub-type detection (Interest Rate Swaps, Call/Put Options, Government Bonds, etc.)
+- **💰 Financial Analytics**: Time-to-maturity calculations, expiration tracking, strike price analysis, yield calculations, and protection level assessment
+- **🔄 Enhanced Derivatives Support**: Comprehensive swap, future, and option analysis with reference rates, underlying assets, and settlement details
+- **🏛️ MIC Code Integration**: Complete ISO 10383 Market Identification Code system with dual-mode operations
+- **📊 CFI-Based Architecture**: ISO 10962 compliant CFI code system as single source of truth for all instrument routing and validation
+- **🎨 Unified Data Models**: JSON-based architecture supporting all 10 FIRDS instrument types (C,D,E,F,H,I,J,O,R,S) with promoted field optimization
+- **⚡ Performance Optimized**: CFI-driven file filtering and single-pass FIRDS processing reduces I/O operations by 90%
+- **🗄️ Dual Database Support**: SQLite (development) / Azure SQL (production) with unified transparency calculations
+- **🔗 Complete Data Integration**: FIRDS/FITRS integration with intelligent type detection and field normalization
+- **🏢 GLEIF API Integration**: Live LEI data retrieval and entity creation from GLEIF public API
+- **💼 Professional CLI**: Modern command-line interface with Rich formatting and type-specific displays
+- **📋 Smart File Management**: Precise regex-based pattern matching for FIRDS/FITRS files
+- **📖 Complete API Documentation**: Interactive Swagger UI at `/api/v1/swagger` with comprehensive endpoint testing
 
 ## Recent Major Improvements
+
+### 🎯 Type-Specific Attribute Extractors (October 2025)
+- **Complete CFI Coverage**: Intelligent attribute extraction for all 10 major instrument types with comprehensive FIRDS field analysis
+- **Rich Business Logic**: Contract specifications, expiration analysis, pricing information, risk attributes, and intelligent classification
+- **Production-Ready API**: Enhanced `/api/v1/instruments/{isin}` endpoints returning detailed `{instrument_type}_attributes` objects
+- **Advanced Analytics**: Automatic calculations for time-to-maturity, strike analysis, swap classification, fund categorization
+- **Enterprise Intelligence**: 
+  - **Swaps**: Reference rates, settlement types, floating terms, swap classifications
+  - **Options**: Strike prices, exercise styles, barrier features, underlying mapping
+  - **Futures**: Contract specifications, delivery types, expiration tracking
+  - **Debt**: Maturity analysis, convertible detection, yield calculations
+  - **Equity**: Share classifications, voting rights, dividend analysis
+  - **Structured Products**: Capital protection, participation rates, barrier analysis
+  - **Collective Investment**: Fund strategies, distribution policies, geographic focus
 
 ### Flask-RESTX API Consolidation (October 2025)
 - **Major Architecture Cleanup**: Eliminated dual API systems (routes/ + swagger/), consolidated into single `api/` folder

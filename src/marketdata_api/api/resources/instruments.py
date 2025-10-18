@@ -40,6 +40,7 @@ def create_instrument_resources(api, models):
             description="Retrieves a paginated list of instruments",
             params={
                 "type": 'Filter by instrument type (e.g., "equity", "debt", "future")',
+                "cfi_type": 'Filter by CFI instrument type (C=Collective, D=Debt, E=Equity, F=Future, H=Structured, I=Interest Rate, J=Commodity, O=Option, R=Rights, S=Swap)',
                 "currency": "Filter by currency code",
                 "mic_code": "Filter by Market Identification Code",
                 "cfi_code": "Filter by CFI code",
@@ -74,6 +75,7 @@ def create_instrument_resources(api, models):
                 # Validate filter parameters
                 allowed_filters = {
                     'type': str,  # No specific validation for instrument type
+                    'cfi_type': lambda x: x.upper() if x.upper() in 'CDEFHIJORS' else None,  # CFI first letter
                     'currency': validate_currency_code,
                     'mic_code': validate_mic_code,
                     'cfi_code': validate_cfi_code,
@@ -94,6 +96,13 @@ def create_instrument_resources(api, models):
                         count = query.count()
                         logger.debug(f"Swagger: Found {count} instruments with type={filters['type']}")
                     
+                    if 'cfi_type' in filters:
+                        # Filter by CFI first letter (instrument classification)
+                        cfi_prefix = filters['cfi_type'] + '%'
+                        query = query.filter(Instrument.cfi_code.like(cfi_prefix))
+                        count = query.count()
+                        logger.debug(f"Swagger: Found {count} instruments with CFI type={filters['cfi_type']}")
+                    
                     if 'currency' in filters:
                         query = query.filter(Instrument.currency == filters['currency'])
                     
@@ -113,8 +122,8 @@ def create_instrument_resources(api, models):
                     offset = pagination['offset'] or (pagination['page'] - 1) * pagination['per_page']
                     instruments = query.limit(limit).offset(offset).all()
 
-                    # Use rich instrument response builder like CLI
-                    from ..utils.instrument_utils import build_instrument_response
+                    # Use rich instrument response builder following CLI pattern
+                    from ..utils.type_specific_responses import build_instrument_response, build_raw_instrument_response
                     
                     logger.info(f"Building rich responses for {len(instruments)} instruments")
                     result = []
@@ -126,7 +135,7 @@ def create_instrument_resources(api, models):
                         except Exception as e:
                             logger.error(f"Error building rich response for {instrument.isin}: {e}")
                             # Fallback to basic response
-                            result.append(instrument.to_api_response())
+                            result.append(build_raw_instrument_response(instrument.to_raw_data()))
 
                     return {
                         ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
@@ -313,10 +322,10 @@ def create_instrument_resources(api, models):
                         },
                     }, HTTPStatus.NOT_FOUND
 
-                # Build detailed response using the helper function from instrument_routes
-                from ..utils.instrument_utils import build_instrument_response
+                # Build detailed response using CLI-pattern response builder
+                from ..utils.type_specific_responses import build_detailed_instrument_response
 
-                result = build_instrument_response(instrument)
+                result = build_detailed_instrument_response(instrument)
                 session.close()
 
                 return {
@@ -326,6 +335,85 @@ def create_instrument_resources(api, models):
 
             except Exception as e:
                 logger.error(f"Error in swagger get_instrument: {str(e)}")
+                return {
+                    ResponseFields.STATUS: "error",
+                    ResponseFields.ERROR: {
+                        "code": str(HTTPStatus.INTERNAL_SERVER_ERROR),
+                        ResponseFields.MESSAGE: str(e),
+                    },
+                }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+    @instruments_ns.route("/<string:isin>/raw")
+    @instruments_ns.param("isin", "International Securities Identification Number")
+    class InstrumentRawData(Resource):
+        @instruments_ns.doc(
+            description="Retrieves raw model data for a specific instrument by its ISIN for comparison with normalized outputs",
+            responses={
+                HTTPStatus.OK: ("Success", common_models["success_model"]),
+                HTTPStatus.NOT_FOUND: ("Instrument not found", common_models["error_model"]),
+                HTTPStatus.UNAUTHORIZED: ("Unauthorized", common_models["error_model"]),
+            },
+        )
+        def get(self, isin):
+            """Retrieves raw model data for a specific instrument - useful for comparing with normalized API responses"""
+            from ...interfaces.factory.services_factory import ServicesFactory
+
+            try:
+                service = ServicesFactory.get_instrument_service()
+                session, instrument = service.get_instrument(isin)
+
+                if not instrument:
+                    return {
+                        ResponseFields.STATUS: "error",
+                        ResponseFields.ERROR: {
+                            "code": str(HTTPStatus.NOT_FOUND),
+                            ResponseFields.MESSAGE: ErrorMessages.INSTRUMENT_NOT_FOUND,
+                        },
+                    }, HTTPStatus.NOT_FOUND
+
+                # Get raw data directly from model - no normalization or presentation logic
+                raw_data = instrument.to_raw_data()
+                session.close()
+
+                # Convert datetime objects and SQLAlchemy objects to JSON-serializable format
+                def serialize_for_json(data):
+                    """Recursively convert objects to JSON-serializable format"""
+                    if isinstance(data, dict):
+                        return {k: serialize_for_json(v) for k, v in data.items()}
+                    elif isinstance(data, list):
+                        return [serialize_for_json(item) for item in data]
+                    elif hasattr(data, 'isoformat'):  # datetime, date objects
+                        return data.isoformat()
+                    elif hasattr(data, '__dict__'):  # SQLAlchemy objects, etc.
+                        return str(data)  # Convert to string representation
+                    elif data is None:
+                        return None
+                    else:
+                        return data
+                
+                # Serialize the raw data for JSON response
+                serialized_raw_data = serialize_for_json(raw_data)
+
+                # Add metadata about the raw data structure for development reference
+                metadata = {
+                    "description": "Raw model data - compare with normalized /api/v1/instruments/{isin} response",
+                    "instrument_type": serialized_raw_data.get("instrument_type"),
+                    "total_fields": len(serialized_raw_data),
+                    "firds_fields_count": len(serialized_raw_data.get("firds_data", {}) or {}),
+                    "processed_attributes_count": len(serialized_raw_data.get("processed_attributes", {}) or {}),
+                    "has_trading_venues": bool(instrument.trading_venues),
+                    "has_figi_mappings": bool(instrument.figi_mappings),
+                    "has_legal_entity": bool(instrument.legal_entity),
+                }
+
+                return {
+                    ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                    ResponseFields.DATA: serialized_raw_data,
+                    ResponseFields.META: metadata,
+                }
+
+            except Exception as e:
+                logger.error(f"Error in raw data endpoint: {str(e)}")
                 return {
                     ResponseFields.STATUS: "error",
                     ResponseFields.ERROR: {

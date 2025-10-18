@@ -12,7 +12,13 @@ MarketDataAPI/
 │   └── marketdata_api/              # Main package
 │       ├── api/                     # Unified Flask-RESTX API (formerly swagger/)
 │       │   ├── resources/           # API endpoint implementations
-│       │   └── utils/               # Shared API utilities (instrument, MIC, response builders)
+│       │   ├── utils/               # Shared API utilities including:
+│       │   │   ├── type_specific_responses.py  # 🎯 Type-specific attribute extractors (10 CFI types)
+│       │   │   ├── instrument_utils.py         # Instrument processing utilities
+│       │   │   ├── mic_utils.py               # MIC code operations
+│       │   │   └── response_builders.py       # Response formatting utilities
+│       │   ├── models/              # API response models
+│       │   └── config.py            # API configuration
 │       ├── models/                  # Database models
 │       ├── services/                # Business logic layer  
 │       └── database/                # Database configuration
@@ -113,18 +119,21 @@ api/
 │   ├── transparency.py         # MiFID II transparency calculations
 │   ├── mic.py                  # MIC code operations
 │   └── files.py                # File management
-└── utils/                      # Shared utilities
-    ├── instrument_utils.py     # Instrument data processing
-    ├── mic_utils.py            # MIC operations
-    ├── response_builders.py    # Response formatting
+└── utils/                      # Rich response utilities
+    ├── instrument_utils.py     # Rich instrument data processing with CLI-quality formatting
+    ├── mic_utils.py            # MIC operations with status indicators
+    ├── response_builders.py    # Enterprise-grade response formatting
+    ├── transparency_utils.py   # Rich transparency calculations with comprehensive analysis
     └── generate_docs.py        # OpenAPI/Postman documentation generation
 ```
 
 **Key Benefits:**
 - **No Code Duplication**: Eliminated previous dual `routes/` + `swagger/` systems
+- **Rich Response Architecture**: CLI-quality API responses with status indicators and formatted metrics
 - **Shared Utilities**: Common operations extracted to reusable utility functions  
 - **Domain Organization**: Resources grouped by business functionality
 - **CFI-Driven**: All instrument operations use CFI codes as primary classification
+- **Enterprise-Grade Data**: Comprehensive analysis, contextual information, and professional formatting
 
 ### Running from Source (Development)
 ```bash
@@ -167,6 +176,35 @@ pytest -c config/pytest.ini
 cd deployment/
 docker-compose up
 ```
+
+## 🎯 Type-Specific Attributes System
+
+### Core Architecture
+The `api/utils/type_specific_responses.py` module implements a comprehensive system for extracting and enriching instrument data based on CFI classification:
+
+#### **10 CFI Type Extractors**
+- **Swaps (S)**: Reference rates, settlement types, floating terms, swap classifications
+- **Futures (F)**: Contract specifications, delivery types, expiration tracking, underlying assets  
+- **Options (O)**: Strike prices, exercise styles, barrier features, underlying mapping
+- **Debt (D)**: Maturity analysis, interest rate types, convertible bond detection
+- **Equity (E)**: Share classifications, voting rights analysis, dividend information
+- **Rights (R)**: Exercise price analysis, underlying mapping, expiry status tracking
+- **Collective Investment (C)**: Fund strategies, distribution policies, geographic focus
+- **Structured Products (I)**: Capital protection analysis, participation rates, barrier classifications
+- **Spot (H)**: FX pair detection, commodity categorization, settlement analysis  
+- **Forward (J)**: Contract terms, underlying assets, maturity calculations
+
+#### **Intelligence Features**
+- **254 FIRDS Fields Analyzed**: Comprehensive categorization into dates, rates, contract specs, underlying assets
+- **Business Logic**: Automatic sub-type detection and intelligent naming
+- **Time Calculations**: Days-to-expiry, time-to-maturity, term classifications
+- **Risk Analysis**: Protection levels, barrier detection, enhanced rights assessment
+
+#### **API Integration**
+- **Rich Responses**: `/api/v1/instruments/{isin}` returns detailed `{instrument_type}_attributes`
+- **Raw Data Access**: `/api/v1/instruments/{isin}/raw` for development comparison
+- **Consistent Structure**: Standardized field normalization across all types
+- **Performance Optimized**: Single-pass FIRDS processing with lazy evaluation
 
 ## Environment Configuration
 

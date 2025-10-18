@@ -77,13 +77,12 @@ class Instrument(Base):
         Index("idx_instruments_unified_created", "created_at"),
     )
 
-    def to_api_response(self) -> Dict[str, Any]:
-        """Convert to structured API response based on instrument type."""
-
-        # Base response structure with promoted FIRDS fields
-        response = {
+    def to_raw_data(self) -> Dict[str, Any]:
+        """Extract raw model data for API layer processing. No presentation logic."""
+        return {
+            # Core database fields - raw values
             "id": self.id,
-            "isin": self.isin,
+            "isin": self.isin, 
             "instrument_type": self.instrument_type,
             "full_name": self.full_name,
             "short_name": self.short_name,
@@ -91,70 +90,40 @@ class Instrument(Base):
             "cfi_code": self.cfi_code,
             "commodity_derivative_indicator": self.commodity_derivative_indicator,
             "lei_id": self.lei_id,
-            "publication_from_date": (
-                self.publication_from_date.isoformat() if self.publication_from_date else None
-            ),
+            "publication_from_date": self.publication_from_date,
             "competent_authority": self.competent_authority,
             "relevant_trading_venue": self.relevant_trading_venue,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+            
+            # JSON data fields
+            "processed_attributes": self.processed_attributes,
+            "firds_data": self.firds_data,
+            
+            # Related data (for API layer to process)
+            "legal_entity": self.legal_entity,
+            "trading_venues": self.trading_venues,
+            "figi_mappings": self.figi_mappings,
+            "transparency_calculations": self.transparency_calculations,
         }
 
-        # Add type-specific attributes in structured format
-        if self.processed_attributes:
-            # Clean and merge processed attributes into response
-            cleaned_attributes = self._clean_json_attributes(self.processed_attributes)
-
-            # Structure type-specific attributes based on FIRDS instrument type
-            if self.instrument_type == "collective_investment":  # Type C
-                civ_attrs = self._format_collective_investment_attributes(cleaned_attributes)
-                if civ_attrs:
-                    response["collective_investment_attributes"] = civ_attrs
-            elif self.instrument_type == "debt":  # Type D
-                debt_attrs = self._format_debt_attributes(cleaned_attributes)
-                if debt_attrs:
-                    response["debt_attributes"] = debt_attrs
-            elif self.instrument_type == "equity":  # Type E
-                equity_attrs = self._format_equity_attributes(cleaned_attributes)
-                if equity_attrs:
-                    response["equity_attributes"] = equity_attrs
-            elif self.instrument_type == "future":  # Type F
-                future_attrs = self._format_future_attributes(cleaned_attributes)
-                if future_attrs:
-                    response["future_attributes"] = future_attrs
-            elif self.instrument_type == "hybrid":  # Type H
-                hybrid_attrs = self._format_hybrid_attributes(cleaned_attributes)
-                if hybrid_attrs:
-                    response["hybrid_attributes"] = hybrid_attrs
-            elif self.instrument_type == "interest_rate":  # Type I
-                ir_attrs = self._format_interest_rate_attributes(cleaned_attributes)
-                if ir_attrs:
-                    response["interest_rate_attributes"] = ir_attrs
-            elif self.instrument_type == "convertible":  # Type J
-                conv_attrs = self._format_convertible_attributes(cleaned_attributes)
-                if conv_attrs:
-                    response["convertible_attributes"] = conv_attrs
-            elif self.instrument_type == "option":  # Type O
-                option_attrs = self._format_option_attributes(cleaned_attributes)
-                if option_attrs:
-                    response["option_attributes"] = option_attrs
-            elif self.instrument_type == "rights":  # Type R
-                rights_attrs = self._format_rights_attributes(cleaned_attributes)
-                if rights_attrs:
-                    response["rights_attributes"] = rights_attrs
-            elif self.instrument_type == "structured":  # Type S
-                struct_attrs = self._format_structured_attributes(cleaned_attributes)
-                if struct_attrs:
-                    response["structured_attributes"] = struct_attrs
-
-            # Also include any remaining unstructured attributes
-            remaining_attrs = {
-                k: v for k, v in cleaned_attributes.items() if not self._is_structured_attribute(k)
-            }
-            if remaining_attrs:
-                response.update(remaining_attrs)
-
-        return response
+    def to_api_response(self) -> Dict[str, Any]:
+        """Legacy method for backward compatibility. Use API layer response builders instead."""
+        # Temporary fallback - will be removed once API layer is updated
+        raw_data = self.to_raw_data()
+        
+        # Basic transformation for backward compatibility
+        result = {}
+        for key, value in raw_data.items():
+            if key in ['created_at', 'updated_at', 'publication_from_date'] and value:
+                result[key] = value.isoformat() if hasattr(value, 'isoformat') else str(value)
+            elif key in ['legal_entity', 'trading_venues', 'figi_mappings', 'transparency_calculations']:
+                # Skip related objects for now
+                continue
+            else:
+                result[key] = value
+        
+        return result
 
     def _format_equity_attributes(self, attrs: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Format equity-specific attributes into structured schema."""
@@ -433,6 +402,114 @@ class Instrument(Base):
                 cleaned[key] = cleaned_value
 
         return cleaned
+
+    def _format_spot_attributes(self, attrs: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Format spot (index-linked) instrument attributes."""
+        if not attrs:
+            return None
+
+        spot_attrs = {}
+
+        # Index reference information
+        if "underlying_index" in attrs:
+            spot_attrs["underlying_index"] = attrs["underlying_index"]
+
+        # Multiplier and adjustment factor
+        if "index_multiplier" in attrs:
+            spot_attrs["index_multiplier"] = attrs["index_multiplier"]
+
+        return spot_attrs if spot_attrs else None
+
+    def _format_forward_attributes(self, attrs: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Format forward instrument attributes."""
+        if not attrs:
+            return None
+
+        forward_attrs = {}
+
+        # Forward contract details
+        if "delivery_date" in attrs:
+            forward_attrs["delivery_date"] = attrs["delivery_date"]
+
+        if "settlement_type" in attrs:
+            forward_attrs["settlement_type"] = attrs["settlement_type"]
+
+        if "underlying_asset" in attrs:
+            forward_attrs["underlying_asset"] = attrs["underlying_asset"]
+
+        return forward_attrs if forward_attrs else None
+
+    def _format_swap_attributes(self, attrs: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Format swap instrument attributes from FIRDS data."""
+        # For swaps, we need to extract from firds_data, not just processed_attributes
+        firds = self.firds_data or {}
+        
+        swap_attrs = {}
+
+        # Expiration and termination dates
+        if firds.get('DerivInstrmAttrbts_XpryDt'):
+            swap_attrs["expiration_date"] = firds['DerivInstrmAttrbts_XpryDt']
+        
+        if firds.get('TradgVnRltdAttrbts_TermntnDt'):
+            swap_attrs["termination_date"] = firds['TradgVnRltdAttrbts_TermntnDt']
+
+        # Settlement/Delivery type
+        if firds.get('DerivInstrmAttrbts_DlvryTp'):
+            swap_attrs["settlement_type"] = firds['DerivInstrmAttrbts_DlvryTp']
+
+        # Price multiplier
+        if firds.get('DerivInstrmAttrbts_PricMltplr'):
+            swap_attrs["price_multiplier"] = firds['DerivInstrmAttrbts_PricMltplr']
+
+        # Reference rate from index
+        if firds.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_RefRate_Indx'):
+            swap_attrs["reference_index"] = firds['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_RefRate_Indx']
+        elif firds.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Indx'):
+            swap_attrs["reference_index"] = firds['DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Indx']
+
+        # Floating term (combine value and unit from interest rate)
+        term_val = firds.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Val')
+        term_unit = firds.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Unit')
+        if term_val and term_unit:
+            swap_attrs["floating_term"] = f"{term_val} {term_unit}"
+
+        # Underlying index term (for reference rate frequency)
+        underlying_val = firds.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Val')
+        underlying_unit = firds.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Unit')
+        if underlying_val and underlying_unit:
+            swap_attrs["reference_rate_frequency"] = f"{underlying_val} {underlying_unit}"
+
+        # Fixed rate (first leg) - if available
+        if firds.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_FrstLegIntrstRate_Fxd'):
+            swap_attrs["fixed_rate"] = firds['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_FrstLegIntrstRate_Fxd']
+
+        # Floating rate name (other leg) - if available
+        if firds.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_OthrLegIntrstRate_Fltg_RefRate_Nm'):
+            swap_attrs["floating_reference_rate"] = firds['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_OthrLegIntrstRate_Fltg_RefRate_Nm']
+
+        # Other currency (for cross-currency swaps)
+        if firds.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_OthrNtnlCcy'):
+            swap_attrs["other_currency"] = firds['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_OthrNtnlCcy']
+
+        # Underlying ISINs (basket or single)
+        if firds.get('DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN'):
+            swap_attrs["underlying_basket_isin"] = firds['DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN']
+        elif firds.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'):
+            swap_attrs["underlying_single_isin"] = firds['DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN']
+
+        # Determine swap type based on available data
+        if any(['IntrstRate' in key for key in firds.keys()]):
+            swap_attrs["swap_type"] = "Interest Rate Swap"
+        elif firds.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_FxTp'):
+            swap_attrs["swap_type"] = "FX Swap"
+        else:
+            swap_attrs["swap_type"] = "Swap"
+
+        # Add classification details for better understanding
+        if swap_attrs.get("reference_index") and swap_attrs.get("floating_term"):
+            swap_attrs["classification"] = f"Fixed-Float {swap_attrs['floating_term']} {swap_attrs['reference_index']}"
+
+        return swap_attrs if swap_attrs else None
 
 
 class TradingVenue(Base):

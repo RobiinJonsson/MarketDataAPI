@@ -96,7 +96,8 @@ def build_instrument_response(instrument, include_rich_details=True):
             for figi in instrument.figi_mappings
         ]
 
-    return response
+    # Normalize response structure for consistent frontend interface
+    return _normalize_instrument_response(response)
 
 
 def validate_instrument_data(data):
@@ -414,3 +415,106 @@ def _get_forward_classification(instrument, firds_data):
             'additional_info': f'Error in classification: {str(e)}',
             'forward_details': {}
         }
+
+
+def _safe_str(value):
+    """Convert value to string or return None for null values."""
+    return str(value) if value is not None else None
+
+
+def _normalize_instrument_response(response):
+    """
+    Comprehensive API normalization ensuring ALL instruments have identical structure.
+    
+    Key principles:
+    1. Every instrument gets the same exact field set
+    2. FIGI fields always present (null if not enriched)  
+    3. Type-specific attributes preserved without modification
+    4. Consistent types for shared fields
+    5. Frontend gets predictable, type-safe interface
+    """
+    
+    # STANDARD FIELD SET - Every instrument response will have these exact fields
+    # This ensures frontend TypeScript interfaces work consistently
+    standard_structure = {
+        # === CORE IDENTIFICATION ===
+        'id': _safe_str(response.get('id')),
+        'isin': _safe_str(response.get('isin')),
+        'instrument_type': _safe_str(response.get('instrument_type')),
+        'full_name': _safe_str(response.get('full_name')),
+        'short_name': _safe_str(response.get('short_name')),
+        'currency': _safe_str(response.get('currency')),
+        'cfi_code': _safe_str(response.get('cfi_code')),
+        
+        # === BOOLEAN FIELDS (never null) ===
+        'commodity_derivative_indicator': bool(response.get('commodity_derivative_indicator', False)),
+        
+        # === REGULATORY FIELDS (nullable) ===
+        'lei_id': _safe_str(response.get('lei_id')),
+        'publication_from_date': _safe_str(response.get('publication_from_date')),
+        'competent_authority': _safe_str(response.get('competent_authority')),
+        'relevant_trading_venue': _safe_str(response.get('relevant_trading_venue')),
+        
+        # === TIMESTAMPS ===
+        'created_at': _safe_str(response.get('created_at')),
+        'updated_at': _safe_str(response.get('updated_at')),
+        
+        # === BUSINESS CLASSIFICATION ===
+        'firds_type': _safe_str(response.get('firds_type')),
+        'business_type': _safe_str(response.get('business_type')),
+        
+        # === RICH RESPONSE ELEMENTS (never null) ===
+        'status_indicators': response.get('status_indicators', []),
+        'display_status': str(response.get('display_status', '')),
+        'trading_venues_count': int(response.get('trading_venues_count', 0)),
+        'trading_venues': response.get('trading_venues', []),
+        
+        # === PRIMARY VENUE ===
+        'primary_venue_display': response.get('primary_venue_display'),
+        
+        # === FINANCIAL DATA ===
+        'financial_data': response.get('financial_data'),
+        
+        # === CFI DECODING ===
+        'cfi_decoded': response.get('cfi_decoded'),
+        'cfi_display': _safe_str(response.get('cfi_display')),
+        
+        # === LEGAL ENTITY ===
+        'legal_entity': response.get('legal_entity'),
+        
+        # === FIGI FIELDS - ALWAYS PRESENT (enrichment dependent) ===
+        'figi': _safe_str(response.get('figi')),
+        'composite_figi': _safe_str(response.get('composite_figi')), 
+        'share_class_figi': _safe_str(response.get('share_class_figi')),
+        'security_type': _safe_str(response.get('security_type')),
+        'market_sector': _safe_str(response.get('market_sector')),
+        'ticker': _safe_str(response.get('ticker')),
+        'figi_mapping': response.get('figi_mapping'),
+        'figi_mappings': response.get('figi_mappings', []),
+        
+        # === RICH CLASSIFICATIONS ===
+        'swap_classification': response.get('swap_classification'),
+        'commodity_classification': response.get('commodity_classification'),
+        'forward_classification': response.get('forward_classification'),
+    }
+    
+    
+    # === TYPE-SPECIFIC ATTRIBUTES ===
+    # Add all possible type-specific attribute fields (null if not applicable)
+    type_specific_attributes = {
+        'collective_investment_attributes': response.get('collective_investment_attributes'),
+        'debt_attributes': response.get('debt_attributes'),
+        'equity_attributes': response.get('equity_attributes'),
+        'future_attributes': response.get('future_attributes'),
+        'structured_attributes': response.get('structured_attributes'),
+        'spot_attributes': response.get('spot_attributes'),
+        'forward_attributes': response.get('forward_attributes'),
+        'option_attributes': response.get('option_attributes'),
+        'rights_attributes': response.get('rights_attributes'),
+        'swap_attributes': response.get('swap_attributes'),
+    }
+    
+    # Combine standard structure with type-specific attributes
+    standard_structure.update(type_specific_attributes)
+    
+    return standard_structure
