@@ -73,7 +73,7 @@ class FileManagementService:
                 from ..database.database_backup import DatabaseBackupManager
 
                 self._backup_manager = DatabaseBackupManager(
-                    db_path=Config.DATABASE_PATH, backup_dir="database_backups"
+                    db_path=Config.DATABASE_PATH, backup_dir="data/database_backups"
                 )
             except Exception as e:
                 self.logger.warning(f"Could not initialize backup manager: {e}")
