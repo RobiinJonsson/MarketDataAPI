@@ -62,26 +62,57 @@ export default class HomePage extends BasePage {
         </div>
       </div>
 
-      <!-- Quick ISIN Search -->
+      <!-- Quick Search -->
       ${this.createCard(`
         <div class="text-center">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">Quick Instrument Lookup</h3>
-          <p class="text-gray-600 mb-6">Enter an ISIN to view detailed instrument information</p>
-          <div class="flex max-w-md mx-auto">
-            <input 
-              type="text" 
-              id="isin-search" 
-              placeholder="e.g. SE0000242455" 
-              class="flex-1 border border-gray-300 rounded-l-md px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-            <button 
-              id="isin-search-btn" 
-              class="bg-blue-600 text-white px-6 py-3 rounded-r-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500"
-            >
-              Search
-            </button>
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">Quick Lookup</h3>
+          <p class="text-gray-600 mb-6">Search for instruments by ISIN or legal entities by LEI</p>
+          
+          <!-- Search Tabs -->
+          <div class="flex justify-center mb-4">
+            <div class="bg-gray-100 p-1 rounded-lg">
+              <button id="isin-tab" class="px-4 py-2 rounded-md text-sm font-medium bg-white text-gray-900 shadow">ISIN Search</button>
+              <button id="lei-tab" class="px-4 py-2 rounded-md text-sm font-medium text-gray-600 hover:text-gray-900">LEI Search</button>
+            </div>
           </div>
-          <p class="text-xs text-gray-500 mt-2">Press Enter or click Search to view instrument details</p>
+          
+          <!-- ISIN Search -->
+          <div id="isin-search-section" class="search-section">
+            <div class="flex max-w-md mx-auto">
+              <input 
+                type="text" 
+                id="isin-search" 
+                placeholder="e.g. SE0000242455" 
+                class="flex-1 border border-gray-300 rounded-l-md px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <button 
+                id="isin-search-btn" 
+                class="bg-blue-600 text-white px-6 py-3 rounded-r-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500"
+              >
+                Search Instrument
+              </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Press Enter or click Search to view instrument details</p>
+          </div>
+          
+          <!-- LEI Search -->
+          <div id="lei-search-section" class="search-section hidden">
+            <div class="flex max-w-md mx-auto">
+              <input 
+                type="text" 
+                id="lei-search" 
+                placeholder="e.g. 5493001WEQ0U2G16QW90" 
+                class="flex-1 border border-gray-300 rounded-l-md px-4 py-3 focus:ring-2 focus:ring-green-500 focus:border-green-500"
+              />
+              <button 
+                id="lei-search-btn" 
+                class="bg-green-600 text-white px-6 py-3 rounded-r-md hover:bg-green-700 focus:ring-2 focus:ring-green-500"
+              >
+                Search Entity
+              </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">Press Enter or click Search to view legal entity details</p>
+          </div>
         </div>
       `, '')}
 
@@ -229,42 +260,106 @@ export default class HomePage extends BasePage {
       </div>
     `;
 
-    // Setup ISIN search functionality
-    this.setupIsinSearch();
+    // Setup search functionality
+    this.setupSearchFunctionality();
 
     // Load dashboard data
     await this.loadDashboardData();
   }
 
-  private setupIsinSearch(): void {
-    const searchInput = document.getElementById('isin-search') as HTMLInputElement;
-    const searchBtn = document.getElementById('isin-search-btn') as HTMLButtonElement;
+  private setupSearchFunctionality(): void {
+    // Tab switching functionality
+    const isinTab = document.getElementById('isin-tab') as HTMLButtonElement;
+    const leiTab = document.getElementById('lei-tab') as HTMLButtonElement;
+    const isinSection = document.getElementById('isin-search-section') as HTMLDivElement;
+    const leiSection = document.getElementById('lei-search-section') as HTMLDivElement;
 
-    if (searchInput && searchBtn) {
-      const performSearch = () => {
-        const isin = searchInput.value.trim().toUpperCase();
+    if (isinTab && leiTab && isinSection && leiSection) {
+      const showIsinSearch = () => {
+        isinTab.classList.add('bg-white', 'text-gray-900', 'shadow');
+        isinTab.classList.remove('text-gray-600', 'hover:text-gray-900');
+        leiTab.classList.remove('bg-white', 'text-gray-900', 'shadow');
+        leiTab.classList.add('text-gray-600', 'hover:text-gray-900');
+        isinSection.classList.remove('hidden');
+        leiSection.classList.add('hidden');
+      };
+
+      const showLeiSearch = () => {
+        leiTab.classList.add('bg-white', 'text-gray-900', 'shadow');
+        leiTab.classList.remove('text-gray-600', 'hover:text-gray-900');
+        isinTab.classList.remove('bg-white', 'text-gray-900', 'shadow');
+        isinTab.classList.add('text-gray-600', 'hover:text-gray-900');
+        leiSection.classList.remove('hidden');
+        isinSection.classList.add('hidden');
+      };
+
+      isinTab.addEventListener('click', showIsinSearch);
+      leiTab.addEventListener('click', showLeiSearch);
+    }
+
+    // ISIN Search functionality
+    const isinInput = document.getElementById('isin-search') as HTMLInputElement;
+    const isinBtn = document.getElementById('isin-search-btn') as HTMLButtonElement;
+
+    if (isinInput && isinBtn) {
+      const performIsinSearch = () => {
+        const isin = isinInput.value.trim().toUpperCase();
         if (isin && this.isValidIsin(isin)) {
-          window.location.href = `/instruments/${isin}`;
+          window.location.hash = `#/instruments/${isin}`;
         } else {
           // Show error styling
-          searchInput.classList.add('border-red-300', 'focus:border-red-500', 'focus:ring-red-500');
-          searchInput.placeholder = 'Please enter a valid ISIN (e.g., SE0000242455)';
+          isinInput.classList.add('border-red-300', 'focus:border-red-500', 'focus:ring-red-500');
+          isinInput.placeholder = 'Please enter a valid ISIN (e.g., SE0000242455)';
           setTimeout(() => {
-            searchInput.classList.remove('border-red-300', 'focus:border-red-500', 'focus:ring-red-500');
-            searchInput.placeholder = 'e.g. SE0000242455';
+            isinInput.classList.remove('border-red-300', 'focus:border-red-500', 'focus:ring-red-500');
+            isinInput.placeholder = 'e.g. SE0000242455';
           }, 3000);
         }
       };
 
-      searchBtn.addEventListener('click', performSearch);
-      searchInput.addEventListener('keypress', (e) => {
+      isinBtn.addEventListener('click', performIsinSearch);
+      isinInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') {
-          performSearch();
+          performIsinSearch();
         }
       });
 
-      // Auto-uppercase and format input
-      searchInput.addEventListener('input', (e) => {
+      // Auto-uppercase and format ISIN input
+      isinInput.addEventListener('input', (e) => {
+        const target = e.target as HTMLInputElement;
+        target.value = target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      });
+    }
+
+    // LEI Search functionality
+    const leiInput = document.getElementById('lei-search') as HTMLInputElement;
+    const leiBtn = document.getElementById('lei-search-btn') as HTMLButtonElement;
+
+    if (leiInput && leiBtn) {
+      const performLeiSearch = () => {
+        const lei = leiInput.value.trim().toUpperCase();
+        if (lei && this.isValidLei(lei)) {
+          window.location.hash = `#/entities/${lei}`;
+        } else {
+          // Show error styling
+          leiInput.classList.add('border-red-300', 'focus:border-red-500', 'focus:ring-red-500');
+          leiInput.placeholder = 'Please enter a valid LEI (20 characters)';
+          setTimeout(() => {
+            leiInput.classList.remove('border-red-300', 'focus:border-red-500', 'focus:ring-red-500');
+            leiInput.placeholder = 'e.g. 5493001WEQ0U2G16QW90';
+          }, 3000);
+        }
+      };
+
+      leiBtn.addEventListener('click', performLeiSearch);
+      leiInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          performLeiSearch();
+        }
+      });
+
+      // Auto-uppercase and format LEI input
+      leiInput.addEventListener('input', (e) => {
         const target = e.target as HTMLInputElement;
         target.value = target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
       });
@@ -275,6 +370,12 @@ export default class HomePage extends BasePage {
     // Basic ISIN validation: 12 characters, starts with 2 letters, followed by 10 alphanumeric
     const isinPattern = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
     return isinPattern.test(isin);
+  }
+
+  private isValidLei(lei: string): boolean {
+    // LEI validation: exactly 20 alphanumeric characters
+    const leiPattern = /^[A-Z0-9]{20}$/;
+    return leiPattern.test(lei);
   }
 
   private async loadDashboardData(): Promise<void> {

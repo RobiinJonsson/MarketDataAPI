@@ -69,12 +69,11 @@ export default class InstrumentsPage extends BasePage {
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Authority</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trading Venue</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Publication Date</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
             <tbody id="instruments-tbody" class="bg-white divide-y divide-gray-200">
               <tr>
-                <td colspan="9" class="px-6 py-8 text-center text-gray-500">
+                <td colspan="8" class="px-6 py-8 text-center text-gray-500">
                   <div class="flex items-center justify-center">
                     <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
                     Loading instruments...
@@ -124,7 +123,7 @@ export default class InstrumentsPage extends BasePage {
     // Show loading state
     tbody.innerHTML = `
       <tr>
-        <td colspan="9" class="px-6 py-8 text-center text-gray-500">
+        <td colspan="8" class="px-6 py-8 text-center text-gray-500">
           <div class="flex items-center justify-center">
             <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
             Loading instruments...
@@ -163,7 +162,7 @@ export default class InstrumentsPage extends BasePage {
     if (instruments.length === 0) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="9" class="px-6 py-8 text-center text-gray-500">
+          <td colspan="8" class="px-6 py-8 text-center text-gray-500">
             No instruments found matching your criteria.
           </td>
         </tr>
@@ -172,7 +171,7 @@ export default class InstrumentsPage extends BasePage {
     }
 
     tbody.innerHTML = instruments.map(instrument => `
-      <tr class="hover:bg-gray-50">
+      <tr class="hover:bg-gray-50 cursor-pointer instrument-row" data-isin="${instrument.isin}">
         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
           ${instrument.isin || 'N/A'}
         </td>
@@ -199,11 +198,28 @@ export default class InstrumentsPage extends BasePage {
         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
           ${this.formatDate(instrument.publication_from_date || undefined) || 'N/A'}
         </td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-          <a href="#" data-route="/instruments/${instrument.isin}" class="text-blue-600 hover:text-blue-900">View Details</a>
-        </td>
       </tr>
     `).join('');
+
+    // Attach click listeners to instrument rows
+    this.attachInstrumentRowListeners();
+  }
+
+  private attachInstrumentRowListeners(): void {
+    const instrumentRows = this.container.querySelectorAll('.instrument-row');
+    instrumentRows.forEach(row => {
+      row.addEventListener('click', async () => {
+        const isin = row.getAttribute('data-isin');
+        if (isin) {
+          await this.selectInstrument(isin);
+        }
+      });
+    });
+  }
+
+  private async selectInstrument(isin: string): Promise<void> {
+    // Navigate to instrument detail page
+    window.location.hash = `#/instruments/${isin}`;
   }
 
   private showInstrumentError(message: string): void {
@@ -211,7 +227,7 @@ export default class InstrumentsPage extends BasePage {
     if (tbody) {
       tbody.innerHTML = `
         <tr>
-          <td colspan="9" class="px-6 py-8 text-center text-red-500">
+          <td colspan="8" class="px-6 py-8 text-center text-red-500">
             <div class="flex items-center justify-center">
               <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />

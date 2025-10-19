@@ -6,10 +6,13 @@ import { Navigation } from './components/navigation/Navigation';
 import HomePage from './pages/HomePage';
 import InstrumentsPage from './pages/InstrumentsPage';
 import InstrumentDetailPage from './pages/InstrumentDetailPage';
+import EntityDetailPage from './pages/EntityDetailPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import DataOpsPage from './pages/DataOpsPage';
-import EntitiesPage from './pages/EntitiesPage';
 import SwaggerPage from './pages/SwaggerPage';
+
+// Dynamic import for EntitiesPage to avoid module resolution issues
+const EntitiesPageImport = () => import('./pages/EntitiesPage');
 
 // Initialize the application when DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
@@ -49,9 +52,16 @@ document.addEventListener('DOMContentLoaded', () => {
     router.addRoute({
       path: '/entities',
       title: 'Entity Management',
-      component: () => Promise.resolve({ default: EntitiesPage }),
+      component: EntitiesPageImport,
       icon: 'entities',
       description: 'Legal entity relationships and LEI information'
+    });
+
+    router.addRoute({
+      path: '/entities/:lei',
+      title: 'Entity Details',
+      component: () => Promise.resolve({ default: EntityDetailPage }),
+      description: 'Detailed entity information and corporate relationships'
     });
 
     router.addRoute({

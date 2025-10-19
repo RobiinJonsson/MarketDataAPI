@@ -24,7 +24,12 @@ export class Router {
 
     // Listen for browser navigation
     window.addEventListener('popstate', () => {
-      this.handleRoute(window.location.pathname);
+      this.handleRoute(this.getHashPath());
+    });
+
+    // Listen for hash changes
+    window.addEventListener('hashchange', () => {
+      this.handleRoute(this.getHashPath());
     });
 
     // Listen for navigation clicks
@@ -53,12 +58,20 @@ export class Router {
    * Navigate to a route
    */
   navigate(path: string): void {
-    // Update browser history
+    // Update browser hash
     if (path !== this.currentRoute) {
-      window.history.pushState({}, '', path);
+      window.location.hash = '#' + path;
+    } else {
+      this.handleRoute(path);
     }
-    
-    this.handleRoute(path);
+  }
+
+  /**
+   * Get path from hash, defaulting to root
+   */
+  private getHashPath(): string {
+    const hash = window.location.hash;
+    return hash ? hash.substring(1) : '/';
   }
 
   /**
@@ -186,7 +199,7 @@ export class Router {
    * Initialize router with initial route
    */
   init(): void {
-    const initialPath = window.location.pathname || '/';
+    const initialPath = this.getHashPath();
     this.handleRoute(initialPath);
   }
 
