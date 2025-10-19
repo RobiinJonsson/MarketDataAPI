@@ -62,6 +62,29 @@ export default class HomePage extends BasePage {
         </div>
       </div>
 
+      <!-- Quick ISIN Search -->
+      ${this.createCard(`
+        <div class="text-center">
+          <h3 class="text-lg font-semibold text-gray-900 mb-4">Quick Instrument Lookup</h3>
+          <p class="text-gray-600 mb-6">Enter an ISIN to view detailed instrument information</p>
+          <div class="flex max-w-md mx-auto">
+            <input 
+              type="text" 
+              id="isin-search" 
+              placeholder="e.g. SE0000242455" 
+              class="flex-1 border border-gray-300 rounded-l-md px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <button 
+              id="isin-search-btn" 
+              class="bg-blue-600 text-white px-6 py-3 rounded-r-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500"
+            >
+              Search
+            </button>
+          </div>
+          <p class="text-xs text-gray-500 mt-2">Press Enter or click Search to view instrument details</p>
+        </div>
+      `, '')}
+
       <!-- Main Features Grid -->
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         
@@ -206,8 +229,52 @@ export default class HomePage extends BasePage {
       </div>
     `;
 
+    // Setup ISIN search functionality
+    this.setupIsinSearch();
+
     // Load dashboard data
     await this.loadDashboardData();
+  }
+
+  private setupIsinSearch(): void {
+    const searchInput = document.getElementById('isin-search') as HTMLInputElement;
+    const searchBtn = document.getElementById('isin-search-btn') as HTMLButtonElement;
+
+    if (searchInput && searchBtn) {
+      const performSearch = () => {
+        const isin = searchInput.value.trim().toUpperCase();
+        if (isin && this.isValidIsin(isin)) {
+          window.location.href = `/instruments/${isin}`;
+        } else {
+          // Show error styling
+          searchInput.classList.add('border-red-300', 'focus:border-red-500', 'focus:ring-red-500');
+          searchInput.placeholder = 'Please enter a valid ISIN (e.g., SE0000242455)';
+          setTimeout(() => {
+            searchInput.classList.remove('border-red-300', 'focus:border-red-500', 'focus:ring-red-500');
+            searchInput.placeholder = 'e.g. SE0000242455';
+          }, 3000);
+        }
+      };
+
+      searchBtn.addEventListener('click', performSearch);
+      searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          performSearch();
+        }
+      });
+
+      // Auto-uppercase and format input
+      searchInput.addEventListener('input', (e) => {
+        const target = e.target as HTMLInputElement;
+        target.value = target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      });
+    }
+  }
+
+  private isValidIsin(isin: string): boolean {
+    // Basic ISIN validation: 12 characters, starts with 2 letters, followed by 10 alphanumeric
+    const isinPattern = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
+    return isinPattern.test(isin);
   }
 
   private async loadDashboardData(): Promise<void> {

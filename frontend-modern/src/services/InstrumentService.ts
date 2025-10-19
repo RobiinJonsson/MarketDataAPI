@@ -36,7 +36,7 @@ export class InstrumentService extends BaseApiService {
    * Get instrument details by ISIN
    */
   async getInstrument(isin: string, config?: RequestConfig): Promise<ApiResponse<InstrumentDetail>> {
-    return this.get<InstrumentDetail>(`/instruments/${encodeURIComponent(isin)}/`, {}, config);
+    return this.get<InstrumentDetail>(`/instruments/${encodeURIComponent(isin)}`, {}, config);
   }
 
   /**
@@ -56,8 +56,8 @@ export class InstrumentService extends BaseApiService {
   /**
    * Get available instrument types
    */
-  async getInstrumentTypes(config?: RequestConfig): Promise<ApiResponse<string[]>> {
-    return this.get<string[]>('/instruments/types', {}, config);
+  async getInstrumentTypes(config?: RequestConfig): Promise<ApiResponse<{ instrument_types: string[] }>> {
+    return this.get<{ instrument_types: string[] }>('/instruments/types', {}, { ...config, cache: true });
   }
 
   /**
@@ -65,13 +65,6 @@ export class InstrumentService extends BaseApiService {
    */
   async searchByCfi(cfiCode: string, config?: RequestConfig): Promise<ApiResponse<Instrument[]>> {
     return this.get<Instrument[]>(`/instruments/cfi/${encodeURIComponent(cfiCode)}`, {}, config);
-  }
-
-  /**
-   * Get CFI information for an instrument
-   */
-  async getInstrumentCfi(isin: string, config?: RequestConfig): Promise<ApiResponse<any>> {
-    return this.get<any>(`/instruments/${encodeURIComponent(isin)}/cfi`, {}, config);
   }
 
   /**

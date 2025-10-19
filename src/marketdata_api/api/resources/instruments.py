@@ -130,7 +130,7 @@ def create_instrument_resources(api, models):
                     for instrument in instruments:
                         try:
                             rich_response = build_instrument_response(instrument, include_rich_details=True)
-                            logger.info(f"Rich response for {instrument.isin} has keys: {list(rich_response.keys())}")
+                            logger.debug(f"Rich response for {instrument.isin} has keys: {list(rich_response.keys())}")
                             result.append(rich_response)
                         except Exception as e:
                             logger.error(f"Error building rich response for {instrument.isin}: {e}")
@@ -605,16 +605,23 @@ def create_instrument_resources(api, models):
                     }, HTTPStatus.NOT_FOUND
 
                 cfi_info = {}
+                logger.debug(f"Instrument CFI code: '{instrument.cfi_code}', type: {type(instrument.cfi_code)}")
                 if instrument.cfi_code:
-                    cfi = CFI(instrument.cfi_code)
-                    cfi_info = {
-                        "cfi_code": instrument.cfi_code,
-                        "category": cfi.get_category(),
-                        "group": cfi.get_group(),
-                        "attributes": cfi.get_attributes(),
-                        "description": cfi.get_description(),
-                        "is_valid": cfi.is_valid(),
-                    }
+                    try:
+                        cfi = CFI(instrument.cfi_code)
+                        cfi_info = {
+                            "cfi_code": instrument.cfi_code,
+                            "category": cfi.get_category(),
+                            "group": cfi.get_group(),
+                            "attributes": cfi.get_attributes(),
+                            "description": cfi.get_description(),
+                            "is_valid": cfi.is_valid(),
+                        }
+                        logger.debug(f"Generated CFI info: {cfi_info}")
+                    except Exception as cfi_error:
+                        logger.error(f"Error processing CFI code '{instrument.cfi_code}': {str(cfi_error)}")
+                else:
+                    logger.debug(f"No CFI code found for instrument {instrument.isin}")
 
                 session.close()
 

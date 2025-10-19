@@ -5,6 +5,7 @@ import { Navigation } from './components/navigation/Navigation';
 // Import page components
 import HomePage from './pages/HomePage';
 import InstrumentsPage from './pages/InstrumentsPage';
+import InstrumentDetailPage from './pages/InstrumentDetailPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import DataOpsPage from './pages/DataOpsPage';
 import EntitiesPage from './pages/EntitiesPage';
@@ -36,6 +37,13 @@ document.addEventListener('DOMContentLoaded', () => {
       component: () => Promise.resolve({ default: InstrumentsPage }),
       icon: 'instruments',
       description: 'Comprehensive instrument analysis and management'
+    });
+
+    router.addRoute({
+      path: '/instruments/:isin',
+      title: 'Instrument Details',
+      component: () => Promise.resolve({ default: InstrumentDetailPage }),
+      description: 'Detailed instrument information and analysis'
     });
 
     router.addRoute({

@@ -100,7 +100,7 @@ def create_legal_entity_resources(api, models):
                 for entity in entities:
                     try:
                         rich_response = build_legal_entity_response(entity, include_rich_details=True)
-                        logger.info(f"Rich response for {entity.lei} has keys: {list(rich_response.keys())}")
+                        logger.debug(f"Rich response for {entity.lei} has keys: {list(rich_response.keys())}")
                         result.append(rich_response)
                     except Exception as e:
                         logger.error(f"Error building rich response for {entity.lei}: {e}")
@@ -159,10 +159,10 @@ def create_legal_entity_resources(api, models):
                         },
                     }, HTTPStatus.NOT_FOUND
 
-                logger.info(f"Building detailed rich response for entity {lei}")
+                logger.debug(f"Building detailed rich response for entity {lei}")
                 try:
                     rich_response = build_legal_entity_response(entity, include_rich_details=True)
-                    logger.info(f"Rich response for {lei} has keys: {list(rich_response.keys())}")
+                    logger.debug(f"Rich response for {lei} has keys: {list(rich_response.keys())}")
                     result = rich_response
                 except Exception as e:
                     logger.error(f"Error building rich response for {lei}: {e}")

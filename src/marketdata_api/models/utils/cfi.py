@@ -567,6 +567,34 @@ class CFI:
             "decoded_attributes": AttributeDecoder.decode_attributes(self.code),
         }
 
+    def get_category(self) -> str:
+        """Returns the category (compatibility method)"""
+        return self.category
+
+    def get_group(self) -> str:
+        """Returns the group (compatibility method)"""
+        return self.group
+
+    def get_attributes(self) -> str:
+        """Returns the attributes (compatibility method)"""
+        return self.attributes
+
+    def get_description(self) -> str:
+        """Returns full description (compatibility method)"""
+        return f"{self.category_description} - {self.group_description}"
+
+    def is_valid(self) -> bool:
+        """Check if CFI code is valid"""
+        try:
+            # Basic validation - 6 characters, valid category
+            if len(self.code) != 6:
+                return False
+            
+            valid_categories = ["E", "D", "C", "R", "O", "F", "S", "H", "I", "J", "K", "L", "T", "M"]
+            return self.category in valid_categories
+        except Exception:
+            return False
+
 
 def decode_cfi(cfi_code: str) -> Dict[str, Any]:
     """Convenience function to decode a CFI code"""

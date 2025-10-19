@@ -267,41 +267,134 @@ def _build_swap_attributes(processed_attrs: Dict, firds_data: Dict) -> Optional[
 
     # Settlement/Delivery type
     if firds_data.get('DerivInstrmAttrbts_DlvryTp'):
-        swap_attrs["settlement_type"] = firds_data['DerivInstrmAttrbts_DlvryTp']
+        delivery_type = firds_data['DerivInstrmAttrbts_DlvryTp']
+        swap_attrs["settlement_type"] = delivery_type
+        
+        # Map settlement type codes
+        settlement_mapping = {
+            'PHYS': 'Physical',
+            'CASH': 'Cash',
+            'OPTL': 'Optional'
+        }
+        swap_attrs["settlement_description"] = settlement_mapping.get(delivery_type, delivery_type)
 
     # Price multiplier
     if firds_data.get('DerivInstrmAttrbts_PricMltplr'):
         swap_attrs["price_multiplier"] = firds_data['DerivInstrmAttrbts_PricMltplr']
 
-    # Reference rate from index
+    # Underlying basket ISIN for credit swaps
+    if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN'):
+        swap_attrs["underlying_basket_isin"] = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN']
+
+    # Reference rate information for interest rate swaps
     if firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_RefRate_Indx'):
         swap_attrs["reference_index"] = firds_data['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_RefRate_Indx']
     elif firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Indx'):
         swap_attrs["reference_index"] = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Indx']
 
-    # Floating term
+    # Floating term for interest rate swaps
     term_val = firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Val')
     term_unit = firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Unit')
     if term_val and term_unit:
         swap_attrs["floating_term"] = f"{term_val} {term_unit}"
 
-    # Reference rate frequency
+    # Reference rate frequency for interest rate swaps
     underlying_val = firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Val')
     underlying_unit = firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Unit')
     if underlying_val and underlying_unit:
         swap_attrs["reference_rate_frequency"] = f"{underlying_val} {underlying_unit}"
 
-    # Determine swap type
-    if any('IntrstRate' in key for key in firds_data.keys()):
-        swap_attrs["swap_type"] = "Interest Rate Swap"
+    # Fixed rate leg information
+    if firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_FrstLegIntrstRate_Fxd'):
+        swap_attrs["fixed_rate"] = firds_data['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_FrstLegIntrstRate_Fxd']
+
+    # Determine swap type based on CFI code and data structure
+    cfi_code = firds_data.get('FinInstrmGnlAttrbts_ClssfctnTp', '')
+    if cfi_code.startswith('SC'):
+        swap_attrs["swap_type"] = "Credit Default Swap"
+        swap_attrs["swap_category"] = "Credit"
+    elif cfi_code.startswith('SR'):
+        # Interest Rate Swaps - check 3rd character for specific type
+        if len(cfi_code) >= 3 and cfi_code[2] == 'H':
+            swap_attrs["swap_type"] = "OIS Interest Rate Swap"
+            swap_attrs["swap_category"] = "Interest Rate"
+        else:
+            swap_attrs["swap_type"] = "Interest Rate Swap"
+            swap_attrs["swap_category"] = "Interest Rate"
+    elif cfi_code.startswith('SF'):
+        swap_attrs["swap_type"] = "FX Swap"
+        swap_attrs["swap_category"] = "Foreign Exchange"
+    elif cfi_code.startswith('SE'):
+        swap_attrs["swap_type"] = "Equity Total Return Swap"
+        swap_attrs["swap_category"] = "Equity"
     elif firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_FxTp'):
         swap_attrs["swap_type"] = "FX Swap"
+        swap_attrs["swap_category"] = "Foreign Exchange"
     else:
-        swap_attrs["swap_type"] = "Swap"
+        swap_attrs["swap_type"] = "Interest Rate Swap"  # Default fallback
+        swap_attrs["swap_category"] = "Interest Rate"
 
-    # Classification
-    if swap_attrs.get("reference_index") and swap_attrs.get("floating_term"):
-        swap_attrs["classification"] = f"Fixed-Float {swap_attrs['floating_term']} {swap_attrs['reference_index']}"
+    # Enhanced classification based on swap type
+    if swap_attrs.get("swap_category") == "Interest Rate":
+        # Special handling for OIS swaps
+        if swap_attrs.get("swap_type") == "OIS Interest Rate Swap":
+            if swap_attrs.get("reference_index") and swap_attrs.get("floating_term"):
+                swap_attrs["classification"] = f"OIS {swap_attrs['floating_term']} {swap_attrs['reference_index']}"
+            else:
+                swap_attrs["classification"] = "Overnight Index Swap (OIS)"
+        # Regular Interest Rate Swaps
+        elif swap_attrs.get("reference_index") and swap_attrs.get("floating_term"):
+            swap_attrs["classification"] = f"Fixed-Float {swap_attrs['floating_term']} {swap_attrs['reference_index']}"
+        else:
+            swap_attrs["classification"] = "Interest Rate Swap"
+    elif swap_attrs.get("swap_category") == "Credit":
+        if swap_attrs.get("underlying_basket_isin"):
+            swap_attrs["classification"] = "Credit Default Swap - Basket"
+        else:
+            swap_attrs["classification"] = "Credit Default Swap - Single Name"
+    elif swap_attrs.get("swap_category") == "Equity":
+        if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'):
+            swap_attrs["classification"] = "Equity Total Return Swap - Single Name"
+            swap_attrs["underlying_equity_isin"] = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN']
+        else:
+            swap_attrs["classification"] = "Equity Total Return Swap"
+    elif swap_attrs.get("swap_category") == "Foreign Exchange":
+        if firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_FxTp'):
+            fx_type = firds_data['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_FxTp']
+            if fx_type == 'FXMJ':
+                swap_attrs["classification"] = "FX Major Currency Swap"
+            elif fx_type == 'FXEM':
+                swap_attrs["classification"] = "FX Emerging Market Swap"
+            else:
+                swap_attrs["classification"] = f"FX Swap ({fx_type})"
+        
+        # Add currency pair information
+        base_currency = firds_data.get('FinInstrmGnlAttrbts_NtnlCcy')
+        other_currency = firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_OthrNtnlCcy')
+        if base_currency and other_currency:
+            swap_attrs["currency_pair"] = f"{base_currency}/{other_currency}"
+            if not swap_attrs.get("classification"):
+                swap_attrs["classification"] = f"FX Swap {base_currency}/{other_currency}"
+    else:
+        swap_attrs["classification"] = swap_attrs.get("swap_type", "Swap")
+
+    # Calculate time to maturity if available
+    if swap_attrs.get("expiration_date"):
+        from datetime import datetime, date
+        try:
+            if isinstance(swap_attrs["expiration_date"], str):
+                expiry = datetime.strptime(swap_attrs["expiration_date"][:10], '%Y-%m-%d').date()
+            else:
+                expiry = swap_attrs["expiration_date"]
+            
+            today = date.today()
+            if expiry > today:
+                days_to_expiry = (expiry - today).days
+                years_to_expiry = round(days_to_expiry / 365.25, 2)
+                swap_attrs["years_to_expiry"] = years_to_expiry
+                swap_attrs["days_to_expiry"] = days_to_expiry
+        except (ValueError, TypeError):
+            pass
 
     return swap_attrs if swap_attrs else None
 
@@ -444,25 +537,47 @@ def _build_debt_attributes(processed_attrs: Dict, firds_data: Dict) -> Optional[
     if firds_data.get('DebtInstrmAttrbts_PrncplAmntCcy'):
         debt_attrs["principal_currency"] = firds_data['DebtInstrmAttrbts_PrncplAmntCcy']
     
-    # Interest rate and coupon information
+    # Interest rate and coupon information - CRITICAL debt fields
+    if firds_data.get('DebtInstrmAttrbts_IntrstRate_Fxd'):
+        debt_attrs["fixed_interest_rate"] = float(firds_data['DebtInstrmAttrbts_IntrstRate_Fxd'])
+        debt_attrs["interest_rate"] = float(firds_data['DebtInstrmAttrbts_IntrstRate_Fxd'])  # For backward compatibility
+        debt_attrs["interest_rate_type"] = "Fixed"
+        
+    # Floating rate information
+    if firds_data.get('DebtInstrmAttrbts_IntrstRate_Fltg_RefRate_Indx'):
+        debt_attrs["floating_rate_index"] = firds_data['DebtInstrmAttrbts_IntrstRate_Fltg_RefRate_Indx']
+        debt_attrs["interest_rate_type"] = "Floating"
+        
+    if firds_data.get('DebtInstrmAttrbts_IntrstRate_Fltg_BsisPtSprd'):
+        debt_attrs["floating_rate_spread"] = firds_data['DebtInstrmAttrbts_IntrstRate_Fltg_BsisPtSprd']
+        
+    # Nominal amount and issuance information
+    if firds_data.get('DebtInstrmAttrbts_NmnlValPerUnit'):
+        debt_attrs["nominal_value_per_unit"] = int(firds_data['DebtInstrmAttrbts_NmnlValPerUnit'])
+        
+    if firds_data.get('DebtInstrmAttrbts_TtlIssdNmnlAmt'):
+        debt_attrs["total_issued_nominal_amount"] = int(firds_data['DebtInstrmAttrbts_TtlIssdNmnlAmt'])
+        
+    # Debt seniority - CRITICAL for credit analysis  
+    if firds_data.get('DebtInstrmAttrbts_DebtSnrty'):
+        seniority_code = firds_data['DebtInstrmAttrbts_DebtSnrty']
+        debt_attrs["seniority_code"] = seniority_code
+        
+        # Map seniority codes to descriptions
+        seniority_mapping = {
+            'SNDB': 'Senior',
+            'SBOD': 'Senior Subordinated', 
+            'JUND': 'Junior',
+            'OTHR': 'Other'
+        }
+        debt_attrs["seniority"] = seniority_mapping.get(seniority_code, seniority_code)
+        
+    # Legacy field handling for backward compatibility
     if firds_data.get('DebtInstrmAttrbts_IntrstRate'):
-        debt_attrs["interest_rate"] = firds_data['DebtInstrmAttrbts_IntrstRate']
+        debt_attrs["legacy_interest_rate"] = firds_data['DebtInstrmAttrbts_IntrstRate']
         
     if firds_data.get('DebtInstrmAttrbts_IntrstRateInd'):
         debt_attrs["interest_rate_indicator"] = firds_data['DebtInstrmAttrbts_IntrstRateInd']
-        
-    if firds_data.get('DebtInstrmAttrbts_IntrstRateTp'):
-        rate_type = firds_data['DebtInstrmAttrbts_IntrstRateTp']
-        debt_attrs["interest_rate_type"] = rate_type
-        
-        # Map rate type codes to descriptions
-        rate_type_mapping = {
-            'FIXD': 'Fixed Rate',
-            'FLOT': 'Floating Rate',
-            'VARI': 'Variable Rate',
-            'ZERO': 'Zero Coupon'
-        }
-        debt_attrs["interest_rate_description"] = rate_type_mapping.get(rate_type, rate_type)
     
     # Bond specific attributes
     if firds_data.get('DebtInstrmAttrbts_AssetClssSpcfcAttrbts_Bond_IntrstAccrlDt'):
@@ -489,25 +604,25 @@ def _build_debt_attributes(processed_attrs: Dict, firds_data: Dict) -> Optional[
     if firds_data.get('FinInstrmGnlAttrbts_ShrtNm'):
         debt_attrs["short_name"] = firds_data['FinInstrmGnlAttrbts_ShrtNm']
         
-    # Determine debt instrument type
+    # Determine debt instrument type based on available data
     debt_type = "Corporate Bond"  # Default
     
     if debt_attrs.get("is_convertible"):
         debt_type = "Convertible Bond"
-    elif debt_attrs.get("interest_rate_type") == "ZERO":
-        debt_type = "Zero Coupon Bond"
-    elif debt_attrs.get("interest_rate_type") == "FLOT":
+    elif debt_attrs.get("interest_rate_type") == "Floating":
         debt_type = "Floating Rate Note"
+    elif not debt_attrs.get("fixed_interest_rate") and not debt_attrs.get("floating_rate_index"):
+        debt_type = "Zero Coupon Bond"
     elif firds_data.get('FinInstrmGnlAttrbts_ShrtNm'):
         short_name = firds_data['FinInstrmGnlAttrbts_ShrtNm'].upper()
         if any(term in short_name for term in ['GOVERNMENT', 'TREASURY', 'SOVEREIGN']):
             debt_type = "Government Bond"
         elif any(term in short_name for term in ['MUNICIPAL', 'MUNI']):
             debt_type = "Municipal Bond"
-        elif any(term in short_name for term in ['COVERED', 'PFANDBRIEF']):
+        elif any(term in short_name for term in ['COVERED', 'PFANDBRIEF', 'MORTG']):
             debt_type = "Covered Bond"
-        elif any(term in short_name for term in ['NOTE', 'FRN']):
-            debt_type = "Note"
+        elif any(term in short_name for term in ['MTN', 'EMTN', 'NOTE', 'FRN']):
+            debt_type = "Medium Term Note"
     
     debt_attrs["debt_type"] = debt_type
     
@@ -686,12 +801,19 @@ def _build_future_attributes(processed_attrs: Dict, firds_data: Dict) -> Optiona
     if firds_data.get('DerivInstrmAttrbts_DlvryTp'):
         future_attrs["delivery_type"] = firds_data['DerivInstrmAttrbts_DlvryTp']
     
-    # Underlying asset information
+    # Underlying asset information - CRITICAL for derivatives
+    if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'):
+        future_attrs["underlying_isin"] = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN']
+        
     if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm'):
         future_attrs["underlying_name"] = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm']
         
     if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Id'):
         future_attrs["underlying_id"] = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Id']
+        
+    # Also check processed attributes as backup source for underlying ISIN
+    if not future_attrs.get("underlying_isin") and processed_attrs.get('underlying_isin'):
+        future_attrs["underlying_isin"] = processed_attrs['underlying_isin']
     
     # Contract size and units
     if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_Term_Unit'):
@@ -999,35 +1121,20 @@ def _build_forward_attributes(processed_attrs: Dict, firds_data: Dict) -> Option
     
     forward_attrs = {}
     
-    # Forward contract dates
-    if firds_data.get('FrwrdInstrmAttrbts_MtrtyDt'):
-        forward_attrs["maturity_date"] = firds_data['FrwrdInstrmAttrbts_MtrtyDt']
+    # Expiration/Maturity date (using derivative structure)
+    if firds_data.get('DerivInstrmAttrbts_XpryDt'):
+        forward_attrs["expiration_date"] = firds_data['DerivInstrmAttrbts_XpryDt']
         
-    if firds_data.get('FrwrdInstrmAttrbts_SttlmDt'):
-        forward_attrs["settlement_date"] = firds_data['FrwrdInstrmAttrbts_SttlmDt']
+    # Settlement/termination date 
+    if firds_data.get('TradgVnRltdAttrbts_TermntnDt'):
+        forward_attrs["termination_date"] = firds_data['TradgVnRltdAttrbts_TermntnDt']
         
     if firds_data.get('TradgVnRltdAttrbts_FrstTradDt'):
         forward_attrs["first_trade_date"] = firds_data['TradgVnRltdAttrbts_FrstTradDt']
-        
-    if firds_data.get('TradgVnRltdAttrbts_TermntnDt'):
-        forward_attrs["termination_date"] = firds_data['TradgVnRltdAttrbts_TermntnDt']
     
-    # Contract specifications
-    if firds_data.get('FrwrdInstrmAttrbts_CntrctSz'):
-        forward_attrs["contract_size"] = firds_data['FrwrdInstrmAttrbts_CntrctSz']
-        
-    if firds_data.get('FrwrdInstrmAttrbts_CntrctSzCcy'):
-        forward_attrs["contract_currency"] = firds_data['FrwrdInstrmAttrbts_CntrctSzCcy']
-        
-    if firds_data.get('FrwrdInstrmAttrbts_FrwrdPric'):
-        forward_attrs["forward_price"] = firds_data['FrwrdInstrmAttrbts_FrwrdPric']
-        
-    if firds_data.get('FrwrdInstrmAttrbts_FrwrdPricCcy'):
-        forward_attrs["forward_price_currency"] = firds_data['FrwrdInstrmAttrbts_FrwrdPricCcy']
-    
-    # Settlement and delivery
-    if firds_data.get('FrwrdInstrmAttrbts_SttlmTp'):
-        settlement_type = firds_data['FrwrdInstrmAttrbts_SttlmTp']
+    # Settlement type and description
+    if firds_data.get('DerivInstrmAttrbts_DlvryTp'):
+        settlement_type = firds_data['DerivInstrmAttrbts_DlvryTp']
         forward_attrs["settlement_type"] = settlement_type
         
         # Map settlement types
@@ -1035,107 +1142,147 @@ def _build_forward_attributes(processed_attrs: Dict, firds_data: Dict) -> Option
             'CASH': 'Cash Settlement',
             'PHYS': 'Physical Delivery',
             'NETC': 'Net Cash Settlement',
-            'NETS': 'Net Share Settlement'
+            'NETS': 'Net Share Settlement',
+            'OPTL': 'Optional Settlement'
         }
         forward_attrs["settlement_description"] = settlement_mapping.get(settlement_type, settlement_type)
-    
+
+    # Price multiplier
+    if firds_data.get('DerivInstrmAttrbts_PricMltplr'):
+        forward_attrs["price_multiplier"] = firds_data['DerivInstrmAttrbts_PricMltplr']
+
     # Underlying asset information
-    if firds_data.get('FrwrdInstrmAttrbts_UndrlygAsstTp'):
-        underlying_type = firds_data['FrwrdInstrmAttrbts_UndrlygAsstTp']
-        forward_attrs["underlying_asset_type"] = underlying_type
-        
-        # Map underlying types
-        underlying_mapping = {
-            'CURR': 'Currency',
-            'COMM': 'Commodity',
-            'EQUI': 'Equity',
-            'BOND': 'Bond',
-            'INDX': 'Index',
-            'INTR': 'Interest Rate'
-        }
-        forward_attrs["underlying_description"] = underlying_mapping.get(underlying_type, underlying_type)
-        
-    if firds_data.get('FrwrdInstrmAttrbts_UndrlygAsst'):
-        forward_attrs["underlying_asset"] = firds_data['FrwrdInstrmAttrbts_UndrlygAsst']
+    underlying_details = []
     
-    # Determine forward contract type
+    # Single underlying ISIN
+    if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'):
+        underlying_isin = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN']
+        forward_attrs["underlying_isin"] = underlying_isin
+        underlying_details.append(f"Single: {underlying_isin}")
+    
+    # Basket underlying ISIN(s)
+    if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN'):
+        basket_isins = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Bskt_ISIN']
+        if isinstance(basket_isins, list) and len(basket_isins) > 0:
+            forward_attrs["basket_isins"] = basket_isins
+            forward_attrs["basket_size"] = len(basket_isins)
+            underlying_details.append(f"Basket ({len(basket_isins)} assets)")
+        elif isinstance(basket_isins, str):
+            forward_attrs["basket_isin"] = basket_isins
+            underlying_details.append(f"Basket: {basket_isins}")
+    
+    # Index information
+    if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_ISIN'):
+        index_isin = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_ISIN']
+        forward_attrs["index_isin"] = index_isin
+        underlying_details.append(f"Index: {index_isin}")
+    
+    if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm'):
+        index_name = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Nm_RefRate_Nm']
+        forward_attrs["index_name"] = index_name
+        underlying_details.append(f"Index: {index_name}")
+    
+    if underlying_details:
+        forward_attrs["underlying_summary"] = " | ".join(underlying_details)
+
+    # FX-specific information
+    if firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_FxTp'):
+        forward_attrs["fx_type"] = firds_data['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_FxTp']
+    
+    if firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_OthrNtnlCcy'):
+        other_currency = firds_data['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_FX_OthrNtnlCcy']
+        base_currency = firds_data.get('FinInstrmGnlAttrbts_NtnlCcy')
+        forward_attrs["other_currency"] = other_currency
+        if base_currency:
+            forward_attrs["currency_pair"] = f"{base_currency}/{other_currency}"
+
+    # Interest rate information
+    if firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_RefRate_Nm'):
+        forward_attrs["reference_rate"] = firds_data['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_RefRate_Nm']
+    
+    if firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Val') and firds_data.get('DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Unit'):
+        term_val = firds_data['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Val']
+        term_unit = firds_data['DerivInstrmAttrbts_AsstClssSpcfcAttrbts_Intrst_IntrstRate_Term_Unit']
+        forward_attrs["interest_term"] = f"{term_val} {term_unit}"
+
+    # Determine forward contract type based on CFI code and data
+    cfi_code = firds_data.get('FinInstrmGnlAttrbts_ClssfctnTp', '')
     forward_type = "Forward Contract"  # Default
+    classification = "Forward Contract"
     
-    if forward_attrs.get("underlying_description"):
-        underlying = forward_attrs["underlying_description"]
-        if underlying == "Currency":
-            forward_type = "FX Forward"
-        elif underlying == "Commodity":
-            forward_type = "Commodity Forward"
-        elif underlying == "Equity":
+    if len(cfi_code) >= 2:
+        second_char = cfi_code[1]  # Group character
+        
+        # Equity Forwards (JE****)
+        if second_char == 'E':
             forward_type = "Equity Forward"
-        elif underlying == "Interest Rate":
+            if forward_attrs.get("basket_size"):
+                classification = f"Equity Basket Forward ({forward_attrs['basket_size']} assets)"
+            elif forward_attrs.get("underlying_isin"):
+                classification = "Equity Forward - Single Name"
+            else:
+                classification = "Equity Forward"
+        
+        # Foreign Exchange Forwards (JF****)
+        elif second_char == 'F':
+            forward_type = "FX Forward"
+            if forward_attrs.get("currency_pair"):
+                classification = f"FX Forward {forward_attrs['currency_pair']}"
+            elif forward_attrs.get("fx_type"):
+                fx_type = forward_attrs["fx_type"]
+                if fx_type == 'FXCR':
+                    classification = "Non-Deliverable Forward (NDF)"
+                elif fx_type == 'FXMJ':
+                    classification = "FX Major Currency Forward"
+                else:
+                    classification = f"FX Forward ({fx_type})"
+            else:
+                classification = "FX Forward"
+        
+        # Rate Forwards (JR****)
+        elif second_char == 'R':
             forward_type = "Interest Rate Forward"
-        elif underlying == "Bond":
-            forward_type = "Bond Forward"
-    
-    # Check short name for more specific classification
-    if firds_data.get('FinInstrmGnlAttrbts_ShrtNm'):
-        short_name = firds_data['FinInstrmGnlAttrbts_ShrtNm'].upper()
-        if "NDF" in short_name:
-            forward_type = "Non-Deliverable Forward"
-        elif "FRA" in short_name:
-            forward_type = "Forward Rate Agreement"
-        elif any(term in short_name for term in ['GOLD', 'SILVER', 'OIL', 'GAS']):
-            if forward_type == "Commodity Forward":
-                if any(metal in short_name for metal in ['GOLD', 'SILVER', 'PLATINUM']):
-                    forward_type = "Precious Metals Forward"
-                elif any(energy in short_name for energy in ['OIL', 'GAS', 'BRENT']):
-                    forward_type = "Energy Forward"
+            if forward_attrs.get("reference_rate"):
+                classification = f"Forward Rate Agreement ({forward_attrs['reference_rate']})"
+            else:
+                classification = "Interest Rate Forward"
+        
+        # Commodity Forwards (JC****)
+        elif second_char == 'C':
+            forward_type = "Commodity Forward"
+            classification = "Commodity Forward"
     
     forward_attrs["forward_type"] = forward_type
+    forward_attrs["classification"] = classification
+    forward_attrs["contract_description"] = classification
     
-    # Calculate time to maturity/settlement
-    if forward_attrs.get("maturity_date") or forward_attrs.get("settlement_date"):
+    # Calculate time to maturity if available
+    if forward_attrs.get("expiration_date"):
         from datetime import datetime, date
         try:
-            target_date = forward_attrs.get("maturity_date") or forward_attrs.get("settlement_date")
-            if isinstance(target_date, str):
-                maturity = datetime.strptime(target_date[:10], '%Y-%m-%d').date()
+            if isinstance(forward_attrs["expiration_date"], str):
+                expiry = datetime.strptime(forward_attrs["expiration_date"][:10], '%Y-%m-%d').date()
             else:
-                maturity = target_date
+                expiry = forward_attrs["expiration_date"]
             
             today = date.today()
-            if maturity > today:
-                days_to_maturity = (maturity - today).days
-                months_to_maturity = round(days_to_maturity / 30.44, 1)
-                forward_attrs["days_to_settlement"] = days_to_maturity
-                forward_attrs["months_to_settlement"] = months_to_maturity
+            if expiry > today:
+                days_to_expiry = (expiry - today).days
+                years_to_expiry = round(days_to_expiry / 365.25, 2)
+                forward_attrs["days_to_expiry"] = days_to_expiry
+                forward_attrs["years_to_expiry"] = years_to_expiry
                 
-                # Classify by term
-                if days_to_maturity <= 7:
-                    forward_attrs["term_classification"] = "Spot-Next"
-                elif days_to_maturity <= 30:
+                # Term classification
+                if days_to_expiry <= 90:
                     forward_attrs["term_classification"] = "Short Term"
-                elif days_to_maturity <= 365:
+                elif days_to_expiry <= 365:
                     forward_attrs["term_classification"] = "Medium Term"
                 else:
                     forward_attrs["term_classification"] = "Long Term"
         except (ValueError, TypeError):
             pass
-    
-    # Build contract description
-    description_parts = [forward_attrs.get("forward_type", "Forward")]
-    
-    if forward_attrs.get("underlying_asset"):
-        description_parts.append(f"on {forward_attrs['underlying_asset']}")
-    elif forward_attrs.get("underlying_description"):
-        description_parts.append(f"on {forward_attrs['underlying_description']}")
-        
-    if forward_attrs.get("forward_price") and forward_attrs.get("forward_price_currency"):
-        price_str = f"{forward_attrs['forward_price_currency']} {forward_attrs['forward_price']}"
-        description_parts.append(f"@ {price_str}")
-        
-    if forward_attrs.get("maturity_date"):
-        maturity_str = forward_attrs["maturity_date"][:10] if forward_attrs["maturity_date"] else "TBD"
-        description_parts.append(f"settling {maturity_str}")
-    
-    forward_attrs["contract_description"] = " ".join(description_parts)
+
+    return forward_attrs if forward_attrs else None
     
     return forward_attrs if forward_attrs else None
     return None  # Placeholder
@@ -1194,7 +1341,10 @@ def _build_option_attributes(processed_attrs: Dict, firds_data: Dict) -> Optiona
     if firds_data.get('DerivInstrmAttrbts_SttlmTp'):
         option_attrs["settlement_type"] = firds_data['DerivInstrmAttrbts_SttlmTp']
     
-    # Underlying asset information
+    # Underlying asset information - CRITICAL for derivatives
+    if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN'):
+        option_attrs["underlying_isin"] = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Sngl_ISIN']
+        
     if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Eq_Id'):
         option_attrs["underlying_equity_id"] = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Sngl_Eq_Id']
         
@@ -1203,6 +1353,10 @@ def _build_option_attributes(processed_attrs: Dict, firds_data: Dict) -> Optiona
         
     if firds_data.get('DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Id'):
         option_attrs["underlying_id"] = firds_data['DerivInstrmAttrbts_UndrlygInstrm_Sngl_Indx_Id']
+        
+    # Also check processed attributes as backup source for underlying ISIN
+    if not option_attrs.get("underlying_isin") and processed_attrs.get('underlying_isin'):
+        option_attrs["underlying_isin"] = processed_attrs['underlying_isin']
     
     # Contract multiplier and size
     if firds_data.get('DerivInstrmAttrbts_PricMltplr'):

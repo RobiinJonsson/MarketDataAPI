@@ -101,7 +101,7 @@ def create_transparency_resources(api, models):
                     for calc in calculations:
                         try:
                             rich_response = build_transparency_response(calc, include_rich_details=True)
-                            logger.info(f"Rich response for {calc.id} has keys: {list(rich_response.keys())}")
+                            logger.debug(f"Rich response for {calc.id} has keys: {list(rich_response.keys())}")
                             result.append(rich_response)
                         except Exception as e:
                             logger.error(f"Error building rich response for {calc.id}: {e}")
@@ -178,10 +178,10 @@ def create_transparency_resources(api, models):
                     # Use rich transparency response builder with full details
                     from ..utils.transparency_utils import build_transparency_response
                     
-                    logger.info(f"Building detailed rich response for transparency calculation {transparency_id}")
+                    logger.debug(f"Building detailed rich response for transparency calculation {transparency_id}")
                     try:
                         result = build_transparency_response(calculation, include_rich_details=True)
-                        logger.info(f"Rich response for {transparency_id} has keys: {list(result.keys())}")
+                        logger.debug(f"Rich response for {transparency_id} has keys: {list(result.keys())}")
                     except Exception as e:
                         logger.error(f"Error building rich response for {transparency_id}: {e}")
                         # Fallback to basic response
