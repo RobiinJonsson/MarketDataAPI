@@ -19,8 +19,21 @@ def create_app(config_override=None):
     if config_override:
         app.config.update(config_override)
 
-    # Enable CORS for all routes
-    CORS(app, origins=["http://localhost:3000", "http://127.0.0.1:3000"])
+    # Enable CORS for all routes with comprehensive configuration
+    # In development, be more permissive with origins
+    if FLASK_ENV == "development":
+        CORS(app, 
+             origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001"],
+             allow_headers=["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+             methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"],
+             supports_credentials=True,
+             expose_headers=["Content-Range", "X-Content-Range"])
+    else:
+        CORS(app, 
+             origins=["http://localhost:3000"],  # Restrict in production
+             allow_headers=["Content-Type", "Authorization"],
+             methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+             supports_credentials=False)
 
     # Set up logging and register cleanup
     logs_dir = os.path.join(Config.ROOT_PATH, "logs")

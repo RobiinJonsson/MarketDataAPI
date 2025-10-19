@@ -82,11 +82,20 @@ def create_legal_entity_resources(api, models):
                 from ..utils.legal_entity_utils import build_legal_entity_response
                 
                 service = ServicesFactory.get_legal_entity_service()
+                
+                # First get total count without pagination (like instruments endpoint)
+                session_count, all_entities = service.get_all_entities(
+                    limit=None, offset=None, filters=filters if filters else None
+                )
+                total_count = len(all_entities)
+                session_count.close()
+                
+                # Then get paginated results
                 session, entities = service.get_all_entities(
                     limit=limit, offset=offset, filters=filters if filters else None
                 )
 
-                logger.info(f"Building rich responses for {len(entities)} legal entities")
+                logger.info(f"Building rich responses for {len(entities)} legal entities (total: {total_count})")
                 result = []
                 for entity in entities:
                     try:
@@ -105,7 +114,7 @@ def create_legal_entity_resources(api, models):
                     ResponseFields.META: {
                         ResponseFields.PAGE: page,
                         ResponseFields.PER_PAGE: per_page,
-                        ResponseFields.TOTAL: len(result),
+                        ResponseFields.TOTAL: total_count,  # Now uses real total count!
                     },
                 }
 
