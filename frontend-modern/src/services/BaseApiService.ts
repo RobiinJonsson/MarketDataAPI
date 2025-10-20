@@ -67,7 +67,15 @@ export class BaseApiService {
         throw await this.createHttpError(response);
       }
 
-      const data: ApiResponse<T> = await response.json();
+      const rawData = await response.json();
+      
+      // Wrap raw Flask responses in ApiResponse format
+      const data: ApiResponse<T> = this.isApiResponse(rawData) 
+        ? rawData 
+        : {
+            status: 'success',
+            data: rawData as T
+          };
       
       // Cache successful GET requests
       if (finalConfig.cache && (!options.method || options.method === 'GET')) {
@@ -95,7 +103,13 @@ export class BaseApiService {
    * GET request
    */
   protected async get<T>(endpoint: string, params?: Record<string, any>, config?: RequestConfig): Promise<ApiResponse<T>> {
-    const url = params ? `${endpoint}?${new URLSearchParams(this.sanitizeParams(params)).toString()}` : endpoint;
+    if (!params) {
+      return this.request<T>(endpoint, { method: 'GET' }, config);
+    }
+    
+    const sanitizedParams = this.sanitizeParams(params);
+    const queryString = new URLSearchParams(sanitizedParams).toString();
+    const url = queryString ? `${endpoint}?${queryString}` : endpoint;
     return this.request<T>(url, { method: 'GET' }, config);
   }
 
@@ -277,6 +291,13 @@ export class BaseApiService {
    */
   private sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Check if response is already in ApiResponse format
+   */
+  private isApiResponse(data: any): data is ApiResponse<any> {
+    return data && typeof data === 'object' && ('status' in data || 'data' in data || 'error' in data);
   }
 
   /**

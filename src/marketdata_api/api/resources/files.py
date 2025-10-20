@@ -150,7 +150,7 @@ def create_file_resources(api, models):
             except Exception as e:
                 logger.error(f"Error retrieving ESMA files: {str(e)}")
                 return {
-                    ResponseFields.ERROR: ErrorMessages.INTERNAL_SERVER_ERROR,
+                    ResponseFields.ERROR: "Internal server error",
                     "details": str(e),
                 }, HTTPStatus.INTERNAL_SERVER_ERROR
 
@@ -193,7 +193,7 @@ def create_file_resources(api, models):
             except Exception as e:
                 logger.error(f"Error downloading files: {str(e)}")
                 return {
-                    ResponseFields.ERROR: ErrorMessages.INTERNAL_SERVER_ERROR,
+                    ResponseFields.ERROR: "Internal server error",
                     "details": str(e),
                 }, HTTPStatus.INTERNAL_SERVER_ERROR
 
@@ -236,7 +236,7 @@ def create_file_resources(api, models):
             except Exception as e:
                 logger.error(f"Error retrieving detailed file stats: {str(e)}")
                 return {
-                    ResponseFields.ERROR: ErrorMessages.INTERNAL_SERVER_ERROR,
+                    ResponseFields.ERROR: "Internal server error",
                     "details": str(e),
                 }, HTTPStatus.INTERNAL_SERVER_ERROR
 
@@ -256,14 +256,53 @@ def create_file_resources(api, models):
                 from ...services.file_management_service import FileManagementService
 
                 service = FileManagementService()
-                result = service.get_file_stats()
+                raw_stats = service.get_storage_stats()
+                
+                # Transform service response to match API model
+                total_files = 0
+                total_size_bytes = 0
+                
+                # Create JSON-serializable stats without FileInfo objects
+                serializable_stats = {}
+                
+                for file_type, stats in raw_stats.items():
+                    total_files += stats.get("count", 0)
+                    total_size_bytes += stats.get("total_size", 0)
+                    
+                    # Create serializable version of stats (remove FileInfo objects)
+                    serializable_stats[file_type] = {
+                        "count": stats.get("count", 0),
+                        "total_size": stats.get("total_size", 0),
+                        "total_size_mb": stats.get("total_size_mb", 0),
+                        # Skip oldest_file and newest_file as they contain FileInfo objects
+                    }
+                
+                # Format human-readable size
+                def format_size(size_bytes):
+                    if size_bytes == 0:
+                        return "0 B"
+                    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+                        if size_bytes < 1024.0:
+                            return f"{size_bytes:.1f} {unit}"
+                        size_bytes /= 1024.0
+                    return f"{size_bytes:.1f} PB"
+                
+                result = {
+                    "total_files": total_files,
+                    "total_size": format_size(total_size_bytes),
+                    "total_size_bytes": total_size_bytes,
+                    "by_type": serializable_stats,
+                    "by_extension": {},  # Could be enhanced later
+                    "oldest_file": None,  # Simplified for now
+                    "newest_file": None,  # Simplified for now
+                }
 
                 return result, HTTPStatus.OK
 
             except Exception as e:
                 logger.error(f"Error retrieving file stats: {str(e)}")
                 return {
-                    ResponseFields.ERROR: ErrorMessages.INTERNAL_SERVER_ERROR,
+                    ResponseFields.ERROR: "Internal server error",
                     "details": str(e),
                 }, HTTPStatus.INTERNAL_SERVER_ERROR
 
@@ -306,7 +345,7 @@ def create_file_resources(api, models):
             except Exception as e:
                 logger.error(f"Error deleting files: {str(e)}")
                 return {
-                    ResponseFields.ERROR: ErrorMessages.INTERNAL_SERVER_ERROR,
+                    ResponseFields.ERROR: "Internal server error",
                     "details": str(e),
                 }, HTTPStatus.INTERNAL_SERVER_ERROR
 
@@ -335,7 +374,7 @@ def create_file_resources(api, models):
             except Exception as e:
                 logger.error(f"Error retrieving file summary: {str(e)}")
                 return {
-                    ResponseFields.ERROR: ErrorMessages.INTERNAL_SERVER_ERROR,
+                    ResponseFields.ERROR: "Internal server error",
                     "details": str(e),
                 }, HTTPStatus.INTERNAL_SERVER_ERROR
 
@@ -359,7 +398,7 @@ def create_file_resources(api, models):
                 data = request.get_json()
                 if not data:
                     return {
-                        ResponseFields.ERROR: ErrorMessages.INVALID_REQUEST_BODY
+                        ResponseFields.ERROR: "Invalid request body"
                     }, HTTPStatus.BAD_REQUEST
 
                 service = FileManagementService()
@@ -370,7 +409,7 @@ def create_file_resources(api, models):
             except Exception as e:
                 logger.error(f"Error downloading files by criteria: {str(e)}")
                 return {
-                    ResponseFields.ERROR: ErrorMessages.INTERNAL_SERVER_ERROR,
+                    ResponseFields.ERROR: "Internal server error",
                     "details": str(e),
                 }, HTTPStatus.INTERNAL_SERVER_ERROR
 
@@ -408,7 +447,7 @@ def create_file_resources(api, models):
             except Exception as e:
                 logger.error(f"Error in auto cleanup: {str(e)}")
                 return {
-                    ResponseFields.ERROR: ErrorMessages.INTERNAL_SERVER_ERROR,
+                    ResponseFields.ERROR: "Internal server error",
                     "details": str(e),
                 }, HTTPStatus.INTERNAL_SERVER_ERROR
 

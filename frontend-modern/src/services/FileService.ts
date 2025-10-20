@@ -28,7 +28,65 @@ export class FileService extends BaseApiService {
     } = {},
     config?: RequestConfig
   ): Promise<ApiResponse<FileInfo[]>> {
-    return this.get<FileInfo[]>('/files', filters, config);
+    // Convert type filter to lowercase for API compatibility
+    const apiFilters = {
+      ...filters,
+      ...(filters.type && { type: filters.type.toLowerCase() })
+    };
+    
+    const response = await this.get<any>('/files/', apiFilters, config);
+    
+    // Transform the API response to match FileInfo[] interface
+    if (response.data) {
+      const transformedFiles: FileInfo[] = [];
+      
+      // Process files from by_type structure
+      if (response.data.by_type) {
+        // Add FIRDS files
+        if (response.data.by_type.firds) {
+          response.data.by_type.firds.forEach((file: any) => {
+            transformedFiles.push({
+              name: file.name || this.extractFilename(file.path),
+              path: file.path,
+              size: file.size,
+              modified: file.modified || file.created,
+              type: 'FIRDS' as const,
+              dataset: file.dataset_type,
+              status: 'active' as const // Default status
+            });
+          });
+        }
+        
+        // Add FITRS files
+        if (response.data.by_type.fitrs) {
+          response.data.by_type.fitrs.forEach((file: any) => {
+            transformedFiles.push({
+              name: file.name || this.extractFilename(file.path),
+              path: file.path,
+              size: file.size,
+              modified: file.modified || file.created,
+              type: 'FITRS' as const,
+              dataset: file.dataset_type,
+              status: 'active' as const // Default status
+            });
+          });
+        }
+      }
+      
+      return {
+        ...response,
+        data: transformedFiles
+      };
+    }
+    
+    return response;
+  }
+  
+  /**
+   * Extract filename from file path
+   */
+  private extractFilename(path: string): string {
+    return path.split(/[/\\]/).pop() || path;
   }
 
   /**
@@ -62,7 +120,28 @@ export class FileService extends BaseApiService {
    * Get file statistics
    */
   async getFileStats(config?: RequestConfig): Promise<ApiResponse<FileStats>> {
-    return this.get<FileStats>('/files/stats', {}, { ...config, cache: true });
+    const response = await this.get<any>('/files/stats', {}, { ...config, cache: true });
+    
+    // Transform the API response to match FileStats interface
+    if (response.data) {
+      const apiData = response.data;
+      const transformedStats: FileStats = {
+        total_files: apiData.total_files || 0,
+        firds_files: apiData.by_type?.firds?.count || 0,
+        fitrs_files: apiData.by_type?.fitrs?.count || 0,
+        total_size: apiData.total_size_bytes || 0,
+        firds_size: apiData.by_type?.firds?.total_size || 0,
+        fitrs_size: apiData.by_type?.fitrs?.total_size || 0,
+        last_updated: new Date().toISOString() // Use current time as fallback
+      };
+      
+      return {
+        ...response,
+        data: transformedStats
+      };
+    }
+    
+    return response;
   }
 
   /**
