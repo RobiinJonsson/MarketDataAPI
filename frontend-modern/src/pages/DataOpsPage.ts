@@ -1,6 +1,6 @@
 import { BasePage } from './BasePage';
 import { ApiServiceFactory } from '../services';
-import type { FileInfo, FileStats } from '../types/api';
+import type { FileInfo, FileStats, ESMAFileInfo, ESMAFileCriteria } from '../types/api';
 
 /**
  * DataOps Management Page
@@ -14,6 +14,8 @@ export default class DataOpsPage extends BasePage {
     type?: 'FIRDS' | 'FITRS' | 'OTHER';
     status?: 'active' | 'outdated' | 'processing';
   } = {};
+  private availableESMAFiles: ESMAFileInfo[] = [];
+  private selectedESMAFiles: Set<string> = new Set();
 
   async render(): Promise<void> {
     this.container.innerHTML = `
@@ -73,11 +75,11 @@ export default class DataOpsPage extends BasePage {
                   </svg>
                   <span>Refresh</span>
                 </button>
-                <button id="download-latest" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center space-x-2">
+                <button id="download-files" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors flex items-center space-x-2">
                   <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                     <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path>
                   </svg>
-                  <span>Download Latest</span>
+                  <span>Download Files</span>
                 </button>
                 <button id="auto-cleanup" class="bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 transition-colors flex items-center space-x-2">
                   <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
@@ -194,6 +196,106 @@ export default class DataOpsPage extends BasePage {
               </div>
             </div>
           `, '⚙️ Batch Operations')}
+        </div>
+      </div>
+
+      <!-- Download Files Dialog -->
+      <div id="download-dialog" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+          <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div class="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 class="text-xl font-semibold text-gray-900">Download ESMA Files</h3>
+              <button id="close-download-dialog" class="text-gray-400 hover:text-gray-600">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+            
+            <div class="flex flex-col h-[600px]">
+              <!-- Filters Section -->
+              <div class="p-6 border-b border-gray-200 bg-gray-50">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Dataset Type</label>
+                    <select id="dataset-filter" class="w-full border border-gray-300 rounded-md px-3 py-2 bg-white">
+                      <option value="">All Datasets</option>
+                      <option value="firds">FIRDS</option>
+                      <option value="fitrs">FITRS</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Asset Type</label>
+                    <select id="asset-type-filter" class="w-full border border-gray-300 rounded-md px-3 py-2 bg-white">
+                      <option value="">All Assets</option>
+                      <option value="C">Collective Investment</option>
+                      <option value="D">Debt</option>
+                      <option value="E">Equity</option>
+                      <option value="F">Futures</option>
+                      <option value="H">Structured Products</option>
+                      <option value="I">Interest Rate</option>
+                      <option value="J">Commodity</option>
+                      <option value="O">Options</option>
+                      <option value="R">Rights</option>
+                      <option value="S">Swaps</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Date From</label>
+                    <input type="date" id="date-from-filter" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Date To</label>
+                    <input type="date" id="date-to-filter" class="w-full border border-gray-300 rounded-md px-3 py-2">
+                  </div>
+                </div>
+                <div class="flex items-center justify-between">
+                  <button id="apply-esma-filters" class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+                    Apply Filters
+                  </button>
+                  <div class="flex items-center space-x-4">
+                    <button id="select-all-files" class="text-blue-600 hover:text-blue-800 font-medium">Select All</button>
+                    <button id="clear-selection" class="text-gray-600 hover:text-gray-800 font-medium">Clear All</button>
+                    <span id="selection-count" class="text-sm text-gray-600">0 files selected</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Files List -->
+              <div class="flex-1 overflow-auto p-6">
+                <div id="esma-files-loading" class="text-center py-8">
+                  <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                  <p class="text-gray-600">Loading available files...</p>
+                </div>
+                <div id="esma-files-list" class="hidden">
+                  <div class="space-y-2" id="files-container">
+                    <!-- Files will be loaded here -->
+                  </div>
+                </div>
+                <div id="esma-files-empty" class="hidden text-center py-8">
+                  <p class="text-gray-600">No files found. Try adjusting your filters.</p>
+                </div>
+              </div>
+
+              <!-- Action Buttons -->
+              <!-- Make footer sticky so action buttons are always visible inside the scrollable area -->
+              <div class="sticky bottom-0 z-10 p-6 border-t border-gray-200 bg-white">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center space-x-4">
+                    <button id="download-all-latest" class="bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 transition-colors">
+                      Download All Latest (Batch)
+                    </button>
+                    <span class="text-sm text-gray-600">For automated scheduling</span>
+                  </div>
+                  <div class="flex items-center space-x-3">
+                    <button id="download-selected" class="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed" disabled>
+                      Download Selected
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     `;
@@ -458,9 +560,9 @@ export default class DataOpsPage extends BasePage {
       refreshBtn.addEventListener('click', () => this.refreshFiles());
     }
 
-    const downloadLatestBtn = this.container.querySelector('#download-latest');
-    if (downloadLatestBtn) {
-      downloadLatestBtn.addEventListener('click', () => this.downloadLatest());
+    const downloadFilesBtn = this.container.querySelector('#download-files');
+    if (downloadFilesBtn) {
+      downloadFilesBtn.addEventListener('click', () => this.openDownloadDialog());
     }
 
     const autoCleanupBtn = this.container.querySelector('#auto-cleanup');
@@ -483,6 +585,9 @@ export default class DataOpsPage extends BasePage {
     if (downloadAllBtn) {
       downloadAllBtn.addEventListener('click', () => this.downloadEsmaFiles('ALL'));
     }
+
+    // Download dialog event listeners
+    this.setupDownloadDialogListeners();
   }
 
   private attachFileActionListeners(): void {
@@ -528,25 +633,6 @@ export default class DataOpsPage extends BasePage {
         refreshBtn.innerHTML = `<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"></path></svg><span>Refresh</span>`;
         refreshBtn.disabled = false;
       }
-    }
-  }
-
-  private async downloadLatest(): Promise<void> {
-    try {
-      const response = await this.fileService.downloadByCriteria({
-        file_types: ['FIRDS', 'FITRS'],
-        force_update: true
-      });
-      
-      if (response.status === 'success') {
-        this.showSuccess('Latest files download initiated!');
-        await this.refreshFiles();
-      } else {
-        this.showDataOpsError('Failed to initiate download.');
-      }
-    } catch (error) {
-      console.error('Error downloading latest files:', error);
-      this.showDataOpsError('Error downloading latest files.');
     }
   }
 
@@ -691,5 +777,263 @@ Total Size: ${totalSize}`);
     // Simple success display - could be enhanced with a toast system
     console.log(message);
     alert(message);
+  }
+
+  // ===== DOWNLOAD DIALOG METHODS =====
+
+  private setupDownloadDialogListeners(): void {
+    // Dialog open/close
+    const closeBtn = this.container.querySelector('#close-download-dialog');
+    if (closeBtn) closeBtn.addEventListener('click', () => this.closeDownloadDialog());
+
+    // Filter controls
+    const applyESMAFiltersBtn = this.container.querySelector('#apply-esma-filters');
+    if (applyESMAFiltersBtn) applyESMAFiltersBtn.addEventListener('click', () => this.applyESMAFilters());
+
+    // Selection controls
+    const selectAllBtn = this.container.querySelector('#select-all-files');
+    const clearSelectionBtn = this.container.querySelector('#clear-selection');
+    if (selectAllBtn) selectAllBtn.addEventListener('click', () => this.selectAllESMAFiles());
+    if (clearSelectionBtn) clearSelectionBtn.addEventListener('click', () => this.clearESMASelection());
+
+    // Download actions
+    const downloadSelectedBtn = this.container.querySelector('#download-selected');
+    const downloadAllLatestBtn = this.container.querySelector('#download-all-latest');
+    if (downloadSelectedBtn) downloadSelectedBtn.addEventListener('click', () => this.downloadSelectedESMAFiles());
+    if (downloadAllLatestBtn) downloadAllLatestBtn.addEventListener('click', () => this.downloadAllLatestFiles());
+  }
+
+  private async openDownloadDialog(): Promise<void> {
+    const dialog = this.container.querySelector('#download-dialog');
+    if (!dialog) return;
+
+    // Show dialog
+    dialog.classList.remove('hidden');
+
+    // Set default date range (last 30 days)
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
+    
+    const dateFromInput = this.container.querySelector('#date-from-filter') as HTMLInputElement;
+    const dateToInput = this.container.querySelector('#date-to-filter') as HTMLInputElement;
+    
+    if (dateFromInput) dateFromInput.value = thirtyDaysAgo.toISOString().split('T')[0];
+    if (dateToInput) dateToInput.value = today.toISOString().split('T')[0];
+
+    // Load initial files
+    await this.loadESMAFiles();
+  }
+
+  private closeDownloadDialog(): void {
+    const dialog = this.container.querySelector('#download-dialog');
+    if (dialog) {
+      dialog.classList.add('hidden');
+      this.selectedESMAFiles.clear();
+      this.updateSelectionCount();
+    }
+  }
+
+  private async loadESMAFiles(): Promise<void> {
+    const loadingDiv = this.container.querySelector('#esma-files-loading');
+    const listDiv = this.container.querySelector('#esma-files-list');
+    const emptyDiv = this.container.querySelector('#esma-files-empty');
+
+    // Show loading
+    if (loadingDiv) loadingDiv.classList.remove('hidden');
+    if (listDiv) listDiv.classList.add('hidden');
+    if (emptyDiv) emptyDiv.classList.add('hidden');
+
+    try {
+      const criteria = this.getESMAFilterCriteria();
+      const response = await this.fileService.getEsmaFiles(criteria);
+      
+      if (response.status === 'success' && response.data) {
+        this.availableESMAFiles = response.data;
+        this.renderESMAFilesList();
+        
+        if (loadingDiv) loadingDiv.classList.add('hidden');
+        if (this.availableESMAFiles.length > 0) {
+          if (listDiv) listDiv.classList.remove('hidden');
+        } else {
+          if (emptyDiv) emptyDiv.classList.remove('hidden');
+        }
+      } else {
+        throw new Error('Failed to load ESMA files');
+      }
+    } catch (error) {
+      console.error('Error loading ESMA files:', error);
+      if (loadingDiv) loadingDiv.classList.add('hidden');
+      if (emptyDiv) emptyDiv.classList.remove('hidden');
+      this.showDataOpsError('Failed to load ESMA files');
+    }
+  }
+
+  private getESMAFilterCriteria(): ESMAFileCriteria {
+    const datasetFilter = this.container.querySelector('#dataset-filter') as HTMLSelectElement;
+    const assetTypeFilter = this.container.querySelector('#asset-type-filter') as HTMLSelectElement;
+    const dateFromFilter = this.container.querySelector('#date-from-filter') as HTMLInputElement;
+    const dateToFilter = this.container.querySelector('#date-to-filter') as HTMLInputElement;
+
+    const criteria: ESMAFileCriteria = {};
+    
+    if (datasetFilter?.value) {
+      criteria.datasets = [datasetFilter.value];
+    }
+    if (assetTypeFilter?.value) {
+      criteria.asset_type = assetTypeFilter.value;
+    }
+    if (dateFromFilter?.value) {
+      criteria.date_from = dateFromFilter.value;
+    }
+    if (dateToFilter?.value) {
+      criteria.date_to = dateToFilter.value;
+    }
+
+    return criteria;
+  }
+
+  private async applyESMAFilters(): Promise<void> {
+    await this.loadESMAFiles();
+  }
+
+  private renderESMAFilesList(): void {
+    const container = this.container.querySelector('#files-container');
+    if (!container) return;
+
+    container.innerHTML = this.availableESMAFiles.map(file => `
+      <div class="flex items-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+        <input 
+          type="checkbox" 
+          class="esma-file-checkbox mr-3 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          data-file-name="${file.file_name}"
+          ${this.selectedESMAFiles.has(file.file_name) ? 'checked' : ''}
+        >
+        <div class="flex-1">
+          <div class="flex items-center justify-between">
+            <div>
+              <h4 class="font-medium text-gray-900">${file.file_name}</h4>
+              <div class="flex items-center space-x-4 text-sm text-gray-600">
+                <span class="bg-${file.file_type === 'firds' ? 'blue' : file.file_type === 'fitrs' ? 'green' : 'gray'}-100 text-${file.file_type === 'firds' ? 'blue' : file.file_type === 'fitrs' ? 'green' : 'gray'}-800 px-2 py-1 rounded-full text-xs font-medium">
+                  ${file.file_type?.toUpperCase() || 'UNKNOWN'}
+                </span>
+                <span>📅 ${file.publication_date ? new Date(file.publication_date).toLocaleDateString() : 'Unknown'}</span>
+                ${file.file_size ? `<span>📦 ${this.formatFileSize(file.file_size)}</span>` : ''}
+                ${file.instrument_type && file.instrument_type !== 'null' ? `<span>🎯 ${file.instrument_type}</span>` : ''}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+    // Add event listeners for checkboxes
+    const checkboxes = container.querySelectorAll('.esma-file-checkbox');
+    checkboxes.forEach(checkbox => {
+      checkbox.addEventListener('change', (e) => {
+        const target = e.target as HTMLInputElement;
+        const fileName = target.dataset.fileName;
+        if (fileName) {
+          if (target.checked) {
+            this.selectedESMAFiles.add(fileName);
+          } else {
+            this.selectedESMAFiles.delete(fileName);
+          }
+          this.updateSelectionCount();
+        }
+      });
+    });
+  }
+
+  private formatFileSize(bytes: number): string {
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    if (bytes === 0) return '0 B';
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+  }
+
+  private selectAllESMAFiles(): void {
+    this.availableESMAFiles.forEach(file => {
+      this.selectedESMAFiles.add(file.file_name);
+    });
+    
+    // Update checkboxes
+    const checkboxes = this.container.querySelectorAll('.esma-file-checkbox') as NodeListOf<HTMLInputElement>;
+    checkboxes.forEach(checkbox => {
+      checkbox.checked = true;
+    });
+    
+    this.updateSelectionCount();
+  }
+
+  private clearESMASelection(): void {
+    this.selectedESMAFiles.clear();
+    
+    // Update checkboxes
+    const checkboxes = this.container.querySelectorAll('.esma-file-checkbox') as NodeListOf<HTMLInputElement>;
+    checkboxes.forEach(checkbox => {
+      checkbox.checked = false;
+    });
+    
+    this.updateSelectionCount();
+  }
+
+  private updateSelectionCount(): void {
+    const countSpan = this.container.querySelector('#selection-count');
+    const downloadBtn = this.container.querySelector('#download-selected') as HTMLButtonElement;
+    
+    const count = this.selectedESMAFiles.size;
+    if (countSpan) {
+      countSpan.textContent = `${count} file${count !== 1 ? 's' : ''} selected`;
+    }
+    
+    if (downloadBtn) {
+      downloadBtn.disabled = count === 0;
+    }
+  }
+
+  private async downloadSelectedESMAFiles(): Promise<void> {
+    if (this.selectedESMAFiles.size === 0) return;
+
+    const selectedFiles = this.availableESMAFiles.filter(file => 
+      this.selectedESMAFiles.has(file.file_name)
+    );
+
+    try {
+      const response = await this.fileService.downloadSelectedFiles(selectedFiles, {
+        parse: true,
+        overwrite: false
+      });
+
+      if (response.status === 'success') {
+        this.showSuccess(`Download initiated for ${selectedFiles.length} files!`);
+        this.closeDownloadDialog();
+        await this.refreshFiles();
+      } else {
+        this.showDataOpsError('Failed to initiate download.');
+      }
+    } catch (error) {
+      console.error('Error downloading selected files:', error);
+      this.showDataOpsError('Error downloading selected files.');
+    }
+  }
+
+  private async downloadAllLatestFiles(): Promise<void> {
+    try {
+      const response = await this.fileService.downloadByCriteria({
+        file_types: ['FIRDS', 'FITRS'],
+        force_update: true
+      });
+      
+      if (response.status === 'success') {
+        this.showSuccess('Batch download of all latest files initiated!');
+        this.closeDownloadDialog();
+        await this.refreshFiles();
+      } else {
+        this.showDataOpsError('Failed to initiate batch download.');
+      }
+    } catch (error) {
+      console.error('Error downloading all latest files:', error);
+      this.showDataOpsError('Error downloading all latest files.');
+    }
   }
 }

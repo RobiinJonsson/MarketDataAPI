@@ -10,6 +10,8 @@ import {
   FileStats,
   DetailedFileStats,
   DownloadCriteria,
+  ESMAFileInfo,
+  ESMAFileCriteria,
   RequestConfig
 } from '../types/api';
 
@@ -45,14 +47,17 @@ export class FileService extends BaseApiService {
         // Add FIRDS files
         if (response.data.by_type.firds) {
           response.data.by_type.firds.forEach((file: any) => {
+            const modifiedDate = file.modified || file.created;
+            const status = this.determineFileStatus(modifiedDate);
+            
             transformedFiles.push({
               name: file.name || this.extractFilename(file.path),
               path: file.path,
               size: file.size,
-              modified: file.modified || file.created,
+              modified: modifiedDate,
               type: 'FIRDS' as const,
               dataset: file.dataset_type,
-              status: 'active' as const // Default status
+              status: status
             });
           });
         }
@@ -60,22 +65,33 @@ export class FileService extends BaseApiService {
         // Add FITRS files
         if (response.data.by_type.fitrs) {
           response.data.by_type.fitrs.forEach((file: any) => {
+            const modifiedDate = file.modified || file.created;
+            const status = this.determineFileStatus(modifiedDate);
+            
             transformedFiles.push({
               name: file.name || this.extractFilename(file.path),
               path: file.path,
               size: file.size,
-              modified: file.modified || file.created,
+              modified: modifiedDate,
               type: 'FITRS' as const,
               dataset: file.dataset_type,
-              status: 'active' as const // Default status
+              status: status
             });
           });
         }
       }
       
+      // Apply status filtering if specified
+      let filteredFiles = transformedFiles;
+      if (filters.status) {
+        filteredFiles = transformedFiles.filter(file => 
+          file.status === filters.status
+        );
+      }
+      
       return {
         ...response,
-        data: transformedFiles
+        data: filteredFiles
       };
     }
     
@@ -90,10 +106,24 @@ export class FileService extends BaseApiService {
   }
 
   /**
-   * Get ESMA files
+   * Determine file status based on modification date
+   * Files older than 30 days are considered 'outdated'
    */
-  async getEsmaFiles(config?: RequestConfig): Promise<ApiResponse<FileInfo[]>> {
-    return this.get<FileInfo[]>('/files/esma', {}, config);
+  private determineFileStatus(modifiedDate: string): 'active' | 'outdated' {
+    if (!modifiedDate) return 'active';
+    
+    const fileDate = new Date(modifiedDate);
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - (30 * 24 * 60 * 60 * 1000));
+    
+    return fileDate < thirtyDaysAgo ? 'outdated' : 'active';
+  }
+
+  /**
+   * Get ESMA files with filtering
+   */
+  async getEsmaFiles(criteria?: ESMAFileCriteria, config?: RequestConfig): Promise<ApiResponse<ESMAFileInfo[]>> {
+    return this.get<ESMAFileInfo[]>('/files/esma', criteria || {}, config);
   }
 
   /**
@@ -113,6 +143,21 @@ export class FileService extends BaseApiService {
     return this.post<any>('/files/download-by-criteria', criteria, {
       ...config,
       timeout: 300000, // 5 minutes for batch downloads
+    });
+  }
+
+  /**
+   * Download selected ESMA files
+   */
+  async downloadSelectedFiles(files: ESMAFileInfo[], options: { parse?: boolean; overwrite?: boolean } = {}, config?: RequestConfig): Promise<ApiResponse<any>> {
+    const downloadUrls = files.map(f => f.download_link);
+    return this.post<any>('/files/download', {
+      files: downloadUrls,
+      parse: options.parse ?? true,
+      overwrite: options.overwrite ?? false
+    }, {
+      ...config,
+      timeout: 300000, // 5 minutes for batch downloads,
     });
   }
 

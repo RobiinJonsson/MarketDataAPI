@@ -224,6 +224,25 @@ export interface DownloadCriteria {
   force_update?: boolean;
 }
 
+export interface ESMAFileInfo {
+  file_name: string;
+  download_link: string;
+  file_type: string;
+  publication_date: string;
+  creation_date: string;
+  instrument_type?: string;
+  file_size?: number;
+  selected?: boolean; // For UI selection
+}
+
+export interface ESMAFileCriteria {
+  datasets?: string[];
+  date_from?: string;
+  date_to?: string;
+  file_type?: string;
+  asset_type?: string;
+}
+
 // ===== SCHEMA TYPES =====
 
 export interface SchemaDefinition {

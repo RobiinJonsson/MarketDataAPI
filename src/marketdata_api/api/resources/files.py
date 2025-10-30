@@ -136,14 +136,41 @@ def create_file_resources(api, models):
                 HTTPStatus.INTERNAL_SERVER_ERROR: ("Server error", common_models["error_model"]),
             },
         )
-        @files_ns.marshal_with(file_models["esma_files_response"])
         def get(self):
             """Get available ESMA files from the registry"""
             try:
                 from ...services.file_management_service import FileManagementService
 
+                # Extract query parameters
+                datasets = request.args.getlist('datasets') or ["firds", "fitrs"]
+                date_from = request.args.get('date_from')
+                date_to = request.args.get('date_to')
+                file_type = request.args.get('file_type')
+                asset_type = request.args.get('asset_type')
+
                 service = FileManagementService()
-                result = service.get_available_esma_files()
+                result = service.get_available_esma_files(
+                    datasets=datasets,
+                    date_from=date_from,
+                    date_to=date_to,
+                    file_type=file_type,
+                    asset_type=asset_type
+                )
+
+                # Convert dataclass objects to dictionaries for JSON serialization
+                if isinstance(result, list):
+                    result = [
+                        {
+                            'file_name': file.file_name,
+                            'download_link': file.download_link,
+                            'file_type': file.file_type,
+                            'publication_date': file.publication_date if file.publication_date and str(file.publication_date) != 'nan' else (file.creation_date if file.creation_date and str(file.creation_date) != 'nan' else None),
+                            'creation_date': file.creation_date if file.creation_date and str(file.creation_date) != 'nan' else (file.publication_date if file.publication_date and str(file.publication_date) != 'nan' else None),
+                            'instrument_type': file.instrument_type if file.instrument_type and str(file.instrument_type) != 'nan' else None,
+                            'file_size': file.file_size
+                        }
+                        for file in result
+                    ]
 
                 return result, HTTPStatus.OK
 
@@ -183,9 +210,8 @@ def create_file_resources(api, models):
 
                 service = FileManagementService()
                 result = service.download_and_parse_files(
-                    files=files,
-                    parse=parse,
-                    overwrite=overwrite
+                    urls=files,
+                    force_update=overwrite
                 )
 
                 return result, HTTPStatus.OK
