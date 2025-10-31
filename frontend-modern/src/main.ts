@@ -11,6 +11,7 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import DataOpsPage from './pages/DataOpsPage';
 import SwaggerPage from './pages/SwaggerPage';
 
+
 // Dynamic import for EntitiesPage to avoid module resolution issues
 const EntitiesPageImport = () => import('./pages/EntitiesPage');
 
@@ -87,6 +88,10 @@ document.addEventListener('DOMContentLoaded', () => {
       icon: 'swagger',
       description: 'Interactive API documentation and testing'
     });
+
+
+
+
 
     // Custom router event to update navigation
     const originalHandleRoute = router['handleRoute'].bind(router);

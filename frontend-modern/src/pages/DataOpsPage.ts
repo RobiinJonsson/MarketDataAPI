@@ -347,7 +347,7 @@ export default class DataOpsPage extends BasePage {
                     </div>
                   </div>
                   <button id="batch-transparency" class="mt-4 w-full bg-purple-600 text-white px-4 py-2 rounded-md hover:bg-purple-700 transition-colors">
-                    Calculate Transparency
+                    Fill Transparency
                   </button>
                 </div>
 
@@ -875,6 +875,12 @@ export default class DataOpsPage extends BasePage {
   }
 
   private async startBatchInstruments(): Promise<void> {
+    const button = this.container.querySelector('#batch-instruments') as HTMLButtonElement;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Processing...';
+    }
+    
     this.showBatchStatus('Preparing batch instrument creation...');
     
     try {
@@ -892,17 +898,28 @@ export default class DataOpsPage extends BasePage {
       this.showDataOpsError('Error starting batch instrument creation.');
     } finally {
       this.hideBatchStatus();
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Batch Instruments';
+      }
     }
   }
 
   private async startBatchEntities(): Promise<void> {
+    const button = this.container.querySelector('#batch-entities') as HTMLButtonElement;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Processing...';
+    }
+    
     this.showBatchStatus('Scanning for incomplete entity records...');
     
     try {
       const response = await this.legalEntityService.batchFillEntityData();
       
       if (response.status === 'success') {
-        this.showSuccess('Entity data fill initiated. The system will scan for incomplete LEI records and populate missing information from GLEIF registry.');
+        const data = response.data || {};
+        this.showSuccess(`Entity data fill completed: ${data.updated || 0} instruments linked to entities (${data.scanned || 0} scanned, ${data.failed || 0} failed)`);
       } else {
         this.showDataOpsError('Failed to start entity data fill.');
       }
@@ -911,36 +928,61 @@ export default class DataOpsPage extends BasePage {
       this.showDataOpsError('Error starting entity data fill.');
     } finally {
       this.hideBatchStatus();
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Fill Entity Data';
+      }
     }
   }
 
   private async startBatchTransparency(): Promise<void> {
-    this.showBatchStatus('Calculating transparency thresholds...');
+    const button = this.container.querySelector('#batch-transparency') as HTMLButtonElement;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Processing...';
+    }
+    
+    this.showBatchStatus('Filling transparency data from FITRS files...');
     
     try {
       const response = await this.transparencyService.batchCalculateTransparency();
       
       if (response.status === 'success') {
-        this.showSuccess('Transparency calculation initiated. The system will compute MiFID II thresholds for instruments with missing transparency data.');
+        const data = response.data || {};
+        this.showSuccess(
+          `Transparency fill completed: ${data.created_calculations || 0} calculations created ` +
+          `(${data.processed || 0} instruments processed, ${data.failed || 0} failed)`
+        );
       } else {
-        this.showDataOpsError('Failed to start transparency calculations.');
+        this.showDataOpsError('Failed to start transparency fill.');
       }
     } catch (error) {
       console.error('Error in batch transparency:', error);
-      this.showDataOpsError('Error starting transparency calculations.');
+      this.showDataOpsError('Error starting transparency fill.');
     } finally {
       this.hideBatchStatus();
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Fill Transparency';
+      }
     }
   }
 
   private async startBatchFigi(): Promise<void> {
-    this.showBatchStatus('Looking up FIGI mappings...');
+    const button = this.container.querySelector('#batch-figi') as HTMLButtonElement;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Processing...';
+    }
+    
+    this.showBatchStatus('Initializing FIGI batch processing...');
     
     try {
       const response = await this.instrumentService.batchMapFigi();
       
       if (response.status === 'success') {
-        this.showSuccess('FIGI mapping initiated. The system will look up Bloomberg FIGIs for instruments with unmapped ISINs.');
+        const data = response.data || {};
+        this.showSuccess(`FIGI mapping completed: ${data.mapped || 0} instruments mapped to FIGIs (${data.processed || 0} processed, ${data.failed || 0} failed)`);
       } else {
         this.showDataOpsError('Failed to start FIGI mapping.');
       }
@@ -949,6 +991,10 @@ export default class DataOpsPage extends BasePage {
       this.showDataOpsError('Error starting FIGI mapping.');
     } finally {
       this.hideBatchStatus();
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Map FIGIs';
+      }
     }
   }
 

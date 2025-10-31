@@ -37,8 +37,8 @@ export class AnalyticsService extends BaseApiService {
       const [
         instrumentStats,
         entityStats,
-        fileStats,
-        micStats
+        _fileStats,
+        _micStats
       ] = await Promise.allSettled([
         this.instrumentService.getInstrumentStats({ ...config, cache: true }),
         this.entityService.getEntityStats({ ...config, cache: true }),
@@ -125,7 +125,7 @@ export class AnalyticsService extends BaseApiService {
   /**
    * Get instrument analytics
    */
-  async getInstrumentAnalytics(config?: RequestConfig): Promise<ApiResponse<{
+  async getInstrumentAnalytics(_config?: RequestConfig): Promise<ApiResponse<{
     distribution_by_type: Record<string, number>;
     distribution_by_country: Record<string, number>;
     distribution_by_currency: Record<string, number>;
@@ -179,7 +179,7 @@ export class AnalyticsService extends BaseApiService {
   /**
    * Get entity analytics
    */
-  async getEntityAnalytics(config?: RequestConfig): Promise<ApiResponse<{
+  async getEntityAnalytics(_config?: RequestConfig): Promise<ApiResponse<{
     distribution_by_country: Record<string, number>;
     relationship_statistics: {
       entities_with_parents: number;
@@ -216,7 +216,7 @@ export class AnalyticsService extends BaseApiService {
   /**
    * Get data quality metrics
    */
-  async getDataQualityMetrics(config?: RequestConfig): Promise<ApiResponse<{
+  async getDataQualityMetrics(_config?: RequestConfig): Promise<ApiResponse<{
     completeness: {
       instruments: { field: string; percentage: number }[];
       entities: { field: string; percentage: number }[];
@@ -269,7 +269,7 @@ export class AnalyticsService extends BaseApiService {
   /**
    * Get system performance metrics
    */
-  async getPerformanceMetrics(config?: RequestConfig): Promise<ApiResponse<{
+  async getPerformanceMetrics(_config?: RequestConfig): Promise<ApiResponse<{
     response_times: {
       avg_response_time: number;
       p95_response_time: number;
@@ -321,7 +321,7 @@ export class AnalyticsService extends BaseApiService {
   /**
    * Get geographic distribution data for mapping
    */
-  async getGeographicDistribution(config?: RequestConfig): Promise<ApiResponse<Array<{
+  async getGeographicDistribution(_config?: RequestConfig): Promise<ApiResponse<Array<{
     country_code: string;
     country_name: string;
     instrument_count: number;

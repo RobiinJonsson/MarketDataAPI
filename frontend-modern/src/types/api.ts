@@ -25,6 +25,14 @@ export interface FilterParams {
 
 // ===== INSTRUMENT TYPES =====
 
+export interface ComprehensiveInstrumentData {
+  instrument: any;
+  transparency: any[];
+  venues: any[];
+  lei_data: any | null;
+  relationships: any | null;
+}
+
 export interface Instrument {
   id: string;
   isin: string;
@@ -92,6 +100,8 @@ export interface InstrumentFilter {
   currency?: string;
   country?: string;
   cfi?: string;
+  cfi_type?: string;
+  cfi_code?: string;
   search?: string;
 }
 
@@ -326,15 +336,28 @@ export interface RequestConfig {
 export interface TransparencyCalculation {
   id: string;
   isin: string;
-  tech_record_id: string;
+  file_type: string;
   from_date: string;
   to_date: string;
-  liquidity: boolean;
-  total_transactions_executed: number;
-  total_volume_executed: number;
-  transparency_fields: Record<string, any>;
-  created_at: string;
-  updated_at: string;
+  liquidity: boolean | null;
+  transactions: number | null;
+  volume: number | null;
+  methodology: string;
+  instrument_type: string;
+  transparency_analysis: {
+    period: string;
+    liquidity_status: string;
+    has_trading_activity: boolean;
+    raw_metrics: {
+      avg_daily_turnover: string | null;
+      large_in_scale: string | null;
+      standard_market_size: string | null;
+    };
+  };
+  mifid_context: {
+    is_equity: boolean;
+    transparency_requirement: boolean;
+  };
 }
 
 // Search and Form Types

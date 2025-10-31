@@ -132,7 +132,7 @@ export default class HomePage extends BasePage {
               <p class="text-gray-600 mb-4">Comprehensive instrument analysis with type-specific attributes, CFI decoding, and venue information</p>
               <div class="space-y-2">
                 <a href="#" data-route="/instruments" class="block text-blue-600 hover:text-blue-800 text-sm">→ Browse Instruments</a>
-                <a href="#" data-route="/instruments/types" class="block text-blue-600 hover:text-blue-800 text-sm">→ Instrument Types</a>
+                <a href="#" data-route="/instruments" class="block text-blue-600 hover:text-blue-800 text-sm">→ Instrument Types</a>
               </div>
             </div>
           </div>
@@ -209,7 +209,7 @@ export default class HomePage extends BasePage {
             </div>
             <h3 class="text-lg font-semibold text-gray-900 mb-2">Transparency Centre</h3>
             <p class="text-gray-600 mb-4">MiFID II transparency calculations and regulatory reporting</p>
-            <a href="#" data-route="/transparency" class="text-blue-600 hover:text-blue-800 font-medium">Access Transparency →</a>
+            <a href="#" data-route="/instruments" class="text-blue-600 hover:text-blue-800 font-medium transparency-link">Access Transparency →</a>
           </div>
         `, '')}
 
@@ -442,8 +442,8 @@ export default class HomePage extends BasePage {
       
       if (transparencyResponse.status === 'fulfilled') {
         console.log('Transparency API Response:', transparencyResponse.value);
-        if (transparencyResponse.value.meta?.total) {
-          totals.files = transparencyResponse.value.meta.total;
+        if (transparencyResponse.value.status === 'success' && transparencyResponse.value.data?.pagination?.total) {
+          totals.files = transparencyResponse.value.data.pagination.total;
         }
       } else {
         console.error('Transparency API failed:', transparencyResponse.reason);

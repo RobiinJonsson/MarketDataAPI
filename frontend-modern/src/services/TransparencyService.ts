@@ -47,12 +47,10 @@ export class TransparencyService extends BaseApiService {
    */
   async getTransparencyCalculations(params?: {
     page?: number;
-    limit?: number;
+    per_page?: number;
     isin?: string;
-    regime?: string;
-    status?: 'completed' | 'pending' | 'error';
-    sort_by?: 'created_date' | 'isin' | 'regime';
-    sort_order?: 'asc' | 'desc';
+    file_type?: string;
+    calculation_type?: string;
   }, config?: RequestConfig): Promise<ApiResponse<{
     calculations: TransparencyCalculation[];
     pagination: {
@@ -65,25 +63,40 @@ export class TransparencyService extends BaseApiService {
     const queryParams = new URLSearchParams();
     
     if (params?.page !== undefined) queryParams.append('page', params.page.toString());
-    if (params?.limit !== undefined) queryParams.append('limit', params.limit.toString());
+    if (params?.per_page !== undefined) queryParams.append('per_page', params.per_page.toString());
     if (params?.isin) queryParams.append('isin', params.isin);
-    if (params?.regime) queryParams.append('regime', params.regime);
-    if (params?.status) queryParams.append('status', params.status);
-    if (params?.sort_by) queryParams.append('sort_by', params.sort_by);
-    if (params?.sort_order) queryParams.append('sort_order', params.sort_order);
+    if (params?.file_type) queryParams.append('file_type', params.file_type);
+    if (params?.calculation_type) queryParams.append('calculation_type', params.calculation_type);
 
     const url = `/transparency${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
     
-    const { cache, timeout, headers, retries } = config || {};
-    return this.request<{
-      calculations: TransparencyCalculation[];
-      pagination: {
-        page: number;
-        limit: number;
-        total: number;
-        pages: number;
+    const { cache, timeout = 60000, headers, retries } = config || {};
+    
+    // Make the raw API request
+    const rawResponse = await this.request<TransparencyCalculation[]>(url, { method: 'GET' }, { cache, timeout, headers, retries });
+    
+    // Transform the response to match expected format
+    if (rawResponse.status === 'success') {
+      // The API returns {status: "success", data: [...], meta: {...}}
+      const apiResponse = rawResponse as any;
+      const calculations = Array.isArray(apiResponse.data) ? apiResponse.data : [];
+      const meta = apiResponse.meta || {};
+      
+      return {
+        status: 'success',
+        data: {
+          calculations,
+          pagination: {
+            page: meta.page || 1,
+            limit: meta.per_page || 20,
+            total: meta.total || 0,
+            pages: Math.ceil((meta.total || 0) / (meta.per_page || 20))
+          }
+        }
       };
-    }>(url, { method: 'GET' }, { cache, timeout, headers, retries });
+    }
+    
+    return rawResponse as any;
   }
 
   /**

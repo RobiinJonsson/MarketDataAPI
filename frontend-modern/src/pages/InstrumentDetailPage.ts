@@ -1,6 +1,6 @@
 import { BasePage } from './BasePage';
-import { ApiServiceFactory, InstrumentService } from '../services';
-import type { InstrumentDetail } from '../types/api';
+import { ApiServiceFactory, InstrumentService, TransparencyService } from '../services';
+import type { InstrumentDetail, TransparencyCalculation } from '../types/api';
 
 /**
  * Detailed Instrument Page
@@ -8,11 +8,13 @@ import type { InstrumentDetail } from '../types/api';
  */
 export default class InstrumentDetailPage extends BasePage {
   private instrumentService: InstrumentService;
+  private transparencyService: TransparencyService;
   private isin: string;
 
   constructor(container: HTMLElement, params: Record<string, string> = {}) {
     super(container, params);
     this.instrumentService = ApiServiceFactory.getInstance().instruments;
+    this.transparencyService = ApiServiceFactory.getInstance().transparency;
     this.isin = params.isin || '';
     
     if (!this.isin) {
@@ -55,6 +57,19 @@ export default class InstrumentDetailPage extends BasePage {
         this.loadInstrumentData();
       });
     }
+
+    // Set up transparency refresh button
+    const refreshTransparencyBtn = this.container.querySelector('#refresh-transparency');
+    if (refreshTransparencyBtn) {
+      refreshTransparencyBtn.addEventListener('click', () => {
+        this.loadTransparencyData();
+      });
+    }
+
+    // Load transparency data when page is rendered
+    setTimeout(() => {
+      this.loadTransparencyData();
+    }, 100);
   }
 
   private async loadInstrumentData(): Promise<void> {
@@ -127,6 +142,9 @@ export default class InstrumentDetailPage extends BasePage {
 
         <!-- CFI Classification -->
         ${this.renderCfiSection(instrument.cfi_decoded, instrument.cfi_code)}
+
+        <!-- Transparency Information -->
+        ${this.renderTransparencySection()}
 
         <!-- Legal Entity Information -->
         ${instrument.legal_entity ? this.renderLegalEntitySection(instrument.legal_entity) : ''}
@@ -434,6 +452,40 @@ export default class InstrumentDetailPage extends BasePage {
         <p class="text-gray-500">No CFI classification data available</p>
       </div>
     `, 'CFI Classification');
+  }
+
+  private renderTransparencySection(): string {
+    return this.createCard(`
+      <div id="transparency-section">
+        <div class="flex justify-between items-center mb-4">
+          <div>
+            <h3 class="text-lg font-semibold text-gray-900">Transparency Information</h3>
+            <p class="text-sm text-gray-600">MiFID II transparency calculations and regulatory data</p>
+          </div>
+          <button id="refresh-transparency" class="text-blue-600 hover:text-blue-800 text-sm">
+            Refresh
+          </button>
+        </div>
+        
+        <div id="transparency-loading" class="text-center py-8">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p class="text-gray-600">Loading transparency data...</p>
+        </div>
+        
+        <div id="transparency-error" class="hidden text-center py-8">
+          <div class="text-red-500 mb-4">
+            <svg class="w-8 h-8 mx-auto" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+            </svg>
+          </div>
+          <p class="text-gray-600">No transparency data found for this instrument</p>
+        </div>
+        
+        <div id="transparency-content" class="hidden space-y-4">
+          <!-- Transparency data will be loaded here -->
+        </div>
+      </div>
+    `, 'MiFID II Transparency');
   }
 
   private renderTypeSpecificSection(instrument: any): string {
@@ -1046,6 +1098,73 @@ export default class InstrumentDetailPage extends BasePage {
       }).format(value);
     } catch {
       return `${this.formatNumber(value)} ${currencyCode}`;
+    }
+  }
+
+  private async loadTransparencyData(): Promise<void> {
+    const loadingElement = this.container.querySelector('#transparency-loading');
+    const errorElement = this.container.querySelector('#transparency-error');
+    const contentElement = this.container.querySelector('#transparency-content');
+
+    if (!loadingElement || !errorElement || !contentElement) return;
+
+    // Show loading state
+    loadingElement.classList.remove('hidden');
+    errorElement.classList.add('hidden');
+    contentElement.classList.add('hidden');
+
+    try {
+      const response = await this.transparencyService.getTransparencyCalculations({
+        page: 1,
+        per_page: 5,
+        isin: this.isin  // Filter by the specific ISIN
+      });
+
+      if (response.status === 'success' && response.data && response.data.calculations && response.data.calculations.length > 0) {
+        const calculations = response.data.calculations;
+        
+        if (calculations.length > 0) {
+          // Show transparency data
+          contentElement.innerHTML = calculations.map((calc: TransparencyCalculation) => `
+            <div class="border border-gray-200 rounded-lg p-4">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <h4 class="text-sm font-medium text-gray-700">Volume</h4>
+                  <p class="text-lg font-semibold text-blue-600">${calc.volume ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(calc.volume) : 'N/A'}</p>
+                </div>
+                <div>
+                  <h4 class="text-sm font-medium text-gray-700">Transactions</h4>
+                  <p class="text-lg font-semibold text-green-600">${calc.transactions ? new Intl.NumberFormat('en-US').format(calc.transactions) : 'N/A'}</p>
+                </div>
+                <div>
+                  <h4 class="text-sm font-medium text-gray-700">Liquidity</h4>
+                  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${calc.liquidity ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                    ${calc.liquidity ? 'Liquid' : 'Illiquid'}
+                  </span>
+                </div>
+              </div>
+              <div class="mt-4 text-xs text-gray-500">
+                Period: ${new Date(calc.from_date).toLocaleDateString()} - ${new Date(calc.to_date).toLocaleDateString()}
+              </div>
+            </div>
+          `).join('');
+
+          loadingElement.classList.add('hidden');
+          contentElement.classList.remove('hidden');
+        } else {
+          // No data for this specific ISIN
+          loadingElement.classList.add('hidden');
+          errorElement.classList.remove('hidden');
+        }
+      } else {
+        // No transparency data available
+        loadingElement.classList.add('hidden');
+        errorElement.classList.remove('hidden');
+      }
+    } catch (error) {
+      console.error('Error loading transparency data:', error);
+      loadingElement.classList.add('hidden');
+      errorElement.classList.remove('hidden');
     }
   }
 }

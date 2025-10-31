@@ -116,7 +116,7 @@ export class InstrumentService extends BaseApiService {
    * Decode CFI code
    */
   async decodeCfi(cfiCode: string, config?: RequestConfig): Promise<ApiResponse<any>> {
-    return this.get<any>(`/instruments/cfi/${encodeURIComponent(cfiCode)}/decode`, {}, config);
+    return this.get<any>(`/instruments/cfi/${encodeURIComponent(cfiCode)}`, {}, config);
   }
 
   // ===== CONVENIENCE METHODS =====
