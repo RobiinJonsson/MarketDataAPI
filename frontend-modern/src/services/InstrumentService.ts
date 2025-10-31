@@ -217,4 +217,40 @@ export class InstrumentService extends BaseApiService {
     
     return response;
   }
+
+  /**
+   * Create multiple instruments from batch upload
+   */
+  async batchCreateInstruments(instruments: any[], config?: RequestConfig): Promise<ApiResponse<any>> {
+    return this.post<any>('/instruments/batch', {
+      instruments
+    }, {
+      ...config,
+      timeout: 300000, // 5 minutes for batch operations
+    });
+  }
+
+  /**
+   * Map ISINs to Bloomberg FIGIs for unmapped instruments
+   */
+  async batchMapFigi(isins?: string[], config?: RequestConfig): Promise<ApiResponse<any>> {
+    return this.post<any>('/instruments/figi/batch', {
+      isins
+    }, {
+      ...config,
+      timeout: 300000, // 5 minutes for batch operations
+    });
+  }
+
+  /**
+   * Get data coverage statistics
+   */
+  async getDataCoverageStats(config?: RequestConfig): Promise<ApiResponse<{
+    total_instruments: number;
+    entity_coverage: { covered: number; percentage: number };
+    figi_coverage: { covered: number; percentage: number };
+    transparency_coverage: { covered: number; percentage: number };
+  }>> {
+    return this.get<any>('/instruments/stats/coverage', {}, { ...config, cache: true });
+  }
 }

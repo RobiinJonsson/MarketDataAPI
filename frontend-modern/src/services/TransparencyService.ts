@@ -352,4 +352,16 @@ export class TransparencyService extends BaseApiService {
        { method: 'POST', body: JSON.stringify(params) }, 
        config);
   }
+
+  /**
+   * Calculate transparency for instruments without current data
+   */
+  async batchCalculateTransparency(isins?: string[], config?: RequestConfig): Promise<ApiResponse<any>> {
+    return this.post<any>('/transparency/batch', {
+      isins
+    }, {
+      ...config,
+      timeout: 300000, // 5 minutes for batch operations
+    });
+  }
 }

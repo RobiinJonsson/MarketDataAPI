@@ -261,4 +261,14 @@ export class LegalEntityService extends BaseApiService {
       limit,
     }, config);
   }
+
+  /**
+   * Fill missing entity data from GLEIF registry
+   */
+  async batchFillEntityData(config?: RequestConfig): Promise<ApiResponse<any>> {
+    return this.post<any>('/legal-entities/batch/fill', {}, {
+      ...config,
+      timeout: 300000, // 5 minutes for batch operations
+    });
+  }
 }
