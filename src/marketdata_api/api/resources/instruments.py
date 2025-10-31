@@ -563,13 +563,7 @@ def create_instrument_resources(api, models):
 
                 return {
                     ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
-                    ResponseFields.DATA: {
-                        "cfi_code": cfi_code,
-                        "category": cfi.get_category(),
-                        "group": cfi.get_group(),
-                        "attributes": cfi.get_attributes(),
-                        "description": cfi.get_description(),
-                    },
+                    ResponseFields.DATA: cfi.describe(),
                 }
 
             except Exception as e:
@@ -704,18 +698,22 @@ def create_instrument_resources(api, models):
         def post(self):
             """Map ISINs to Bloomberg FIGIs using OpenFIGI API"""
             try:
-                data = request.get_json()
-                isins = data.get("isins", []) if data else []
+                from ...services.sqlite.instrument_service import SqliteInstrumentService
                 
-                # TODO: Implement batch FIGI mapping using OpenFIGI API
+                data = request.get_json()
+                isins = data.get("isins", []) if data else None
+                
+                # Use service layer for business logic
+                instrument_service = SqliteInstrumentService()
+                results = instrument_service.batch_enrich_figi(isins=isins, batch_size=50)
                 
                 return {
                     ResponseFields.STATUS: "success",
-                    ResponseFields.MESSAGE: "FIGI mapping initiated",
-                    "processed": 0,
-                    "mapped": 0,
-                    "failed": 0,
-                    "total": len(isins) if isins else "all_unmapped"
+                    ResponseFields.MESSAGE: f"FIGI mapping completed: {results['mapped']} instruments mapped to FIGIs",
+                    "processed": results["processed"],
+                    "mapped": results["mapped"],
+                    "failed": results["failed"],
+                    "total": results["total"]
                 }, HTTPStatus.OK
 
             except Exception as e:

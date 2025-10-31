@@ -61,6 +61,7 @@ def create_transparency_resources(api, models):
             try:
                 # Get query parameters
                 calculation_type = request.args.get("calculation_type")
+                file_type = request.args.get("file_type")
                 isin = request.args.get("isin")
                 page = request.args.get("page", 1, type=int)
                 per_page = min(request.args.get("per_page", 20, type=int), 100)
@@ -76,8 +77,11 @@ def create_transparency_resources(api, models):
                     query = session.query(TransparencyCalculation)
 
                     # Apply filters - updated for unified transparency model
-                    if calculation_type:
-                        # Map old calculation_type to new file_type patterns
+                    if file_type:
+                        # Direct file_type filtering
+                        query = query.filter(TransparencyCalculation.file_type == file_type)
+                    elif calculation_type:
+                        # Map old calculation_type to new file_type patterns (fallback)
                         if calculation_type.upper() == "EQUITY":
                             query = query.filter(TransparencyCalculation.file_type.like("FULECR_%"))
                         elif calculation_type.upper() == "NON_EQUITY":

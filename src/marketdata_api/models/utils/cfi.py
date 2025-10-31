@@ -564,6 +564,7 @@ class CFI:
             "group": self.group,
             "group_description": self.group_description,
             "attributes": self.attributes,
+            "description": self.get_description(),
             "decoded_attributes": AttributeDecoder.decode_attributes(self.code),
         }
 

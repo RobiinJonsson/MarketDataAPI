@@ -298,20 +298,38 @@ def create_transparency_resources(api, models):
             },
         )
         def post(self):
-            """Calculate transparency for instruments without current data"""
+            """Fill transparency data for instruments without current data"""
             try:
-                data = request.get_json()
-                isins = data.get("isins", []) if data else []
+                # Get service instance
+                from ...services.sqlite.transparency_service import TransparencyService
                 
-                # TODO: Implement batch transparency calculation
+                transparency_service = TransparencyService()
+                
+                # Get optional parameters from request
+                data = request.get_json() if request.is_json else {}
+                limit = data.get("limit") if data else None
+                batch_size = data.get("batch_size", 20) if data else 20  # Increased default for better performance
+                
+                logger.info(f"Starting batch transparency fill with limit={limit}, batch_size={batch_size}")
+                
+                # Call service layer method
+                results = transparency_service.create_transparency_bulk(
+                    limit=limit, 
+                    batch_size=batch_size, 
+                    skip_existing=True
+                )
                 
                 return {
-                    ResponseFields.STATUS: "success",
-                    ResponseFields.MESSAGE: "Batch transparency calculation initiated",
-                    "processed": 0,
-                    "calculated": 0,
-                    "failed": 0,
-                    "total": len(isins) if isins else "all_missing"
+                    ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                    ResponseFields.MESSAGE: "Batch transparency fill completed successfully",
+                    ResponseFields.DATA: {
+                        "total_instruments": results["total_instruments"],
+                        "processed": results["total_processed"],
+                        "created_calculations": results["total_created_calculations"],
+                        "skipped": results["total_skipped"],
+                        "failed": results["total_failed"],
+                        "elapsed_time": results["elapsed_time"]
+                    }
                 }, HTTPStatus.OK
 
             except Exception as e:

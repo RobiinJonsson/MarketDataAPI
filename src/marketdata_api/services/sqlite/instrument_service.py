@@ -1215,6 +1215,183 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             if lei_session:
                 lei_session.close()
 
+    def batch_enrich_figi(self, isins: Optional[List[str]] = None, batch_size: int = 50) -> Dict[str, Any]:
+        """
+        Batch FIGI enrichment for instruments using OpenFIGI API.
+        
+        Finds instruments without FIGI mappings and enriches them using the OpenFIGI batch search.
+        
+        Args:
+            isins: Optional list of specific ISINs to process. If None, processes all unmapped instruments.
+            batch_size: Number of instruments to process in one batch (OpenFIGI API limit consideration)
+            
+        Returns:
+            Dict with statistics: {"processed": int, "mapped": int, "failed": int, "total": int}
+        """
+        from ...models.sqlite.figi import FigiMapping
+        from ..openfigi import OpenFIGIService, map_figi_data
+        
+        processed = 0
+        mapped = 0
+        failed = 0
+        
+        session = SessionLocal()
+        try:
+            # Query for instruments without FIGI mappings
+            if isins:
+                # Process specific ISINs
+                instruments_query = session.query(Instrument).filter(
+                    Instrument.isin.in_(isins),
+                    ~session.query(FigiMapping).filter(
+                        FigiMapping.isin == Instrument.isin
+                    ).exists()
+                ).limit(batch_size)
+            else:
+                # Process all instruments without FIGI mappings
+                instruments_query = session.query(Instrument).filter(
+                    ~session.query(FigiMapping).filter(
+                        FigiMapping.isin == Instrument.isin
+                    ).exists()
+                ).limit(batch_size)
+            
+            instruments = instruments_query.all()
+            total_found = len(instruments)
+            
+            if not instruments:
+                self.logger.info("No instruments found without FIGI mappings")
+                return {"processed": 0, "mapped": 0, "failed": 0, "total": 0}
+            
+            self.logger.info(f"Found {total_found} instruments to process for FIGI mapping")
+            
+            # Prepare batch search requests (ISIN + MIC pairs)
+            search_requests = []
+            instrument_lookup = {}  # Map (isin, mic) -> instrument for later processing
+            
+            for instrument in instruments:
+                # Extract MIC code from relevant_trading_venue or firds_data
+                mic_code = self._extract_mic_for_figi_search(instrument)
+                search_requests.append((instrument.isin, mic_code))
+                instrument_lookup[(instrument.isin, mic_code)] = instrument
+                processed += 1
+            
+            # Use OpenFIGI batch search with rate limiting
+            openfigi_service = OpenFIGIService()
+            self.logger.info(f"Starting batch FIGI search for {len(search_requests)} instruments")
+            
+            # Process in chunks to respect API limits
+            chunk_size = min(10, len(search_requests))  # OpenFIGI supports up to 100, but be conservative
+            total_chunks = (len(search_requests) + chunk_size - 1) // chunk_size
+            
+            for i in range(0, len(search_requests), chunk_size):
+                chunk = search_requests[i:i + chunk_size]
+                chunk_num = i // chunk_size + 1
+                self.logger.info(f"Processing chunk {chunk_num}/{total_chunks}: {len(chunk)} instruments")
+                
+                try:
+                    # batch_search returns List[Tuple[str, str, List[OpenFIGISearchResult], str]]
+                    batch_results = openfigi_service.batch_search(chunk, rate_limit_delay=2.0)
+                    
+                    for idx, (isin, mic_code, figi_results, strategy) in enumerate(batch_results):
+                        instrument = instrument_lookup.get((isin, mic_code))
+                        if not instrument:
+                            continue
+                        
+                        # Log progress within chunk
+                        current_position = (chunk_num - 1) * chunk_size + idx + 1
+                        self.logger.debug(f"Processing instrument {current_position}/{len(search_requests)}: {isin}")
+                            
+                        if figi_results:
+                            try:
+                                # Convert OpenFIGISearchResult objects to dict format for map_figi_data
+                                figi_data_list = []
+                                for result in figi_results:
+                                    figi_data_list.append({
+                                        "figi": result.figi,
+                                        "name": result.name,
+                                        "ticker": result.ticker,
+                                        "exchCode": result.exch_code,
+                                        "securityType": result.security_type,
+                                        "marketSector": result.market_sector,
+                                        "compositeFIGI": result.composite_figi,
+                                        "shareClassFIGI": result.share_class_figi,
+                                        "currency": result.currency,
+                                        "securityDescription": result.security_description,
+                                        "searchStrategy": result.search_strategy
+                                    })
+                                
+                                # Create FIGI mappings using existing function
+                                figi_mappings = map_figi_data(figi_data_list, isin)
+                                
+                                if figi_mappings:
+                                    # Check for existing FIGIs and only add new ones
+                                    new_mappings = []
+                                    for figi_mapping in figi_mappings:
+                                        existing_figi = session.query(FigiMapping).filter(
+                                            FigiMapping.figi == figi_mapping.figi
+                                        ).first()
+                                        
+                                        if not existing_figi:
+                                            new_mappings.append(figi_mapping)
+                                            session.add(figi_mapping)
+                                    
+                                    if new_mappings:
+                                        mapped += 1
+                                        self.logger.info(f"Created {len(new_mappings)} new FIGI mapping(s) for {isin} using {strategy} (skipped {len(figi_mappings) - len(new_mappings)} duplicates)")
+                                    else:
+                                        self.logger.info(f"All FIGI mappings for {isin} already exist, skipped")
+                                else:
+                                    self.logger.warning(f"Failed to create FIGI mappings for {isin}")
+                                    failed += 1
+                                    
+                            except Exception as e:
+                                self.logger.error(f"Error processing FIGI results for {isin}: {str(e)}")
+                                failed += 1
+                        else:
+                            self.logger.debug(f"No FIGI results found for {isin} with MIC {mic_code}")
+                            failed += 1
+                            
+                except Exception as e:
+                    self.logger.error(f"Error in batch FIGI search for chunk: {str(e)}")
+                    failed += len(chunk)
+            
+            # Commit all changes
+            session.commit()
+            self.logger.info(f"Batch FIGI enrichment completed: {processed} processed, {mapped} mapped, {failed} failed")
+            
+            return {
+                "processed": processed,
+                "mapped": mapped, 
+                "failed": failed,
+                "total": total_found
+            }
+            
+        except Exception as e:
+            session.rollback()
+            self.logger.error(f"Error in batch FIGI enrichment: {str(e)}")
+            raise InstrumentServiceError(f"Batch FIGI enrichment failed: {str(e)}")
+        finally:
+            session.close()
+    
+    def _extract_mic_for_figi_search(self, instrument: Instrument) -> str:
+        """Extract MIC code for FIGI search from instrument data."""
+        # Try relevant_trading_venue first
+        if instrument.relevant_trading_venue:
+            return instrument.relevant_trading_venue
+            
+        # Try to extract from firds_data
+        if instrument.firds_data and isinstance(instrument.firds_data, dict):
+            mic_code = (
+                instrument.firds_data.get('TechAttrbts_RlvntTradgVn') or
+                instrument.firds_data.get('relevant_trading_venue') or
+                instrument.firds_data.get('mic_code') or
+                instrument.firds_data.get('MIC')
+            )
+            if mic_code:
+                return mic_code
+        
+        # Default to empty string (will trigger broad FIGI search)
+        return ""
+
     # Implement required interface methods for backward compatibility
     def get_instruments(
         self, limit: int = 100, offset: int = 0, instrument_type: Optional[str] = None

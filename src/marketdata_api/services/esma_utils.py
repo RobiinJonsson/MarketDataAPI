@@ -536,3 +536,368 @@ class QueryUrl:
         "https://api.data.fca.org.uk/fca_data_firds_files?q=((file_type:FULINS)"
         "%20AND%20(publication_date:[{creation_date_from}%20TO%20{creation_date_to}]))&from=0&size={limit}"
     )
+
+
+class BatchDataExtractor:
+    """
+    High-performance batch data extraction utility for ESMA FIRDS/FITRS files.
+    
+    Creates consolidated in-memory DataFrames per asset type to eliminate redundant file I/O
+    operations during batch processing. Optimized for bulk operations on large datasets.
+    """
+    
+    def __init__(self, logger: logging.Logger = None):
+        self.logger = logger or logging.getLogger(__name__)
+        self._consolidated_cache = {}  # Cache for consolidated DataFrames
+    
+    @staticmethod
+    def get_firds_consolidated_dataframe(
+        asset_type: str, 
+        data_directory: str = None,
+        logger: logging.Logger = None
+    ) -> pd.DataFrame:
+        """
+        Create a consolidated DataFrame for all FIRDS files of a specific asset type.
+        
+        This function reads all FIRDS CSV files matching the asset type pattern,
+        combines them into a single DataFrame, and returns it for batch processing.
+        
+        Args:
+            asset_type: CFI first character (C, D, E, F, H, I, J, O, R, S)
+            data_directory: Path to FIRDS data directory (defaults to config path)
+            logger: Logger instance for progress tracking
+            
+        Returns:
+            pd.DataFrame: Consolidated DataFrame containing all records for the asset type
+            
+        Example:
+            # Get all equity (E) instruments in one DataFrame
+            equity_df = BatchDataExtractor.get_firds_consolidated_dataframe('E')
+            target_isins = ['GB00B1YW4409', 'US0378331005']
+            matches = equity_df[equity_df['ISIN'].isin(target_isins)]
+        """
+        if logger is None:
+            logger = logging.getLogger(__name__)
+            
+        if data_directory is None:
+            from ..config import Config
+            data_directory = os.path.join(Config.ROOT_PATH, "data", "downloads", "firds")
+        
+        if not os.path.exists(data_directory):
+            logger.warning(f"FIRDS directory not found: {data_directory}")
+            return pd.DataFrame()
+        
+        # Get all FIRDS files for this asset type
+        # FIRDS format: FULINS_{letter}_{date}_{part}.csv
+        pattern = rf"FULINS_{asset_type.upper()}_\d{{8}}_\d+of\d+\.csv"
+        
+        matching_files = []
+        for filename in os.listdir(data_directory):
+            if re.match(pattern, filename):
+                matching_files.append(filename)
+        
+        if not matching_files:
+            logger.info(f"No FIRDS files found for asset type {asset_type}")
+            return pd.DataFrame()
+        
+        logger.info(f"🔄 Consolidating {len(matching_files)} FIRDS files for asset type {asset_type}")
+        
+        consolidated_dfs = []
+        for filename in sorted(matching_files):
+            filepath = os.path.join(data_directory, filename)
+            try:
+                df = pd.read_csv(filepath, dtype=str, low_memory=False)
+                if not df.empty:
+                    df['source_file'] = filename  # Track source for debugging
+                    consolidated_dfs.append(df)
+                    logger.debug(f"   📁 Loaded {len(df)} records from {filename}")
+            except Exception as e:
+                logger.warning(f"Failed to read FIRDS file {filename}: {str(e)}")
+                continue
+        
+        if not consolidated_dfs:
+            logger.warning(f"No valid FIRDS data found for asset type {asset_type}")
+            return pd.DataFrame()
+        
+        # Combine all DataFrames
+        consolidated_df = pd.concat(consolidated_dfs, ignore_index=True)
+        
+        # Remove duplicates based on ISIN (keep most recent)
+        if 'ISIN' in consolidated_df.columns:
+            initial_count = len(consolidated_df)
+            consolidated_df = consolidated_df.drop_duplicates(subset=['ISIN'], keep='last')
+            final_count = len(consolidated_df)
+            if initial_count != final_count:
+                logger.info(f"   🔧 Removed {initial_count - final_count} duplicate ISINs")
+        
+        logger.info(f"✅ Consolidated FIRDS data: {len(consolidated_df)} unique records for asset type {asset_type}")
+        return consolidated_df
+    
+    @staticmethod
+    def get_fitrs_consolidated_dataframe(
+        asset_type: str, 
+        data_directory: str = None,
+        logger: logging.Logger = None
+    ) -> pd.DataFrame:
+        """
+        Create a consolidated DataFrame for all FITRS files of a specific asset type.
+        
+        This function reads all FITRS CSV files matching the asset type pattern,
+        combines them into a single DataFrame for efficient batch transparency processing.
+        
+        Args:
+            asset_type: CFI first character (C, D, E, F, H, I, J, O, R, S)
+            data_directory: Path to FITRS data directory (defaults to config path)
+            logger: Logger instance for progress tracking
+            
+        Returns:
+            pd.DataFrame: Consolidated DataFrame containing all transparency records
+            
+        Example:
+            # Get all debt (D) transparency data in one DataFrame
+            debt_df = BatchDataExtractor.get_fitrs_consolidated_dataframe('D')
+            target_isins = ['XS1234567890', 'US912828XY12']
+            matches = debt_df[debt_df['ISIN'].isin(target_isins)]
+        """
+        if logger is None:
+            logger = logging.getLogger(__name__)
+            
+        if data_directory is None:
+            from ..config import Config
+            data_directory = os.path.join(Config.ROOT_PATH, "data", "downloads", "fitrs")
+        
+        if not os.path.exists(data_directory):
+            logger.warning(f"FITRS directory not found: {data_directory}")
+            return pd.DataFrame()
+        
+        # Get all FITRS files for this asset type
+        # FITRS format: FUL{ECR|NCR}_{date}_{letter}_{part}_fitrs_data.csv
+        pattern = rf"FUL(ECR|NCR)_\d{{8}}_{asset_type.upper()}_\d+of\d+_fitrs_data\.csv"
+        
+        matching_files = []
+        for filename in os.listdir(data_directory):
+            if re.match(pattern, filename):
+                matching_files.append(filename)
+        
+        if not matching_files:
+            logger.info(f"No FITRS files found for asset type {asset_type}")
+            return pd.DataFrame()
+        
+        logger.info(f"🔄 Consolidating {len(matching_files)} FITRS files for asset type {asset_type}")
+        
+        consolidated_dfs = []
+        for filename in sorted(matching_files):
+            filepath = os.path.join(data_directory, filename)
+            try:
+                df = pd.read_csv(filepath, dtype=str, low_memory=False)
+                if not df.empty:
+                    df['source_file'] = filename  # Track source for debugging
+                    consolidated_dfs.append(df)
+                    logger.debug(f"   📁 Loaded {len(df)} records from {filename}")
+            except Exception as e:
+                logger.warning(f"Failed to read FITRS file {filename}: {str(e)}")
+                continue
+        
+        if not consolidated_dfs:
+            logger.warning(f"No valid FITRS data found for asset type {asset_type}")
+            return pd.DataFrame()
+        
+        # Combine all DataFrames
+        consolidated_df = pd.concat(consolidated_dfs, ignore_index=True)
+        
+        logger.info(f"✅ Consolidated FITRS data: {len(consolidated_df)} records for asset type {asset_type}")
+        return consolidated_df
+    
+    @staticmethod
+    def batch_extract_firds_data(
+        isin_list: list,
+        asset_type_mapping: dict = None,
+        data_directory: str = None,
+        logger: logging.Logger = None
+    ) -> dict:
+        """
+        Extract FIRDS data for multiple ISINs in an optimized batch operation.
+        
+        Groups ISINs by asset type, creates consolidated DataFrames per type,
+        and extracts all matching records in a single pass per asset type.
+        
+        Args:
+            isin_list: List of ISINs to extract data for
+            asset_type_mapping: Optional mapping of ISIN -> asset_type to avoid lookups
+            data_directory: Path to FIRDS data directory
+            logger: Logger instance
+            
+        Returns:
+            dict: {
+                'results': {isin: [matching_records]},
+                'statistics': {asset_type: count},
+                'total_found': int,
+                'total_searched': int
+            }
+        """
+        if logger is None:
+            logger = logging.getLogger(__name__)
+            
+        results = {}
+        statistics = {}
+        total_found = 0
+        
+        logger.info(f"🚀 Starting batch FIRDS extraction for {len(isin_list)} ISINs")
+        
+        # Group ISINs by asset type if mapping provided, otherwise try all types
+        if asset_type_mapping:
+            isin_groups = {}
+            for isin in isin_list:
+                asset_type = asset_type_mapping.get(isin, 'E')  # Default to equity
+                if asset_type not in isin_groups:
+                    isin_groups[asset_type] = []
+                isin_groups[asset_type].append(isin)
+        else:
+            # Try all common asset types if no mapping provided
+            asset_types_to_try = ['C', 'D', 'E', 'F', 'H', 'I', 'J', 'O', 'R', 'S']
+            isin_groups = {asset_type: isin_list for asset_type in asset_types_to_try}
+        
+        # Process each asset type group
+        for asset_type, group_isins in isin_groups.items():
+            if not group_isins:
+                continue
+                
+            logger.info(f"🔍 Processing asset type {asset_type} ({len(group_isins)} ISINs)")
+            
+            # Get consolidated DataFrame for this asset type
+            consolidated_df = BatchDataExtractor.get_firds_consolidated_dataframe(
+                asset_type, data_directory, logger
+            )
+            
+            if consolidated_df.empty:
+                statistics[asset_type] = 0
+                continue
+            
+            # Extract matching records
+            matches = consolidated_df[consolidated_df['ISIN'].isin(group_isins)]
+            found_count = len(matches)
+            
+            if found_count > 0:
+                # Group matches by ISIN
+                for isin in matches['ISIN'].unique():
+                    isin_matches = matches[matches['ISIN'] == isin]
+                    if isin not in results:
+                        results[isin] = []
+                    results[isin].extend(isin_matches.to_dict('records'))
+                
+                total_found += found_count
+                logger.info(f"   ✅ Found {found_count} records for asset type {asset_type}")
+            
+            statistics[asset_type] = found_count
+        
+        logger.info(f"🎉 Batch FIRDS extraction completed: {total_found} records found for {len(results)} ISINs")
+        
+        return {
+            'results': results,
+            'statistics': statistics,
+            'total_found': total_found,
+            'total_searched': len(isin_list)
+        }
+    
+    @staticmethod
+    def batch_extract_fitrs_data(
+        isin_list: list,
+        asset_type_mapping: dict = None,
+        data_directory: str = None,
+        logger: logging.Logger = None
+    ) -> dict:
+        """
+        Extract FITRS transparency data for multiple ISINs in an optimized batch operation.
+        
+        Groups ISINs by asset type, creates consolidated DataFrames per type,
+        and extracts all matching transparency records in a single pass per asset type.
+        
+        Args:
+            isin_list: List of ISINs to extract transparency data for
+            asset_type_mapping: Optional mapping of ISIN -> asset_type to avoid lookups
+            data_directory: Path to FITRS data directory
+            logger: Logger instance
+            
+        Returns:
+            dict: {
+                'results': {isin: [matching_transparency_records]},
+                'statistics': {asset_type: count},
+                'total_found': int,
+                'total_searched': int
+            }
+        """
+        if logger is None:
+            logger = logging.getLogger(__name__)
+            
+        results = {}
+        statistics = {}
+        total_found = 0
+        
+        logger.info(f"🚀 Starting batch FITRS extraction for {len(isin_list)} ISINs")
+        
+        # Group ISINs by asset type if mapping provided, otherwise try all types
+        if asset_type_mapping:
+            isin_groups = {}
+            for isin in isin_list:
+                asset_type = asset_type_mapping.get(isin, 'E')  # Default to equity
+                if asset_type not in isin_groups:
+                    isin_groups[asset_type] = []
+                isin_groups[asset_type].append(isin)
+        else:
+            # Try all common asset types if no mapping provided
+            asset_types_to_try = ['C', 'D', 'E', 'F', 'H', 'I', 'J', 'O', 'R', 'S']
+            isin_groups = {asset_type: isin_list for asset_type in asset_types_to_try}
+        
+        # Process each asset type group
+        for asset_type, group_isins in isin_groups.items():
+            if not group_isins:
+                continue
+                
+            logger.info(f"🔍 Processing asset type {asset_type} ({len(group_isins)} ISINs)")
+            
+            # Get consolidated DataFrame for this asset type
+            consolidated_df = BatchDataExtractor.get_fitrs_consolidated_dataframe(
+                asset_type, data_directory, logger
+            )
+            
+            if consolidated_df.empty:
+                statistics[asset_type] = 0
+                continue
+            
+            # Search in both ISIN and Id columns (FULECR uses 'Id')
+            matches = pd.DataFrame()
+            
+            if 'ISIN' in consolidated_df.columns:
+                isin_matches = consolidated_df[consolidated_df['ISIN'].isin(group_isins)]
+                matches = pd.concat([matches, isin_matches], ignore_index=True)
+            
+            if 'Id' in consolidated_df.columns:
+                id_matches = consolidated_df[consolidated_df['Id'].isin(group_isins)]
+                matches = pd.concat([matches, id_matches], ignore_index=True)
+            
+            # Remove duplicates
+            matches = matches.drop_duplicates()
+            found_count = len(matches)
+            
+            if found_count > 0:
+                # Group matches by ISIN (handle both ISIN and Id columns)
+                for _, row in matches.iterrows():
+                    isin = row.get('ISIN') or row.get('Id')
+                    if isin and isin in group_isins:
+                        if isin not in results:
+                            results[isin] = []
+                        results[isin].append(row.to_dict())
+                
+                total_found += found_count
+                logger.info(f"   ✅ Found {found_count} transparency records for asset type {asset_type}")
+            
+            statistics[asset_type] = found_count
+        
+        logger.info(f"🎉 Batch FITRS extraction completed: {total_found} records found for {len(results)} ISINs")
+        
+        return {
+            'results': results,
+            'statistics': statistics,
+            'total_found': total_found,
+            'total_searched': len(isin_list)
+        }

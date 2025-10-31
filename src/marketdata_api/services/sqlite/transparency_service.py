@@ -732,6 +732,11 @@ class TransparencyService(TransparencyServiceInterface):
     ) -> Dict[str, Any]:
         """
         Create transparency calculations in bulk for instruments that don't have them yet.
+        
+        Smart processing optimizations:
+        - Groups instruments by asset type (CFI code) to minimize file switching
+        - Loads each FITRS file only once per asset type
+        - Processes all instruments of same type together for maximum efficiency
 
         Args:
             limit: Maximum number of instruments to process (None = no limit)
@@ -750,12 +755,12 @@ class TransparencyService(TransparencyServiceInterface):
             "total_failed": 0,
             "failed_instruments": [],
             "successful_instruments": [],
-            "batch_results": [],
+            "asset_type_results": [],
             "elapsed_time": 0,
         }
 
         try:
-            self.logger.info(f"🚀 Starting bulk transparency creation")
+            self.logger.info(f"🚀 Starting smart bulk transparency creation")
             self.logger.info(f"   Limit: {limit or 'No limit'}")
             self.logger.info(f"   Skip existing: {skip_existing}")
             self.logger.info(f"   Batch size: {batch_size}")
@@ -774,37 +779,39 @@ class TransparencyService(TransparencyServiceInterface):
                 f"📊 Found {len(instruments_to_process)} instruments needing transparency calculations"
             )
 
-            # Process in batches
-            total_batches = (len(instruments_to_process) + batch_size - 1) // batch_size
+            # SMART OPTIMIZATION: Group instruments by asset type for efficient file processing
+            instruments_by_asset_type = self._group_instruments_by_asset_type(instruments_to_process)
+            
+            self.logger.info(f"🎯 Smart grouping: {len(instruments_by_asset_type)} asset types found")
+            for asset_type, count in [(t, len(instrs)) for t, instrs in instruments_by_asset_type.items()]:
+                self.logger.info(f"   📂 {asset_type}: {count} instruments")
 
-            for batch_idx in range(total_batches):
-                batch_start_idx = batch_idx * batch_size
-                batch_end_idx = min(batch_start_idx + batch_size, len(instruments_to_process))
-                batch_instruments = instruments_to_process[batch_start_idx:batch_end_idx]
-
-                batch_start_time = time.time()
-                self.logger.info(
-                    f"🔄 Processing batch {batch_idx + 1}/{total_batches} ({len(batch_instruments)} instruments)"
-                )
-
-                batch_result = self._process_transparency_batch(batch_instruments)
-
+            # Process each asset type group efficiently
+            for asset_type, type_instruments in instruments_by_asset_type.items():
+                type_start_time = time.time()
+                self.logger.info(f"� Processing asset type '{asset_type}' ({len(type_instruments)} instruments)")
+                
+                # Process this asset type with optimized file handling
+                type_result = self._process_asset_type_batch(asset_type, type_instruments, batch_size)
+                
                 # Update overall results
-                results["total_processed"] += batch_result["processed"]
-                results["total_created_calculations"] += batch_result["created_calculations"]
-                results["total_skipped"] += batch_result["skipped"]
-                results["total_failed"] += batch_result["failed"]
-                results["failed_instruments"].extend(batch_result["failed_instruments"])
-                results["successful_instruments"].extend(batch_result["successful_instruments"])
-
-                batch_elapsed = time.time() - batch_start_time
-                batch_result["elapsed_time"] = batch_elapsed
-                results["batch_results"].append(batch_result)
-
+                results["total_processed"] += type_result["processed"]
+                results["total_created_calculations"] += type_result["created_calculations"]
+                results["total_skipped"] += type_result["skipped"]
+                results["total_failed"] += type_result["failed"]
+                results["failed_instruments"].extend(type_result["failed_instruments"])
+                results["successful_instruments"].extend(type_result["successful_instruments"])
+                
+                type_elapsed = time.time() - type_start_time
+                type_result["elapsed_time"] = type_elapsed
+                type_result["asset_type"] = asset_type
+                results["asset_type_results"].append(type_result)
+                
                 self.logger.info(
-                    f"✅ Batch {batch_idx + 1} completed: {batch_result['created_calculations']} calculations created, {batch_result['failed']} failed ({batch_elapsed:.1f}s)"
+                    f"✅ Asset type '{asset_type}' completed: {type_result['created_calculations']} calculations, "
+                    f"{type_result['failed']} failed ({type_elapsed:.1f}s)"
                 )
-
+                
                 # Progress update
                 progress_pct = (results["total_processed"] / len(instruments_to_process)) * 100
                 self.logger.info(
@@ -814,7 +821,7 @@ class TransparencyService(TransparencyServiceInterface):
             results["elapsed_time"] = time.time() - start_time
 
             # Final summary
-            self.logger.info(f"🎉 Bulk transparency creation completed!")
+            self.logger.info(f"🎉 Smart bulk transparency creation completed!")
             self.logger.info(f"   Total instruments: {results['total_instruments']}")
             self.logger.info(f"   Total processed: {results['total_processed']}")
             self.logger.info(
@@ -822,13 +829,20 @@ class TransparencyService(TransparencyServiceInterface):
             )
             self.logger.info(f"   Total failed: {results['total_failed']}")
             self.logger.info(f"   Total time: {results['elapsed_time']:.1f}s")
+            
+            # Asset type breakdown
+            for type_result in results["asset_type_results"]:
+                self.logger.info(
+                    f"     {type_result['asset_type']}: {type_result['created_calculations']} calculations "
+                    f"({type_result['elapsed_time']:.1f}s)"
+                )
 
             return results
 
         except Exception as e:
             results["elapsed_time"] = time.time() - start_time
-            self.logger.error(f"💥 Bulk transparency creation failed: {str(e)}")
-            raise TransparencyServiceError(f"Bulk transparency creation failed: {str(e)}") from e
+            self.logger.error(f"💥 Smart bulk transparency creation failed: {str(e)}")
+            raise TransparencyServiceError(f"Smart bulk transparency creation failed: {str(e)}") from e
 
     def _get_instruments_without_transparency(
         self, limit: Optional[int] = None, skip_existing: bool = True
@@ -870,8 +884,138 @@ class TransparencyService(TransparencyServiceInterface):
         finally:
             session.close()
 
+    def _group_instruments_by_asset_type(self, instruments: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Group instruments by asset type using CFI codes for optimal FITRS file processing.
+        
+        This ensures each FITRS file type is processed only once with all relevant instruments.
+        """
+        from collections import defaultdict
+        
+        grouped = defaultdict(list)
+        
+        for instrument in instruments:
+            cfi_code = instrument.get("cfi_code")
+            
+            if cfi_code and len(cfi_code) >= 1:
+                # Use CFI first character as asset type
+                asset_type = cfi_code[0].upper()
+            else:
+                # Fallback to instrument_type mapping
+                instrument_type = instrument.get("instrument_type", "").lower()
+                if "debt" in instrument_type or "bond" in instrument_type:
+                    asset_type = "D"
+                elif "equity" in instrument_type or "share" in instrument_type:
+                    asset_type = "E"
+                elif "collective" in instrument_type or "fund" in instrument_type:
+                    asset_type = "C"
+                elif "future" in instrument_type:
+                    asset_type = "F"
+                else:
+                    asset_type = "C"  # Default to collective investment
+            
+            grouped[asset_type].append(instrument)
+        
+        return dict(grouped)
+
+    def _process_asset_type_batch(
+        self, asset_type: str, instruments: List[Dict[str, Any]], batch_size: int
+    ) -> Dict[str, Any]:
+        """
+        Process all instruments of a specific asset type using optimized batch extraction.
+        
+        Uses the new BatchDataExtractor from esma_utils for maximum performance.
+        Loads FITRS files once per asset type and processes all ISINs in memory.
+        """
+        from ..esma_utils import BatchDataExtractor
+        
+        type_result = {
+            "processed": 0,
+            "created_calculations": 0,
+            "skipped": 0,
+            "failed": 0,
+            "failed_instruments": [],
+            "successful_instruments": [],
+        }
+        
+        # Extract ISINs for this asset type
+        target_isins = [instr["isin"] for instr in instruments]
+        
+        self.logger.info(f"🚀 Using optimized batch extraction for {len(target_isins)} ISINs of type {asset_type}")
+        
+        try:
+            # Use the new optimized batch extractor
+            batch_results = BatchDataExtractor.batch_extract_fitrs_data(
+                isin_list=target_isins,
+                asset_type_mapping={isin: asset_type for isin in target_isins},
+                logger=self.logger
+            )
+            
+            found_results = batch_results.get('results', {})
+            
+            # Process each instrument
+            for instrument in instruments:
+                isin = instrument["isin"]
+                type_result["processed"] += 1
+                
+                if isin in found_results:
+                    transparency_records = found_results[isin]
+                    calculations_created = 0
+                    
+                    # Create transparency calculations for each found record
+                    for record_data in transparency_records:
+                        try:
+                            # Get source filename for tracking
+                            source_filename = record_data.get('source_file', f"batch_extracted_{asset_type}")
+                            
+                            # Create transparency calculation
+                            calc = self.create_transparency_calculation(
+                                data=record_data, 
+                                source_filename=source_filename
+                            )
+                            
+                            if calc:
+                                calculations_created += 1
+                                
+                        except Exception as e:
+                            self.logger.warning(f"Failed to create calculation for {isin}: {str(e)}")
+                            continue
+                    
+                    if calculations_created > 0:
+                        type_result["created_calculations"] += calculations_created
+                        type_result["successful_instruments"].append({
+                            "isin": isin, 
+                            "calculations_created": calculations_created
+                        })
+                        self.logger.debug(f"   ✅ Created {calculations_created} calculations for {isin}")
+                    else:
+                        type_result["skipped"] += 1
+                        self.logger.debug(f"   ⚪ Found records but failed to create calculations for {isin}")
+                        
+                else:
+                    type_result["skipped"] += 1
+                    self.logger.debug(f"   ⚪ No transparency data found for {isin}")
+            
+            # Log batch statistics
+            batch_stats = batch_results.get('statistics', {})
+            self.logger.info(
+                f"� Asset type {asset_type} batch results: "
+                f"{type_result['created_calculations']} calculations, "
+                f"{batch_results.get('total_found', 0)} raw records found"
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Batch extraction failed for asset type {asset_type}: {str(e)}")
+            # Fall back to individual processing
+            self.logger.info(f"🔄 Falling back to individual processing for asset type {asset_type}")
+            return self._process_transparency_batch(instruments)
+        
+        return type_result
+
+
+
     def _process_transparency_batch(self, instruments: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Process a batch of instruments for transparency creation."""
+        """Process a batch of instruments for transparency creation (legacy method)."""
         batch_result = {
             "processed": 0,
             "created_calculations": 0,
