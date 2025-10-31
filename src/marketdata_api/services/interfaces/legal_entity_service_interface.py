@@ -33,3 +33,8 @@ class LegalEntityServiceInterface(ABC):
     def delete_entity(self, lei: str) -> bool:
         """Delete a legal entity."""
         pass
+
+    @abstractmethod
+    def batch_fill_entity_data(self, batch_size: int = 100) -> Dict[str, Any]:
+        """Fill missing entity data for instruments with LEI information from GLEIF."""
+        pass

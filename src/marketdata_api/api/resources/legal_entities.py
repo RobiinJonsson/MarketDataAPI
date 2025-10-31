@@ -188,4 +188,40 @@ def create_legal_entity_resources(api, models):
                     },
                 }, HTTPStatus.INTERNAL_SERVER_ERROR
 
+    @legal_entities_ns.route("/batch/fill")
+    class BatchEntityFill(Resource):
+        @legal_entities_ns.doc(
+            description="Fill missing entity data from GLEIF registry",
+            responses={
+                HTTPStatus.OK: ("Success", common_models["success_model"]),
+                HTTPStatus.INTERNAL_SERVER_ERROR: ("Server Error", common_models["error_model"]),
+            },
+        )
+        def post(self):
+            """Fill missing entity data for all incomplete records"""
+            try:
+                from ...services.sqlite.legal_entity_service import LegalEntityService
+                
+                # Use service layer for business logic
+                entity_service = LegalEntityService()
+                results = entity_service.batch_fill_entity_data(batch_size=100)
+                
+                return {
+                    ResponseFields.STATUS: "success",
+                    ResponseFields.MESSAGE: f"Entity data fill completed: {results['updated']} instruments linked to entities",
+                    "scanned": results["scanned"],
+                    "updated": results["updated"],
+                    "failed": results["failed"]
+                }, HTTPStatus.OK
+
+            except Exception as e:
+                logger.error(f"Error in batch entity fill: {str(e)}")
+                return {
+                    ResponseFields.STATUS: "error",
+                    ResponseFields.ERROR: {
+                        "code": str(HTTPStatus.INTERNAL_SERVER_ERROR),
+                        ResponseFields.MESSAGE: str(e),
+                    },
+                }, HTTPStatus.INTERNAL_SERVER_ERROR
+
     return legal_entities_ns

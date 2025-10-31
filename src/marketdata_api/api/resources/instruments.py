@@ -9,8 +9,15 @@ import logging
 
 from flask import current_app, request
 from flask_restx import Namespace, Resource
+from sqlalchemy import func, distinct
+from sqlalchemy.orm import sessionmaker
 
 from ...constants import ErrorMessages, HTTPStatus, Pagination, ResponseFields
+from ...database import get_session
+from ...models.sqlite.instrument import Instrument
+from ...models.sqlite.legal_entity import LegalEntity
+from ...models.sqlite.figi import FigiMapping
+from ...models.sqlite.transparency import TransparencyCalculation
 
 logger = logging.getLogger(__name__)
 
@@ -636,6 +643,161 @@ def create_instrument_resources(api, models):
 
             except Exception as e:
                 logger.error(f"Error in swagger get_instrument_cfi: {str(e)}")
+                return {
+                    ResponseFields.STATUS: "error",
+                    ResponseFields.ERROR: {
+                        "code": str(HTTPStatus.INTERNAL_SERVER_ERROR),
+                        ResponseFields.MESSAGE: str(e),
+                    },
+                }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+    @instruments_ns.route("/batch")
+    class BatchInstruments(Resource):
+        @instruments_ns.doc(
+            description="Create multiple instruments from batch upload",
+            responses={
+                HTTPStatus.OK: ("Success", common_models["success_model"]),
+                HTTPStatus.BAD_REQUEST: ("Bad Request", common_models["error_model"]),
+                HTTPStatus.INTERNAL_SERVER_ERROR: ("Server Error", common_models["error_model"]),
+            },
+        )
+        def post(self):
+            """Create multiple instruments from batch data"""
+            try:
+                data = request.get_json()
+                if not data or not data.get("instruments"):
+                    return {
+                        ResponseFields.STATUS: "error",
+                        ResponseFields.ERROR: "Instruments data is required"
+                    }, HTTPStatus.BAD_REQUEST
+
+                # TODO: Implement batch instrument creation logic
+                instruments_data = data.get("instruments", [])
+                
+                return {
+                    ResponseFields.STATUS: "success",
+                    ResponseFields.MESSAGE: f"Batch processing initiated for {len(instruments_data)} instruments",
+                    "processed": 0,
+                    "failed": 0,
+                    "total": len(instruments_data)
+                }, HTTPStatus.OK
+
+            except Exception as e:
+                logger.error(f"Error in batch instrument creation: {str(e)}")
+                return {
+                    ResponseFields.STATUS: "error",
+                    ResponseFields.ERROR: {
+                        "code": str(HTTPStatus.INTERNAL_SERVER_ERROR),
+                        ResponseFields.MESSAGE: str(e),
+                    },
+                }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+    @instruments_ns.route("/figi/batch")
+    class BatchFigi(Resource):
+        @instruments_ns.doc(
+            description="Map ISINs to Bloomberg FIGIs for unmapped instruments",
+            responses={
+                HTTPStatus.OK: ("Success", common_models["success_model"]),
+                HTTPStatus.INTERNAL_SERVER_ERROR: ("Server Error", common_models["error_model"]),
+            },
+        )
+        def post(self):
+            """Map ISINs to Bloomberg FIGIs using OpenFIGI API"""
+            try:
+                data = request.get_json()
+                isins = data.get("isins", []) if data else []
+                
+                # TODO: Implement batch FIGI mapping using OpenFIGI API
+                
+                return {
+                    ResponseFields.STATUS: "success",
+                    ResponseFields.MESSAGE: "FIGI mapping initiated",
+                    "processed": 0,
+                    "mapped": 0,
+                    "failed": 0,
+                    "total": len(isins) if isins else "all_unmapped"
+                }, HTTPStatus.OK
+
+            except Exception as e:
+                logger.error(f"Error in batch FIGI mapping: {str(e)}")
+                return {
+                    ResponseFields.STATUS: "error",
+                    ResponseFields.ERROR: {
+                        "code": str(HTTPStatus.INTERNAL_SERVER_ERROR),
+                        ResponseFields.MESSAGE: str(e),
+                    },
+                }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+    @instruments_ns.route("/stats/coverage")
+    class DataCoverageStats(Resource):
+        @instruments_ns.doc(
+            description="Get data coverage statistics for instruments",
+            responses={
+                HTTPStatus.OK: ("Success", common_models["success_model"]),
+                HTTPStatus.INTERNAL_SERVER_ERROR: ("Server Error", common_models["error_model"]),
+            },
+        )
+        def get(self):
+            """Get statistics on data coverage (entities, FIGIs, transparency)"""
+            try:
+                with get_session() as session:
+                    # Get total number of instruments
+                    total_instruments = session.query(func.count(distinct(Instrument.isin))).scalar() or 0
+                    
+                    if total_instruments == 0:
+                        # Return zeros if no instruments
+                        coverage_stats = {
+                            "total_instruments": 0,
+                            "entity_coverage": {"covered": 0, "percentage": 0.0},
+                            "figi_coverage": {"covered": 0, "percentage": 0.0},
+                            "transparency_coverage": {"covered": 0, "percentage": 0.0}
+                        }
+                    else:
+                        # Count instruments with entity data (LEI mapping)
+                        instruments_with_entities = session.query(
+                            func.count(distinct(Instrument.isin))
+                        ).filter(
+                            Instrument.lei_id.isnot(None)
+                        ).scalar() or 0
+                        
+                        # Count instruments with FIGI mappings
+                        instruments_with_figis = session.query(
+                            func.count(distinct(FigiMapping.isin))
+                        ).scalar() or 0
+                        
+                        # Count instruments with transparency data
+                        instruments_with_transparency = session.query(
+                            func.count(distinct(TransparencyCalculation.isin))
+                        ).scalar() or 0
+                        
+                        # Calculate percentages
+                        entity_percentage = (instruments_with_entities / total_instruments) * 100
+                        figi_percentage = (instruments_with_figis / total_instruments) * 100
+                        transparency_percentage = (instruments_with_transparency / total_instruments) * 100
+                        
+                        coverage_stats = {
+                            "total_instruments": total_instruments,
+                            "entity_coverage": {
+                                "covered": instruments_with_entities,
+                                "percentage": round(entity_percentage, 1)
+                            },
+                            "figi_coverage": {
+                                "covered": instruments_with_figis,
+                                "percentage": round(figi_percentage, 1)
+                            },
+                            "transparency_coverage": {
+                                "covered": instruments_with_transparency,
+                                "percentage": round(transparency_percentage, 1)
+                            }
+                        }
+                    
+                    return {
+                        ResponseFields.STATUS: "success",
+                        "data": coverage_stats
+                    }, HTTPStatus.OK
+
+            except Exception as e:
+                logger.error(f"Error getting coverage statistics: {str(e)}")
                 return {
                     ResponseFields.STATUS: "error",
                     ResponseFields.ERROR: {

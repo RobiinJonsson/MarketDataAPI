@@ -191,6 +191,110 @@ class LegalEntityService(LegalEntityServiceInterface):
         else:
             entity.registration = EntityRegistration(**registration_data)
 
+    def batch_fill_entity_data(self, batch_size: int = 100) -> Dict[str, Any]:
+        """
+        Fill missing entity data for instruments with LEI information from GLEIF.
+        
+        Finds instruments that have LEI codes in their FIRDS data but no lei_id mapping,
+        then fetches entity information from GLEIF API and creates the necessary entities.
+        
+        Args:
+            batch_size: Maximum number of instruments to process in one batch
+            
+        Returns:
+            Dict with statistics: {"scanned": int, "updated": int, "failed": int}
+        """
+        from ...models.sqlite.instrument import Instrument
+        from ..gleif import fetch_lei_info
+        
+        scanned = 0
+        updated = 0  
+        failed = 0
+        
+        session = SessionLocal()
+        try:
+            # Find instruments that have FIRDS data with LEI info but no lei_id mapping
+            instruments_query = session.query(Instrument).filter(
+                Instrument.lei_id.is_(None),
+                Instrument.firds_data.isnot(None)
+            ).limit(batch_size)
+            
+            instruments = instruments_query.all()
+            self.logger.info(f"Found {len(instruments)} instruments to process for entity data")
+            
+            for instrument in instruments:
+                scanned += 1
+                try:
+                    # Extract LEI from FIRDS data
+                    firds_data = instrument.firds_data or {}
+                    lei_code = None
+                    
+                    # Try different possible LEI field names in FIRDS data
+                    if isinstance(firds_data, dict):
+                        lei_code = (
+                            firds_data.get('Issr') or 
+                            firds_data.get('issuer_lei') or
+                            firds_data.get('LEI') or
+                            firds_data.get('lei')
+                        )
+                    
+                    if not lei_code or len(lei_code) != 20:
+                        self.logger.debug(f"No valid LEI found in FIRDS data for instrument {instrument.isin}")
+                        continue
+                        
+                    # Check if LEI entity already exists
+                    existing_entity = session.query(LegalEntity).filter(
+                        LegalEntity.lei == lei_code
+                    ).first()
+                    
+                    if not existing_entity:
+                        # Fetch entity data from GLEIF API and create entity
+                        self.logger.debug(f"Fetching entity data for LEI: {lei_code}")
+                        gleif_response = fetch_lei_info(lei_code)
+                        
+                        if isinstance(gleif_response, dict) and gleif_response.get('error'):
+                            self.logger.warning(f"Failed to fetch LEI {lei_code}: {gleif_response['error']}")
+                            failed += 1
+                            continue
+                        
+                        # Create entity from GLEIF data using existing mapping logic
+                        try:
+                            mapped_data = map_lei_record(gleif_response)
+                            existing_entity = self._update_entity_from_data(session, mapped_data)
+                            self.logger.info(f"Created new entity for LEI: {lei_code}")
+                        except Exception as e:
+                            self.logger.error(f"Failed to create entity for LEI {lei_code}: {str(e)}")
+                            failed += 1
+                            continue
+                    
+                    # Link instrument to entity
+                    instrument.lei_id = lei_code
+                    session.flush()  # Ensure the change is persisted
+                    updated += 1
+                    self.logger.debug(f"Linked instrument {instrument.isin} to entity {lei_code}")
+                    
+                except Exception as e:
+                    self.logger.error(f"Error processing instrument {instrument.isin}: {str(e)}")
+                    failed += 1
+                    continue
+            
+            # Commit all changes
+            session.commit()
+            self.logger.info(f"Batch entity fill completed: {scanned} scanned, {updated} updated, {failed} failed")
+            
+            return {
+                "scanned": scanned,
+                "updated": updated,
+                "failed": failed
+            }
+            
+        except Exception as e:
+            session.rollback()
+            self.logger.error(f"Error in batch entity fill: {str(e)}")
+            raise LegalEntityServiceError(f"Batch entity fill failed: {str(e)}")
+        finally:
+            session.close()
+
     def delete_entity(self, lei: str) -> bool:
         """Delete a legal entity and its relationships."""
         session = SessionLocal()

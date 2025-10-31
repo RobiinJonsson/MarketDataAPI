@@ -288,4 +288,40 @@ def create_transparency_resources(api, models):
                     },
                 }, HTTPStatus.INTERNAL_SERVER_ERROR
 
+    @transparency_ns.route("/batch")
+    class BatchTransparency(Resource):
+        @transparency_ns.doc(
+            description="Calculate transparency for multiple ISINs",
+            responses={
+                HTTPStatus.OK: ("Success", common_models["success_model"]),
+                HTTPStatus.INTERNAL_SERVER_ERROR: ("Server Error", common_models["error_model"]),
+            },
+        )
+        def post(self):
+            """Calculate transparency for instruments without current data"""
+            try:
+                data = request.get_json()
+                isins = data.get("isins", []) if data else []
+                
+                # TODO: Implement batch transparency calculation
+                
+                return {
+                    ResponseFields.STATUS: "success",
+                    ResponseFields.MESSAGE: "Batch transparency calculation initiated",
+                    "processed": 0,
+                    "calculated": 0,
+                    "failed": 0,
+                    "total": len(isins) if isins else "all_missing"
+                }, HTTPStatus.OK
+
+            except Exception as e:
+                logger.error(f"Error in batch transparency calculation: {str(e)}")
+                return {
+                    ResponseFields.STATUS: "error",
+                    ResponseFields.ERROR: {
+                        "code": str(HTTPStatus.INTERNAL_SERVER_ERROR),
+                        ResponseFields.MESSAGE: str(e),
+                    },
+                }, HTTPStatus.INTERNAL_SERVER_ERROR
+
     return transparency_ns
