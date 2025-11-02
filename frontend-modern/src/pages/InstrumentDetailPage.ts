@@ -370,7 +370,7 @@ export default class InstrumentDetailPage extends BasePage {
     // If we have CFI decoded info from the API, use it
     if (cfiDecoded && cfiDecoded.cfi_code) {
       return this.createCard(`
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
           <div class="space-y-4">
             <div>
               <label class="block text-sm font-medium text-gray-700">CFI Code</label>
@@ -380,42 +380,20 @@ export default class InstrumentDetailPage extends BasePage {
               <label class="block text-sm font-medium text-gray-700">Category</label>
               <p class="mt-1 text-sm text-gray-900">${cfiDecoded.category_description || cfiDecoded.category || 'N/A'}</p>
             </div>
+          </div>
+          <div class="space-y-4">
             <div>
               <label class="block text-sm font-medium text-gray-700">Group</label>
               <p class="mt-1 text-sm text-gray-900">${cfiDecoded.group_description || cfiDecoded.group || 'N/A'}</p>
             </div>
-          </div>
-          <div class="space-y-4">
             <div>
               <label class="block text-sm font-medium text-gray-700">Attributes Code</label>
               <p class="mt-1 text-sm text-gray-900 font-mono">${cfiDecoded.attributes || 'N/A'}</p>
             </div>
-            ${cfiDecoded.decoded_attributes ? `
-            <div>
-              <label class="block text-sm font-medium text-gray-700">Voting Rights</label>
-              <p class="mt-1 text-sm text-gray-900">${cfiDecoded.decoded_attributes.voting_rights || 'N/A'}</p>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700">Payment Status</label>
-              <p class="mt-1 text-sm text-gray-900">${cfiDecoded.decoded_attributes.payment_status || 'N/A'}</p>
-            </div>
-            ` : ''}
           </div>
         </div>
         ${cfiDecoded.decoded_attributes ? `
-        <div class="mt-6">
-          <label class="block text-sm font-medium text-gray-700 mb-3">Detailed CFI Attributes</label>
-          <div class="bg-gray-50 rounded-lg p-4">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-              ${Object.entries(cfiDecoded.decoded_attributes).map(([key, value]) => `
-                <div>
-                  <span class="font-medium text-gray-700">${this.formatAttributeName(key)}:</span>
-                  <span class="text-gray-900 ml-2">${value}</span>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        </div>
+        ${this.renderTopCfiAttributes(cfiDecoded.decoded_attributes, cfiDecoded.attribute_labels)}
         ` : ''}
       `, 'CFI Classification');
     }
@@ -1041,7 +1019,40 @@ export default class InstrumentDetailPage extends BasePage {
     return categoryMap[category] || `Unknown category (${category})`;
   }
 
-  private formatAttributeName(key: string): string {
+  private renderTopCfiAttributes(decodedAttributes: any, attributeLabels?: any): string {
+    if (!decodedAttributes || typeof decodedAttributes !== 'object') {
+      return '';
+    }
+
+    // Show all attributes in a grid layout
+    const entries = Object.entries(decodedAttributes);
+
+    return `
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-3">CFI Attributes</label>
+        <div class="bg-gray-50 rounded-lg p-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            ${entries.map(([key, value]) => {
+              const label = attributeLabels?.[key] || this.formatAttributeName(key);
+              return `
+                <div>
+                  <span class="block text-xs font-medium text-gray-600">${label}</span>
+                  <span class="text-sm text-gray-900">${value || 'N/A'}</span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private formatAttributeName(key: string, attributeLabels?: any): string {
+    // Use attribute labels if available, otherwise format the key
+    if (attributeLabels && attributeLabels[key]) {
+      return attributeLabels[key];
+    }
+    
     return key
       .split('_')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))

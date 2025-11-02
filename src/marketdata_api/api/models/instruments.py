@@ -181,17 +181,14 @@ def create_instrument_models(api, common_models):
         },
     )
 
-    # CFI decoded attributes
-    cfi_decoded_attributes = api.model(
-        "CFIDecodedAttributes",
-        {
-            "voting_rights": fields.String(description="Voting rights description"),
-            "ownership_restrictions": fields.String(
-                description="Ownership restrictions description"
-            ),
-            "payment_status": fields.String(description="Payment status description"),
-            "form": fields.String(description="Form description"),
-        },
+    # CFI decoded attributes - dynamic based on instrument type
+    cfi_decoded_attributes = fields.Raw(
+        description="Decoded CFI attributes (dynamic based on instrument type). "
+        "Examples: Equities have voting_rights, payment_status; "
+        "Futures have underlying_commodities, delivery; "
+        "Options have option_type, exercise_style; "
+        "Swaps have underlying_credit/equity/fx, return_trigger; "
+        "Forwards have underlying_equity/fx/rate, payout_trigger"
     )
 
     # CFI information response
@@ -204,8 +201,9 @@ def create_instrument_models(api, common_models):
             "group": fields.String(description="CFI group letter"),
             "group_description": fields.String(description="CFI group description"),
             "attributes": fields.String(description="CFI attributes (4 characters)"),
-            "decoded_attributes": fields.Nested(
-                cfi_decoded_attributes, description="Decoded CFI attributes"
+            "decoded_attributes": cfi_decoded_attributes,
+            "attribute_labels": fields.Raw(
+                description="Human-readable labels for decoded attributes (key-value mapping)"
             ),
             "business_type": fields.String(description="Business instrument type"),
             "fitrs_patterns": fields.List(

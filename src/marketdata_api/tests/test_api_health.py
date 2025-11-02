@@ -132,15 +132,14 @@ class TestServiceHealthChecks:
     """Test all core services for basic functionality."""
 
     @pytest.mark.integration
-    def test_database_connection_service(self):
+    def test_database_connection_service(self, test_session):
         """Test that database connection service works."""
         try:
             from sqlalchemy import text
 
-            with get_session() as session:
-                # Simple query to test connection
-                result = session.execute(text("SELECT 1")).fetchone()
-                assert result is not None
+            # Simple query to test connection using test session
+            result = test_session.execute(text("SELECT 1")).fetchone()
+            assert result is not None
         except Exception as e:
             pytest.fail(f"Database connection failed: {e}")
 
@@ -340,14 +339,15 @@ class TestPerformanceBasics:
             assert response_time < 5.0, f"Endpoint {endpoint} took {response_time:.2f}s to respond"
 
     @pytest.mark.slow
-    def test_database_query_performance(self):
+    def test_database_query_performance(self, test_session):
         """Test basic database query performance."""
         import time
+        from sqlalchemy import text
 
         start_time = time.time()
         try:
-            with get_session() as session:
-                session.execute("SELECT 1").fetchone()
+            # Use test session instead of production session
+            test_session.execute(text("SELECT 1")).fetchone()
         except Exception:
             pytest.skip("Database connection not available")
         end_time = time.time()

@@ -243,6 +243,175 @@ class AttributeDecoder:
         "X": "Not applicable/undefined",
     }
 
+    # Futures Attributes
+    FUTURES_UNDERLYING_COMMODITIES = {
+        "E": "Energy (oil, gas, electricity, etc.)",
+        "A": "Agricultural (grains, livestock, softs)",
+        "I": "Industrial/precious metals (gold, silver, copper, etc.)",
+        "S": "Index (commodity indices)",
+        "N": "Environmental (carbon, weather, etc.)",
+        "M": "Others (miscellaneous)",
+        "X": "Not applicable/undefined",
+    }
+
+    FUTURES_UNDERLYING_FINANCIAL = {
+        "B": "Debt instruments (bonds, bills, notes)",
+        "S": "Equities (single stocks, indices)",
+        "D": "Depository receipts",
+        "C": "Currencies/foreign exchange",
+        "I": "Interest rates",
+        "T": "Collective investment vehicles",
+        "F": "Futures (futures on futures)",
+        "O": "Options",
+        "W": "Swaps",
+        "M": "Others (miscellaneous)",
+        "X": "Not applicable/undefined",
+    }
+
+    FUTURES_DELIVERY = {
+        "P": "Physical delivery (actual underlying asset delivered)",
+        "C": "Cash settled (cash payment based on reference price)",
+        "N": "Non-deliverable (cash settled, no physical delivery possible)",
+        "X": "Not applicable/undefined",
+    }
+
+    FUTURES_STANDARDIZATION = {
+        "S": "Standardized (exchange-traded with standard terms)",
+        "N": "Non-standardized (customized terms)",
+        "X": "Not applicable/undefined",
+    }
+
+    # Options Attributes
+    OPTIONS_EXERCISE_STYLE = {
+        "E": "European (can only be exercised at expiration)",
+        "A": "American (can be exercised at any time before expiration)",
+        "B": "Bermuda (can be exercised on specific dates)",
+        "X": "Not applicable/undefined",
+    }
+
+    OPTIONS_UNDERLYING = {
+        "B": "Debt instruments (bonds, bills, notes)",
+        "S": "Equities (stocks, equity indices)",
+        "D": "Depository receipts",
+        "T": "Collective investment vehicles (ETFs, funds)",
+        "C": "Currencies/foreign exchange",
+        "I": "Interest rates",
+        "F": "Futures contracts",
+        "O": "Options (options on options)",
+        "W": "Swaps",
+        "A": "Commodities",
+        "M": "Others (miscellaneous)",
+        "X": "Not applicable/undefined",
+    }
+
+    OPTIONS_DELIVERY = {
+        "P": "Physical delivery (actual underlying delivered)",
+        "C": "Cash settled (cash payment)",
+        "N": "Non-deliverable forward (cash settled)",
+        "E": "Elect at exercise (choice at exercise time)",
+        "X": "Not applicable/undefined",
+    }
+
+    # Swaps Attributes  
+    SWAPS_CREDIT_UNDERLYING = {
+        "U": "Single name (individual issuer)",
+        "V": "Index (credit index)",
+        "I": "Basket (multiple names)",
+        "B": "Tranche (portfolio slice)",
+        "W": "Index tranche",
+        "M": "Others (miscellaneous)",
+        "X": "Not applicable/undefined",
+    }
+
+    SWAPS_EQUITY_UNDERLYING = {
+        "S": "Single name (individual stock)",
+        "I": "Index (equity index)",
+        "B": "Basket (multiple stocks)",
+        "M": "Others (miscellaneous)",
+        "X": "Not applicable/undefined",
+    }
+
+    SWAPS_RATES_UNDERLYING = {
+        "A": "Interest rate index (LIBOR, EURIBOR, etc.)",
+        "C": "Government/treasury bonds",
+        "D": "Corporate bonds", 
+        "G": "Mortgage-backed securities",
+        "H": "Asset-backed securities",
+        "I": "Municipal bonds",
+        "M": "Others (miscellaneous)",
+        "X": "Not applicable/undefined",
+    }
+
+    SWAPS_FX_UNDERLYING = {
+        "A": "Currency (single currency pair)",
+        "C": "Cross-currency (multiple currencies)",
+        "M": "Others (miscellaneous)",
+        "X": "Not applicable/undefined",
+    }
+
+    SWAPS_DELIVERY = {
+        "C": "Cash settled",
+        "P": "Physical delivery",
+        "E": "Elect at settlement",
+        "D": "Delivery vs payment",
+        "N": "Net settlement",
+        "A": "Automatic exercise",
+        "X": "Not applicable/undefined",
+    }
+
+    # Forwards Attributes
+    FORWARDS_EQUITY_UNDERLYING = {
+        "S": "Single name (individual stock)",
+        "I": "Index (equity index)",
+        "B": "Basket (multiple stocks)",
+        "O": "Others (equity-related)",
+        "F": "Funds/ETFs",
+        "M": "Others (miscellaneous)",
+        "X": "Not applicable/undefined",
+    }
+
+    FORWARDS_FX_UNDERLYING = {
+        "T": "Currency forward (deliverable)",
+        "R": "Currency forward (non-deliverable)",
+        "V": "Currency swap",
+        "U": "Cross-currency swap",
+        "W": "Currency option",
+        "M": "Others (miscellaneous)",
+        "X": "Not applicable/undefined",
+    }
+
+    FORWARDS_RATES_UNDERLYING = {
+        "I": "Interest rate agreement (FRA)",
+        "O": "Options on rates",
+        "M": "Others (rate instruments)",
+        "X": "Not applicable/undefined",
+    }
+
+    FORWARDS_PAYOUT_TRIGGER = {
+        "C": "Cash settlement",
+        "S": "Share/security delivery",
+        "F": "Future value settlement",
+        "R": "Rate differential settlement",
+        "X": "Not applicable/undefined",
+    }
+
+    FORWARDS_DELIVERY = {
+        "C": "Cash settled",
+        "P": "Physical delivery", 
+        "X": "Not applicable/undefined",
+    }
+
+    # Spot Instruments Attributes
+    SPOT_COMMODITIES_UNDERLYING = {
+        "A": "Agricultural products",
+        "J": "Precious metals",
+        "K": "Industrial metals", 
+        "N": "Energy products",
+        "P": "Environmental/other",
+        "M": "Others (miscellaneous)",
+        "X": "Not applicable/undefined",
+    }
+
     @classmethod
     def decode_attributes(cls, cfi_code: str) -> Dict[str, Any]:
         """Decode CFI attributes based on category and group"""
@@ -255,7 +424,7 @@ class AttributeDecoder:
 
         # Equity instruments
         if category == "E":
-            if group == "S":  # Common shares
+            if group in ["S", "C"]:  # Common shares and convertible shares (both use same attributes)
                 return {
                     "voting_rights": cls.EQUITY_VOTING_RIGHTS.get(
                         attrs[0], f"Unknown ({attrs[0]})"
@@ -424,6 +593,104 @@ class AttributeDecoder:
                     "form": cls.EQUITY_FORM.get(attrs[3], f"Unknown ({attrs[3]})"),
                 }
 
+        # Futures (F category)
+        elif category == "F":
+            if group == "C":  # Commodities futures
+                return {
+                    "underlying_commodities": cls.FUTURES_UNDERLYING_COMMODITIES.get(
+                        attrs[0], f"Unknown ({attrs[0]})"
+                    ),
+                    "delivery": cls.FUTURES_DELIVERY.get(attrs[1], f"Unknown ({attrs[1]})"),
+                    "standardization": cls.FUTURES_STANDARDIZATION.get(attrs[2], f"Unknown ({attrs[2]})"),
+                    "not_applicable": "Not applicable/undefined" if attrs[3] == "X" else f"Unknown ({attrs[3]})",
+                }
+            elif group == "F":  # Financial futures
+                return {
+                    "underlying_financial": cls.FUTURES_UNDERLYING_FINANCIAL.get(
+                        attrs[0], f"Unknown ({attrs[0]})"
+                    ),
+                    "delivery": cls.FUTURES_DELIVERY.get(attrs[1], f"Unknown ({attrs[1]})"),
+                    "standardization": cls.FUTURES_STANDARDIZATION.get(attrs[2], f"Unknown ({attrs[2]})"),
+                    "not_applicable": "Not applicable/undefined" if attrs[3] == "X" else f"Unknown ({attrs[3]})",
+                }
+
+        # Options (O category)
+        elif category == "O":
+            if group in ["C", "P"]:  # Call and Put options
+                option_type = "Call options" if group == "C" else "Put options"
+                return {
+                    "option_type": option_type,
+                    "exercise_style": cls.OPTIONS_EXERCISE_STYLE.get(attrs[0], f"Unknown ({attrs[0]})"),
+                    "underlying": cls.OPTIONS_UNDERLYING.get(attrs[1], f"Unknown ({attrs[1]})"),
+                    "delivery": cls.OPTIONS_DELIVERY.get(attrs[2], f"Unknown ({attrs[2]})"),
+                    "standardization": cls.FUTURES_STANDARDIZATION.get(attrs[3], f"Unknown ({attrs[3]})"),
+                }
+
+        # Swaps (S category)
+        elif category == "S":
+            if group == "C":  # Credit swaps
+                return {
+                    "underlying_credit": cls.SWAPS_CREDIT_UNDERLYING.get(attrs[0], f"Unknown ({attrs[0]})"),
+                    "return_trigger": "Credit event trigger" if attrs[1] == "C" else f"Trigger ({attrs[1]})",
+                    "issuer_type": "Corporate" if attrs[2] == "C" else f"Issuer ({attrs[2]})",
+                    "delivery": cls.SWAPS_DELIVERY.get(attrs[3], f"Unknown ({attrs[3]})"),
+                }
+            elif group == "E":  # Equity swaps
+                return {
+                    "underlying_equity": cls.SWAPS_EQUITY_UNDERLYING.get(attrs[0], f"Unknown ({attrs[0]})"),
+                    "return_trigger": "Share price return" if attrs[1] == "S" else f"Return ({attrs[1]})",
+                    "settlement_frequency": "Not applicable" if attrs[2] == "X" else f"Frequency ({attrs[2]})",
+                    "delivery": cls.SWAPS_DELIVERY.get(attrs[3], f"Unknown ({attrs[3]})"),
+                }
+            elif group == "F":  # FX swaps
+                return {
+                    "underlying_fx": cls.SWAPS_FX_UNDERLYING.get(attrs[0], f"Unknown ({attrs[0]})"),
+                    "currency_pair": "Not applicable" if attrs[1] == "X" else f"Pair ({attrs[1]})",
+                    "settlement_method": "Not applicable" if attrs[2] == "X" else f"Method ({attrs[2]})",
+                    "delivery": cls.SWAPS_DELIVERY.get(attrs[3], f"Unknown ({attrs[3]})"),
+                }
+            elif group == "R":  # Rate swaps
+                return {
+                    "underlying_rate": cls.SWAPS_RATES_UNDERLYING.get(attrs[0], f"Unknown ({attrs[0]})"),
+                    "notional": "Constant notional" if attrs[1] == "C" else f"Notional ({attrs[1]})",
+                    "currency": "Single currency" if attrs[2] == "S" else f"Currency ({attrs[2]})",
+                    "delivery": cls.SWAPS_DELIVERY.get(attrs[3], f"Unknown ({attrs[3]})"),
+                }
+
+        # Forwards (J category)
+        elif category == "J":
+            if group == "E":  # Equity forwards
+                return {
+                    "underlying_equity": cls.FORWARDS_EQUITY_UNDERLYING.get(attrs[0], f"Unknown ({attrs[0]})"),
+                    "not_applicable": "Not applicable" if attrs[1] == "X" else f"Feature ({attrs[1]})",
+                    "payout_trigger": cls.FORWARDS_PAYOUT_TRIGGER.get(attrs[2], f"Unknown ({attrs[2]})"),
+                    "delivery": cls.FORWARDS_DELIVERY.get(attrs[3], f"Unknown ({attrs[3]})"),
+                }
+            elif group == "F":  # FX forwards
+                return {
+                    "underlying_fx": cls.FORWARDS_FX_UNDERLYING.get(attrs[0], f"Unknown ({attrs[0]})"),
+                    "not_applicable": "Not applicable" if attrs[1] == "X" else f"Feature ({attrs[1]})",
+                    "payout_trigger": cls.FORWARDS_PAYOUT_TRIGGER.get(attrs[2], f"Unknown ({attrs[2]})"),
+                    "delivery": cls.FORWARDS_DELIVERY.get(attrs[3], f"Unknown ({attrs[3]})"),
+                }
+            elif group == "R":  # Rate forwards
+                return {
+                    "underlying_rate": cls.FORWARDS_RATES_UNDERLYING.get(attrs[0], f"Unknown ({attrs[0]})"),
+                    "not_applicable": "Not applicable" if attrs[1] == "X" else f"Feature ({attrs[1]})",
+                    "payout_trigger": cls.FORWARDS_PAYOUT_TRIGGER.get(attrs[2], f"Unknown ({attrs[2]})"),
+                    "delivery": cls.FORWARDS_DELIVERY.get(attrs[3], f"Unknown ({attrs[3]})"),
+                }
+
+        # Spot instruments (I category)  
+        elif category == "I":
+            if group == "T":  # Commodities spot
+                return {
+                    "underlying_commodity": cls.SPOT_COMMODITIES_UNDERLYING.get(attrs[0], f"Unknown ({attrs[0]})"),
+                    "not_applicable_2": "Not applicable" if attrs[1] == "X" else f"Feature ({attrs[1]})",
+                    "not_applicable_3": "Not applicable" if attrs[2] == "X" else f"Feature ({attrs[2]})",
+                    "not_applicable_4": "Not applicable" if attrs[3] == "X" else f"Feature ({attrs[3]})",
+                }
+
         # Default for unknown patterns
         return {
             "attribute_1": f"Unknown ({attrs[0]})",
@@ -503,9 +770,11 @@ class CFI:
                 "T": "Medium-term notes",
                 "Y": "Money market instruments",
                 "A": "Mortgage backed securities",
-                "S": "Asset backed securities",
-                "N": "Municipal securities",
-                "D": "Deposits",
+                "S": "Structured instruments (capital protection)",
+                "E": "Structured instruments (without capital protection)",
+                "G": "Mortgage-backed securities",
+                "N": "Municipal bonds",
+                "D": "Depository receipts on debt instruments",
                 "M": "Others (miscellaneous)",
             }
         # CIV groups
@@ -518,6 +787,40 @@ class CFI:
                 "S": "Pension funds",
                 "F": "Funds of funds",
                 "P": "Private equity funds",
+                "M": "Others (miscellaneous)",
+            }
+        # Futures groups
+        elif self.category == "F":
+            groups = {
+                "C": "Commodities futures",
+                "F": "Financial futures",
+                "M": "Others (miscellaneous)",
+            }
+        # Options groups
+        elif self.category == "O":
+            groups = {
+                "C": "Call options",
+                "P": "Put options", 
+                "M": "Others (miscellaneous)",
+            }
+        # Swaps groups
+        elif self.category == "S":
+            groups = {
+                "C": "Credit swaps",
+                "E": "Equity swaps",
+                "F": "Foreign exchange swaps",
+                "R": "Rate swaps",
+                "T": "Commodities swaps",
+                "M": "Others (miscellaneous)",
+            }
+        # Forwards groups  
+        elif self.category == "J":
+            groups = {
+                "E": "Equity forwards",
+                "F": "Foreign exchange forwards",
+                "R": "Rate forwards",
+                "C": "Credit forwards",
+                "T": "Commodities forwards",
                 "M": "Others (miscellaneous)",
             }
         # Non-standard/Structured products groups (Real-world FIRDS patterns)
@@ -533,6 +836,61 @@ class CFI:
                 "N": "Notes (Structured notes and certificates)",
                 "W": "Warrants (Covered warrants, Barrier warrants)",
                 "Y": "Others (miscellaneous structured products)",
+                "T": "Commodities derivatives",
+            }
+        # Spot groups
+        elif self.category == "I":
+            groups = {
+                "T": "Commodities spot",
+                "F": "Foreign exchange spot",
+                "M": "Others (miscellaneous)",
+            }
+        # Rights/Entitlements groups
+        elif self.category == "R":
+            groups = {
+                "S": "Subscription rights",
+                "P": "Purchase rights",
+                "A": "Allotment (bonus) rights",
+                "W": "Warrants",
+                "F": "Mini-future certificates/constant leverage certificates",
+                "D": "Depository receipts on entitlements",
+                "M": "Others (miscellaneous)",
+            }
+        # Strategies groups
+        elif self.category == "K":
+            groups = {
+                "E": "Equity strategies",
+                "C": "Credit strategies",
+                "F": "Foreign exchange strategies",
+                "R": "Rate strategies",
+                "T": "Commodities strategies",
+                "Y": "Mixed assets strategies",
+                "M": "Others (miscellaneous)",
+            }
+        # Financing groups
+        elif self.category == "L":
+            groups = {
+                "R": "Repurchase agreements",
+                "S": "Securities lending",
+                "L": "Loan-lease",
+                "M": "Others (miscellaneous)",
+            }
+        # Others groups
+        elif self.category == "M":
+            groups = {
+                "C": "Combined instruments",
+                "M": "Other assets (miscellaneous)",
+            }
+        # Referential instruments groups
+        elif self.category == "T":
+            groups = {
+                "I": "Indices",
+                "B": "Baskets", 
+                "C": "Currencies",
+                "R": "Interest rates",
+                "T": "Commodities",
+                "D": "Stock dividends",
+                "M": "Others (miscellaneous)",
             }
         else:
             groups = {}
@@ -596,11 +954,265 @@ class CFI:
         except Exception:
             return False
 
+    def validate_against_iso(self) -> Dict[str, Any]:
+        """
+        Validate CFI code against ISO 10962 standard and return detailed validation info.
+        
+        Returns:
+            Dictionary with validation results and suggestions
+        """
+        validation = {
+            "is_valid": True,
+            "errors": [],
+            "warnings": [],
+            "category_valid": False,
+            "group_valid": False,
+            "attributes_valid": True,
+            "iso_compliant": True
+        }
+        
+        try:
+            # Category validation
+            valid_categories = ["E", "D", "C", "R", "O", "F", "S", "H", "I", "J", "K", "L", "T", "M"]
+            if self.category not in valid_categories:
+                validation["errors"].append(f"Invalid category '{self.category}'. Valid categories: {valid_categories}")
+                validation["category_valid"] = False
+                validation["is_valid"] = False
+            else:
+                validation["category_valid"] = True
+            
+            # Group validation based on category
+            valid_groups = {
+                "E": ["S", "P", "C", "F", "L", "D", "Y", "M"],
+                "D": ["B", "C", "W", "T", "Y", "A", "S", "E", "G", "N", "D", "M"],
+                "C": ["I", "H", "B", "E", "S", "F", "P", "M"],
+                "F": ["C", "F", "M"],
+                "O": ["C", "P", "M"],
+                "S": ["C", "E", "F", "R", "T", "M"],
+                "J": ["C", "E", "F", "R", "T", "M"],
+                "H": ["C", "E", "F", "R", "T", "M"],
+                "I": ["T", "F", "M"],
+                "R": ["S", "P", "A", "W", "F", "D", "M"],
+                "K": ["E", "C", "F", "R", "T", "Y", "M"],
+                "L": ["R", "S", "L", "M"],
+                "M": ["C", "M"],
+                "T": ["I", "B", "C", "R", "T", "D", "M"]
+            }
+            
+            expected_groups = valid_groups.get(self.category, [])
+            if self.group not in expected_groups and expected_groups:
+                validation["warnings"].append(f"Group '{self.group}' may not be standard for category '{self.category}'. Expected: {expected_groups}")
+                validation["group_valid"] = False
+            else:
+                validation["group_valid"] = True
+            
+            # Attribute validation (basic - check for valid characters)
+            valid_attribute_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            for i, char in enumerate(self.attributes):
+                if char not in valid_attribute_chars:
+                    validation["errors"].append(f"Invalid character '{char}' at position {i+3}. Must be A-Z")
+                    validation["attributes_valid"] = False
+                    validation["is_valid"] = False
+            
+            # ISO compliance check
+            if not validation["category_valid"] or not validation["group_valid"]:
+                validation["iso_compliant"] = False
+                
+        except Exception as e:
+            validation["errors"].append(f"Validation error: {str(e)}")
+            validation["is_valid"] = False
+            validation["iso_compliant"] = False
+            
+        return validation
+
+
+def get_attribute_labels(cfi_code: str) -> Dict[str, str]:
+    """
+    Get human-readable labels for CFI attributes based on category and group.
+    Returns a mapping of attribute key -> display label.
+    """
+    if not cfi_code or len(cfi_code) < 2:
+        return {}
+    
+    category = cfi_code[0]
+    group = cfi_code[1]
+    
+    # Equity attributes
+    if category == "E":
+        if group in ["S", "C"]:  # Common shares and convertible shares
+            return {
+                "voting_rights": "Voting Rights",
+                "ownership_restrictions": "Ownership Restrictions", 
+                "payment_status": "Payment Status",
+                "form": "Form"
+            }
+        elif group == "P":  # Preferred shares
+            return {
+                "voting_rights": "Voting Rights",
+                "redemption": "Redemption Features",
+                "income": "Income Type",
+                "form": "Form"
+            }
+        elif group == "D":  # Depository receipts
+            return {
+                "instrument_dependency": "Underlying Instrument",
+                "redemption_conversion": "Redemption/Conversion",
+                "income": "Income Type", 
+                "form": "Form"
+            }
+        elif group == "Y":  # Structured participation
+            return {
+                "type": "Structure Type",
+                "distribution": "Distribution Policy",
+                "repayment": "Repayment Method",
+                "underlying_assets": "Underlying Assets"
+            }
+    
+    # Debt attributes
+    elif category == "D":
+        return {
+            "interest_type": "Interest Type",
+            "guarantee_ranking": "Guarantee/Ranking",
+            "redemption": "Redemption Terms",
+            "form": "Form"
+        }
+    
+    # CIV attributes
+    elif category == "C":
+        if group == "H":  # Hedge funds
+            return {
+                "investment_strategy": "Investment Strategy",
+                "attribute_2": "Additional Feature 2",
+                "attribute_3": "Additional Feature 3", 
+                "attribute_4": "Additional Feature 4"
+            }
+        else:  # Other CIVs
+            return {
+                "closed_open_end": "Structure Type",
+                "distribution_policy": "Distribution Policy",
+                "assets": "Asset Focus",
+                "security_type": "Security Type"
+            }
+    
+    # Futures attributes
+    elif category == "F":
+        if group == "C":  # Commodities futures
+            return {
+                "underlying_commodities": "Underlying Commodity",
+                "delivery": "Delivery Method",
+                "standardization": "Standardization",
+                "not_applicable": "Additional Features"
+            }
+        elif group == "F":  # Financial futures
+            return {
+                "underlying_financial": "Underlying Asset",
+                "delivery": "Delivery Method",
+                "standardization": "Standardization",
+                "not_applicable": "Additional Features"
+            }
+    
+    # Options attributes  
+    elif category == "O":
+        return {
+            "option_type": "Option Type",
+            "exercise_style": "Exercise Style",
+            "underlying": "Underlying Asset",
+            "delivery": "Delivery Method",
+            "standardization": "Standardization"
+        }
+    
+    # Swaps attributes
+    elif category == "S":
+        if group == "C":  # Credit swaps
+            return {
+                "underlying_credit": "Credit Reference",
+                "return_trigger": "Return Trigger",
+                "issuer_type": "Issuer Type",
+                "delivery": "Settlement Method"
+            }
+        elif group == "E":  # Equity swaps
+            return {
+                "underlying_equity": "Equity Reference",
+                "return_trigger": "Return Trigger", 
+                "settlement_frequency": "Settlement Frequency",
+                "delivery": "Settlement Method"
+            }
+        elif group == "F":  # FX swaps
+            return {
+                "underlying_fx": "Currency Pair",
+                "currency_pair": "Currency Details",
+                "settlement_method": "Settlement Method",
+                "delivery": "Delivery Method"
+            }
+        elif group == "R":  # Rate swaps
+            return {
+                "underlying_rate": "Rate Reference",
+                "notional": "Notional Type",
+                "currency": "Currency Type",
+                "delivery": "Settlement Method"
+            }
+    
+    # Forwards attributes
+    elif category == "J":
+        if group == "E":  # Equity forwards
+            return {
+                "underlying_equity": "Equity Reference",
+                "not_applicable": "Additional Features",
+                "payout_trigger": "Payout Trigger",
+                "delivery": "Settlement Method"
+            }
+        elif group == "F":  # FX forwards
+            return {
+                "underlying_fx": "Currency Reference",
+                "not_applicable": "Additional Features",
+                "payout_trigger": "Payout Trigger",
+                "delivery": "Settlement Method"
+            }
+        elif group == "R":  # Rate forwards
+            return {
+                "underlying_rate": "Rate Reference",
+                "not_applicable": "Additional Features", 
+                "payout_trigger": "Payout Trigger",
+                "delivery": "Settlement Method"
+            }
+    
+    # Spot instruments
+    elif category == "I":
+        if group == "T":  # Commodities spot
+            return {
+                "underlying_commodity": "Commodity Type",
+                "not_applicable_2": "Feature 2",
+                "not_applicable_3": "Feature 3",
+                "not_applicable_4": "Feature 4"
+            }
+    
+    # Non-standard derivatives
+    elif category == "H":
+        return {
+            "product_feature_1": "Product Feature 1",
+            "product_feature_2": "Product Feature 2",
+            "product_feature_3": "Product Feature 3", 
+            "form": "Form"
+        }
+    
+    # Default fallback
+    return {
+        "attribute_1": "Attribute 1",
+        "attribute_2": "Attribute 2",
+        "attribute_3": "Attribute 3",
+        "attribute_4": "Attribute 4"
+    }
+
 
 def decode_cfi(cfi_code: str) -> Dict[str, Any]:
     """Convenience function to decode a CFI code"""
     try:
         cfi = CFI(cfi_code)
-        return cfi.describe()
+        result = cfi.describe()
+        
+        # Add attribute labels for frontend display
+        result["attribute_labels"] = get_attribute_labels(cfi_code)
+        
+        return result
     except Exception as e:
         return {"error": str(e), "cfi_code": cfi_code}
