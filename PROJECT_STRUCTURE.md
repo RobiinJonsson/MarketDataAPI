@@ -73,7 +73,7 @@ deployment\upgrade.bat 1.0.1
 ### 🚀 Release Workflow (Order of Operations)
 ```bash
 # Step 1: Version upgrade on dev branch
-deployment\upgrade.bat 1.0.2
+deployment\upgrade.bat 1.0.4
 # (Script will pause - manually update setup.py and pyproject.toml versions)
 
 # Step 2: Commit version changes

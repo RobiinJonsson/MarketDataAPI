@@ -4,109 +4,140 @@ All notable changes to the MarketDataAPI project will be documented in this file
 
 ## Recent Highlights
 
-- **[2025-10-31]**: 🎨 **Enhanced Instruments Hub & Transparency Integration** - Complete UI consolidation with tabbed interface, real-time transparency statistics, multi-page API loading, and comprehensive filtering system
-- **[2025-10-19]**: 🎯 **Complete Derivative Type Implementation** - Comprehensive enhancement of all derivative types (S, J, O, F) with professional frontend displays, CFI-based classification, and type-specific attributes
-- **[2025-10-18]**: 🎯 **Type-Specific Attribute Extractors** - Comprehensive implementation of intelligent FIRDS field extraction for all 10 CFI instrument types with rich business logic and API integration
-- **[2025-10-12]**: ✨ **Rich API Response Enhancement** - Major upgrade transforming all API endpoints from basic JSON to rich CLI-quality responses with comprehensive analysis, status indicators, and MiFID II context
-- **[2025-10-10]**: 🚀 **Flask-RESTX API Consolidation** - Major architectural refactoring consolidating duplicate API systems, removing 2,658 lines of code, and reorganizing to clean api/ folder structure
-- **[2025-10-07]**: 🏢 **GLEIF API Integration** - Added entities create and get-remote commands for live GLEIF API integration with comprehensive error handling and professional display
-- **[2025-10-05]**: 🏛️ **Enhanced CLI Commands** - Comprehensive CLI improvements across instruments, entities, transparency, and MIC commands with professional displays
-- **[2025-10-05]**: 🏗️ **Structured Products Analysis** - Complete H-category FIRDS analysis with real-world CFI patterns and CLI implementation  
-- **[2025-10-05]**: 🔄 **Comprehensive Swap CLI Enhancement** - Complete swap classification system with intelligent type detection and professional display
-- **[2025-10-04]**: 🔥 **MAJOR CLI Refactoring** - Transformed monolithic CLI into modular architecture (39% code reduction, zero breaking changes)
+- **[2025-11-03]**: OpenFIGI batch processing optimization with 15x performance improvement, batch API implementation, and intelligent MIC handling
+- **[2025-10-31]**: Enhanced instruments hub with tabbed interface, real-time transparency statistics, and multi-page API loading
+- **[2025-10-19]**: Complete derivative type implementation with enhanced frontend displays, CFI-based classification, and type-specific attributes
+- **[2025-10-18]**: Type-specific attribute extractors with FIRDS field extraction for all 10 CFI instrument types and API integration
+- **[2025-10-12]**: Rich API response enhancement transforming endpoints from basic JSON to comprehensive responses with analysis and context
+- **[2025-10-10]**: Flask-RESTX API consolidation with architectural refactoring, removing 2,658 lines of code and reorganizing API structure
+- **[2025-10-07]**: GLEIF API integration with entities create and get-remote commands for live API integration
+- **[2025-10-05]**: Enhanced CLI commands with improvements across instruments, entities, transparency, and MIC commands
+- **[2025-10-05]**: Structured products analysis with H-category FIRDS analysis and CFI patterns
+- **[2025-10-05]**: Swap CLI enhancement with classification system and intelligent type detection
+- **[2025-10-04]**: CLI refactoring transforming monolithic CLI into modular architecture (39% code reduction)
 - **[2025-10-04]**: Fixed FIGI enrichment system with enhanced statistics
 - **[2025-09-21]**: Health monitoring system with detailed API endpoints
-- **[2025-09-20]**: Complete Azure SQL production deployment with dual database support
+- **[2025-09-20]**: Azure SQL production deployment with dual database support
+
+## [2025-11-03] - OpenFIGI Batch Processing Optimization
+
+### Performance Improvements
+- Reduced FIGI batch processing time from 125 seconds to 8 seconds for 50 instruments
+- Implemented OpenFIGI batch API using 100 jobs per HTTP request with API key
+- Reduced API calls from 50+ individual requests to 5 optimized batch requests
+- Added rate limiting compliance and proper error handling
+
+### MIC Handling Enhancement
+- Added automatic conversion of segment MICs to operating MICs for better OpenFIGI results
+- Implemented database-driven MIC mapping using MarketIdentificationCode table
+- Enhanced search strategy with MIC-specific search followed by broad ISIN-only fallback
+- Improved FIGI matching success rates through proper venue identification
+
+### Failed Attempt Tracking
+- Added intelligent filtering to skip instruments with recent FIGI lookup failures (7-day cutoff)
+- Implemented persistent failure tracking using processed_attributes JSON field
+- Added proper error handling with SQLAlchemy flag_modified() for JSON updates
+- Optimized processing by filtering eligible instruments before API calls
+
+### Technical Changes
+- Added _execute_batch_request() method for handling multiple jobs per HTTP request
+- Implemented chunking logic respecting OpenFIGI API limits
+- Enhanced database session management with proper cleanup
+- Fixed frontend display of batch operation statistics
+
+### Results
+- Achieved 96% success rate (48/50 instruments) in production testing
+- Created 239 FIGI mappings across successful instruments
+- Automatically filtered 34 recently failed instruments from processing
 
 ## [2025-10-31] - Enhanced Instruments Hub & Transparency Integration
 
-### 🎨 **Unified Instruments Interface**
-- **Tabbed Architecture**: Consolidated InstrumentTypesPage into InstrumentsPage with three tabs (listing, CFI classification, transparency)
-- **Enhanced Navigation**: Removed separate transparency page, integrated all functionality into single hub interface
-- **Homepage Integration**: Updated transparency card to point to instruments page transparency tab
+### Interface Consolidation
+- Consolidated InstrumentTypesPage into InstrumentsPage with tabbed architecture
+- Integrated transparency functionality into instruments hub
+- Updated homepage navigation to point to unified instruments interface
 
-### 📊 **Real-Time Transparency Statistics**
-- **Live Data Cards**: Four statistical cards showing Total Calculations, FULECR Files (Equity), FULNCR Files (Non-Equity), and Active Trading metrics
-- **Dynamic Updates**: Statistics update automatically after data loading, filtering, and tab switching
-- **Number Formatting**: Consistent Intl.NumberFormat for professional display of large numbers
+### Transparency Statistics
+- Added real-time statistics cards for Total Calculations, FULECR Files, FULNCR Files, and Active Trading
+- Implemented dynamic statistics updates after data loading and filtering
+- Added consistent number formatting for large values
 
-### 🔄 **Multi-Page API Loading**
-- **Complete Dataset**: Fixed pagination issue by implementing multi-page loading to fetch all 136 transparency calculations instead of just 100
-- **Parallel Processing**: Efficient Promise.allSettled() approach for loading remaining pages simultaneously  
-- **API Response Handling**: Enhanced TransparencyService to properly handle backend response structure with data.pagination.total
+### API Loading Improvements  
+- Fixed pagination issue by implementing multi-page loading for complete dataset
+- Enhanced TransparencyService to fetch all 136 transparency calculations
+- Added parallel processing for efficient page loading
 
-### 🎯 **Advanced Filtering System**
-- **Client-Side Filtering**: Comprehensive filtering by file_type, instrument_type, activity status, and ISIN search
-- **Real-Time Updates**: Filters apply instantly to loaded data without additional API calls
-- **Clear Functionality**: One-click filter clearing with form reset and UI updates
+### Filtering System
+- Implemented client-side filtering by file_type, instrument_type, activity status, and ISIN
+- Added real-time filter application without additional API calls
+- Included filter clearing functionality
 
-### 🛠️ **Technical Improvements**
-- **Fixed Build Errors**: Added missing ComprehensiveInstrumentData interface and resolved unused parameter warnings
-- **Enhanced Logging**: Comprehensive console logging for debugging data loading and filtering operations  
-- **DOM Management**: Robust element querying with proper null checks and timing controls
+### Technical Changes
+- Fixed build errors and added missing TypeScript interfaces
+- Enhanced logging for debugging data operations
+- Improved DOM management with proper null checks
 
-## [2025-10-19] - Complete Derivative Type Implementation & Professional Frontend
+## [2025-10-19] - Complete Derivative Type Implementation
 
-### 🎯 **Comprehensive Swap Classification System**
-- **Five Swap Types**: Complete implementation of Interest Rate Swaps (SRCCSP), OIS Swaps (SRHCSC), Credit Default Swaps (SCBCCA), Equity Total Return Swaps (SESTXC), and FX Swaps (SFCXXP)
-- **Enhanced CFI Logic**: Advanced 3rd character analysis for OIS detection and precise swap type differentiation
-- **Professional Display**: Color-coded badges, specialized terminology, and type-specific sections with compounding frequency details
+### Swap Classification System
+- Implemented five swap types: Interest Rate Swaps (SRCCSP), OIS Swaps (SRHCSC), Credit Default Swaps (SCBCCA), Equity Total Return Swaps (SESTXC), and FX Swaps (SFCXXP)
+- Added advanced CFI 3rd character analysis for OIS detection and swap type differentiation
+- Enhanced display with color-coded badges and type-specific sections
 
-### 🔄 **Enhanced Forward Contract Support**
-- **Complete CFI Coverage**: Equity Forwards (JE), FX Forwards (JF), Interest Rate Forwards (JR), and Commodity Forwards (JC)
-- **Advanced Attributes**: Settlement types, underlying assets, time calculations, and term classification
-- **Frontend Integration**: Professional forward-specific sections with conditional displays for FX pairs, interest rates, and underlying baskets
+### Forward Contract Support
+- Added complete CFI coverage for Equity Forwards (JE), FX Forwards (JF), Interest Rate Forwards (JR), and Commodity Forwards (JC)
+- Implemented settlement types, underlying assets, time calculations, and term classification
+- Created forward-specific frontend sections with conditional displays
 
-### 💎 **Options & Futures Enhancement**
-- **Comprehensive Attributes**: Strike prices, exercise styles, underlying ISINs, settlement types, and expiration analysis
-- **Enhanced Display**: Option type badges, exercise style indicators, and clickable underlying asset navigation
-- **Time Calculations**: Years/days to expiry with professional formatting and term classification
+### Options & Futures Enhancement
+- Added strike prices, exercise styles, underlying ISINs, settlement types, and expiration analysis
+- Implemented option type badges, exercise style indicators, and underlying asset navigation
+- Added time calculations with years/days to expiry formatting
 
-### 🏛️ **Debt Instrument Enhancement**
-- **Financial Details**: Fixed interest rates, debt seniority, nominal amounts, and maturity calculations
-- **Professional Display**: Currency formatting, seniority badges, and comprehensive time-to-maturity analysis
-- **Enhanced Data**: Total issued amounts, nominal value per unit, and proper FIRDS field mapping
+### Debt Instrument Enhancement
+- Added fixed interest rates, debt seniority, nominal amounts, and maturity calculations
+- Implemented currency formatting and seniority badges
+- Enhanced data display with total issued amounts and nominal value per unit
 
-### 🎨 **Professional Frontend Implementation**
-- **Type-Specific Sections**: Conditional displays with proper color coding and visual indicators
-- **Navigation Enhancement**: Clickable underlying ISINs with hover effects and navigation integration
-- **Currency Formatting**: Professional number formatting with proper separators and currency symbols
-- **Mobile Responsive**: Complete responsive design with grid layouts and mobile-optimized displays
+### Frontend Implementation
+- Created type-specific sections with conditional displays and color coding
+- Added clickable underlying ISINs with navigation integration
+- Implemented professional number formatting and mobile responsive design
 
-## [2025-10-18] - Type-Specific Attribute Extractors & Intelligence System
+## [2025-10-18] - Type-Specific Attribute Extractors
 
-### 🎯 **Comprehensive FIRDS Field Analysis & Extraction**
-- **Complete CFI Type Coverage**: Implemented intelligent attribute extractors for all 10 major CFI instrument types (Swap, Future, Option, Debt, Equity, Rights, Collective Investment, Structured Products, Spot, Forward)
-- **254 FIRDS Fields Analyzed**: Systematic categorization of all FIRDS data fields into functional groups (dates, rates, contract specifications, underlying assets)
-- **Intelligent Classification**: Advanced business logic for automatic instrument type determination and descriptive naming
+### FIRDS Field Analysis & Extraction
+- Implemented attribute extractors for all 10 major CFI instrument types (Swap, Future, Option, Debt, Equity, Rights, Collective Investment, Structured Products, Spot, Forward)
+- Analyzed and categorized 254 FIRDS data fields into functional groups (dates, rates, contract specifications, underlying assets)
+- Added business logic for automatic instrument type determination and descriptive naming
 
-### 🏗️ **Advanced Attribute Extraction System**
-- **Rich Data Extraction**: Contract specifications, expiration analysis, pricing information, risk attributes, and classification logic
-- **Time-Based Calculations**: Automatic time-to-maturity, days-to-expiry, and term classification calculations
-- **Enhanced Type Detection**: Intelligent differentiation between sub-types (e.g., Interest Rate Swaps vs Credit Default Swaps, Call vs Put Options)
+### Attribute Extraction System
+- Added contract specifications, expiration analysis, pricing information, and risk attributes
+- Implemented automatic time-to-maturity, days-to-expiry, and term classification calculations
+- Enhanced type detection for differentiation between sub-types (Interest Rate Swaps vs Credit Default Swaps, Call vs Put Options)
 
-### 🚀 **Production-Ready API Integration**
-- **Type-Specific Responses**: All `/api/v1/instruments/{isin}` endpoints now return rich `{instrument_type}_attributes` objects
-- **Consistent Data Structures**: Standardized field normalization across all instrument types
-- **Raw Data Comparison**: Added `/api/v1/instruments/{isin}/raw` endpoint for development validation
-- **Fixed Swagger UI**: Resolved model registration issues for complete API documentation
+### API Integration
+- Modified `/api/v1/instruments/{isin}` endpoints to return rich `{instrument_type}_attributes` objects
+- Standardized field normalization across all instrument types
+- Added `/api/v1/instruments/{isin}/raw` endpoint for development validation
+- Fixed Swagger UI model registration issues
 
-### 📊 **Business Intelligence Features**
-- **Swap Attributes**: Reference rates, settlement types, floating terms, swap classifications
-- **Option Attributes**: Strike prices, exercise styles, barrier features, underlying asset mapping  
-- **Future Attributes**: Contract specifications, delivery types, underlying assets, expiration tracking
-- **Debt Attributes**: Maturity analysis, interest rate types, convertible bond detection
-- **Equity Attributes**: Share classifications, voting rights analysis, dividend information
-- **Enhanced Rights**: Exercise price analysis, underlying mapping, expiry status tracking
-- **Fund Intelligence**: Investment strategies, distribution policies, geographic focus (Collective Investment)
-- **Structured Products**: Capital protection analysis, participation rates, barrier classifications
-- **Currency & Commodities**: FX pair detection, commodity categorization, settlement analysis
+### Business Intelligence Features
+- Added swap attributes: reference rates, settlement types, floating terms, swap classifications
+- Added option attributes: strike prices, exercise styles, barrier features, underlying asset mapping
+- Added future attributes: contract specifications, delivery types, underlying assets, expiration tracking
+- Added debt attributes: maturity analysis, interest rate types, convertible bond detection
+- Added equity attributes: share classifications, voting rights analysis, dividend information
+- Enhanced rights: exercise price analysis, underlying mapping, expiry status tracking
+- Added fund intelligence: investment strategies, distribution policies, geographic focus
+- Added structured products: capital protection analysis, participation rates, barrier classifications
+- Added currency & commodities: FX pair detection, commodity categorization, settlement analysis
 
-### 🛠️ **Technical Architecture**
-- **Modular Design**: Clean separation between field extraction, business logic, and API integration
-- **Performance Optimized**: Single-pass FIRDS data processing with lazy evaluation
-- **Extensible Framework**: Easy addition of new CFI types or field mappings
-- **Memory Efficient**: Optional rich details with graceful fallbacks when data is sparse
+### Technical Architecture
+- Implemented modular design with separation between field extraction, business logic, and API integration
+- Optimized single-pass FIRDS data processing with lazy evaluation
+- Created extensible framework for adding new CFI types or field mappings
+- Added memory efficient processing with graceful fallbacks
 
 ## [2025-10-12] - Rich API Response Enhancement & CLI-Quality Data
 
