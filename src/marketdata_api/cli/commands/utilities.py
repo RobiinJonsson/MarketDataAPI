@@ -50,8 +50,8 @@ def stats(ctx):
                     ).scalar() or 0
                     
                     # Legal entity coverage statistics
-                    instruments_with_lei_count = session.query(Instrument).filter(
-                        Instrument.lei_id.isnot(None)
+                    instruments_with_lei_count = session.query(Instrument).join(
+                        LegalEntity, Instrument.lei_id == LegalEntity.lei
                     ).count()
                     
                     # Transparency coverage statistics
@@ -84,7 +84,7 @@ def stats(ctx):
         stats_text = f"""[cyan]Instruments:[/cyan] {stats_data['instruments']:,}
 [cyan]Transparency Calculations:[/cyan] {stats_data['transparency']:,} ([green]{stats_data['instruments_with_transparency']:,} instruments[/green] - {transparency_coverage:.1f}%)
 [cyan]MIC Codes:[/cyan] {stats_data['mics']:,}
-[cyan]Legal Entities:[/cyan] {stats_data['legal_entities']:,} ([green]{stats_data['instruments_with_lei']:,} linked[/green] - {lei_coverage:.1f}%)
+[cyan]Legal Entities:[/cyan] {stats_data['legal_entities']:,} unique entities ([green]{stats_data['instruments_with_lei']:,} instruments linked[/green] - {lei_coverage:.1f}%)
 [cyan]FIGI Mappings:[/cyan] {stats_data['figi_mappings']:,} ([green]{stats_data['instruments_with_figi']:,} instruments[/green] - {figi_coverage:.1f}%)"""
 
         console.print(Panel(stats_text, title="Database Statistics"))

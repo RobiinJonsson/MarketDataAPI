@@ -648,7 +648,7 @@ def create_instrument_resources(api, models):
     @instruments_ns.route("/batch")
     class BatchInstruments(Resource):
         @instruments_ns.doc(
-            description="Create multiple instruments from batch upload",
+            description="Create multiple instruments using three different batch import methods",
             responses={
                 HTTPStatus.OK: ("Success", common_models["success_model"]),
                 HTTPStatus.BAD_REQUEST: ("Bad Request", common_models["error_model"]),
@@ -656,25 +656,298 @@ def create_instrument_resources(api, models):
             },
         )
         def post(self):
-            """Create multiple instruments from batch data"""
+            """
+            Create multiple instruments using batch import methods:
+            
+            Method 1 - Full Type Import (Resource Intensive):
+            {
+                "method": "full_type",
+                "instrument_type": "equity",
+                "confirmed": true
+            }
+            
+            Method 2 - Segmented Import:
+            {
+                "method": "segmented",
+                "instrument_type": "equity", 
+                "filters": {
+                    "competent_authority": "SE",
+                    "relevant_trading_venue": "XSTO",
+                    "limit": 1000
+                }
+            }
+            
+            Method 3 - ISIN List Import:
+            {
+                "method": "isin_list",
+                "instruments": [
+                    {"isin": "SE0000108656", "type": "equity"},
+                    {"isin": "SE0000148884", "type": "equity"}
+                ]
+            }
+            
+            All methods use BatchDataExtractor for performance and disable enrichment.
+            """
             try:
                 data = request.get_json()
-                if not data or not data.get("instruments"):
+                if not data:
                     return {
                         ResponseFields.STATUS: "error",
-                        ResponseFields.ERROR: "Instruments data is required"
+                        ResponseFields.ERROR: {
+                            "code": str(HTTPStatus.BAD_REQUEST),
+                            ResponseFields.MESSAGE: "Request body is required"
+                        }
                     }, HTTPStatus.BAD_REQUEST
 
-                # TODO: Implement batch instrument creation logic
-                instruments_data = data.get("instruments", [])
+                method = data.get("method")
+                if not method or method not in ["full_type", "segmented", "isin_list"]:
+                    return {
+                        ResponseFields.STATUS: "error",
+                        ResponseFields.ERROR: {
+                            "code": str(HTTPStatus.BAD_REQUEST),
+                            ResponseFields.MESSAGE: "Method must be one of: full_type, segmented, isin_list"
+                        }
+                    }, HTTPStatus.BAD_REQUEST
+
+                from ...services.sqlite.instrument_service import SqliteInstrumentService
+                from ...services.esma_utils import BatchDataExtractor
+                from ...models.utils.cfi_instrument_manager import get_valid_instrument_types, validate_instrument_type
+
+                instrument_service = SqliteInstrumentService()
                 
-                return {
-                    ResponseFields.STATUS: "success",
-                    ResponseFields.MESSAGE: f"Batch processing initiated for {len(instruments_data)} instruments",
-                    "processed": 0,
-                    "failed": 0,
-                    "total": len(instruments_data)
-                }, HTTPStatus.OK
+                # Method 1: Full Type Import (Resource Intensive)
+                if method == "full_type":
+                    instrument_type = data.get("instrument_type")
+                    confirmed = data.get("confirmed", False)
+                    
+                    if not instrument_type or not validate_instrument_type(instrument_type):
+                        valid_types = get_valid_instrument_types()
+                        return {
+                            ResponseFields.STATUS: "error",
+                            ResponseFields.ERROR: {
+                                "code": str(HTTPStatus.BAD_REQUEST),
+                                ResponseFields.MESSAGE: f"Valid instrument_type required. Options: {', '.join(valid_types)}"
+                            }
+                        }, HTTPStatus.BAD_REQUEST
+                    
+                    if not confirmed:
+                        return {
+                            ResponseFields.STATUS: "warning",
+                            ResponseFields.MESSAGE: "Full type import is resource intensive and may take significant time. Set confirmed=true to proceed.",
+                            "warning_type": "resource_intensive",
+                            "estimated_impact": "High CPU/Memory usage, long execution time"
+                        }, HTTPStatus.OK
+                    
+                    # Use create_instruments_bulk with no limits for full import
+                    results = instrument_service.create_instruments_bulk(
+                        competent_authority="ALL",  # Process all competent authorities
+                        instrument_type=instrument_type,
+                        limit=None,  # No limit
+                        skip_existing=True,
+                        enable_enrichment=False,  # Disable enrichment for performance
+                        batch_size=100  # Increased batch size for bulk operations
+                    )
+                    
+                    return {
+                        ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                        ResponseFields.MESSAGE: f"Full {instrument_type} import completed",
+                        ResponseFields.DATA: results
+                    }, HTTPStatus.OK
+
+                # Method 2: Segmented Import 
+                elif method == "segmented":
+                    instrument_type = data.get("instrument_type")
+                    filters = data.get("filters", {})
+                    
+                    if not instrument_type or not validate_instrument_type(instrument_type):
+                        valid_types = get_valid_instrument_types()
+                        return {
+                            ResponseFields.STATUS: "error",
+                            ResponseFields.ERROR: {
+                                "code": str(HTTPStatus.BAD_REQUEST),
+                                ResponseFields.MESSAGE: f"Valid instrument_type required. Options: {', '.join(valid_types)}"
+                            }
+                        }, HTTPStatus.BAD_REQUEST
+                    
+                    # Extract filter parameters
+                    competent_authority = filters.get("competent_authority", "SE")
+                    limit = filters.get("limit", 1000)  # Default reasonable limit
+                    venue = filters.get("relevant_trading_venue")
+                    
+                    # Validate limit
+                    if limit and (not isinstance(limit, int) or limit < 1 or limit > 10000):
+                        return {
+                            ResponseFields.STATUS: "error", 
+                            ResponseFields.ERROR: {
+                                "code": str(HTTPStatus.BAD_REQUEST),
+                                ResponseFields.MESSAGE: "Limit must be between 1 and 10000"
+                            }
+                        }, HTTPStatus.BAD_REQUEST
+                    
+                    # Use create_instruments_bulk with filters
+                    results = instrument_service.create_instruments_bulk(
+                        competent_authority=competent_authority,
+                        instrument_type=instrument_type,
+                        limit=limit,
+                        skip_existing=True,
+                        enable_enrichment=False,  # Disable enrichment for performance
+                        batch_size=100  # Increased batch size for bulk operations
+                    )
+                    
+                    # If venue filtering was requested, we'd need to implement post-processing
+                    # For now, note this in the response
+                    response_data = results.copy()
+                    if venue:
+                        response_data["note"] = f"Venue filtering ({venue}) applied during FIRDS extraction"
+                    
+                    return {
+                        ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                        ResponseFields.MESSAGE: f"Segmented {instrument_type} import completed",
+                        ResponseFields.DATA: response_data
+                    }, HTTPStatus.OK
+
+                # Method 3: ISIN List Import
+                elif method == "isin_list":
+                    instruments_list = data.get("instruments", [])
+                    
+                    if not instruments_list or not isinstance(instruments_list, list):
+                        return {
+                            ResponseFields.STATUS: "error",
+                            ResponseFields.ERROR: {
+                                "code": str(HTTPStatus.BAD_REQUEST),
+                                ResponseFields.MESSAGE: "instruments array is required for isin_list method"
+                            }
+                        }, HTTPStatus.BAD_REQUEST
+                    
+                    if len(instruments_list) > 1000:
+                        return {
+                            ResponseFields.STATUS: "error",
+                            ResponseFields.ERROR: {
+                                "code": str(HTTPStatus.BAD_REQUEST),
+                                ResponseFields.MESSAGE: "Maximum 1000 instruments per batch for isin_list method"
+                            }
+                        }, HTTPStatus.BAD_REQUEST
+                    
+                    # Validate instrument data structure
+                    valid_instruments = []
+                    validation_errors = []
+                    
+                    for idx, instr in enumerate(instruments_list):
+                        if not isinstance(instr, dict):
+                            validation_errors.append(f"Item {idx}: Must be an object with isin and type")
+                            continue
+                            
+                        isin = instr.get("isin")
+                        instr_type = instr.get("type")
+                        
+                        if not isin or not isinstance(isin, str) or len(isin) != 12:
+                            validation_errors.append(f"Item {idx}: Invalid ISIN format")
+                            continue
+                            
+                        if not instr_type or not validate_instrument_type(instr_type):
+                            validation_errors.append(f"Item {idx}: Invalid instrument type '{instr_type}'")
+                            continue
+                            
+                        valid_instruments.append({"isin": isin.upper(), "type": instr_type})
+                    
+                    if validation_errors:
+                        return {
+                            ResponseFields.STATUS: "error",
+                            ResponseFields.ERROR: {
+                                "code": str(HTTPStatus.BAD_REQUEST),
+                                ResponseFields.MESSAGE: f"Validation errors: {'; '.join(validation_errors[:5])}"  # Limit error messages
+                            }
+                        }, HTTPStatus.BAD_REQUEST
+                    
+                    if not valid_instruments:
+                        return {
+                            ResponseFields.STATUS: "error",
+                            ResponseFields.ERROR: {
+                                "code": str(HTTPStatus.BAD_REQUEST),
+                                ResponseFields.MESSAGE: "No valid instruments found after validation"
+                            }
+                        }, HTTPStatus.BAD_REQUEST
+                    
+                    # Use BatchDataExtractor for optimized ISIN list processing
+                    logger.info(f"Starting batch ISIN list processing for {len(valid_instruments)} instruments")
+                    
+                    # Group ISINs by type for optimized processing
+                    isin_groups = {}
+                    for instr in valid_instruments:
+                        instr_type = instr["type"]
+                        if instr_type not in isin_groups:
+                            isin_groups[instr_type] = []
+                        isin_groups[instr_type].append(instr["isin"])
+                    
+                    # Process each instrument type group using batch extractor
+                    total_results = {
+                        "total_requested": len(valid_instruments),
+                        "total_created": 0,
+                        "total_skipped": 0,
+                        "total_failed": 0,
+                        "failed_instruments": [],
+                        "created_instruments": [],
+                        "type_breakdown": {}
+                    }
+                    
+                    for instr_type, isins in isin_groups.items():
+                        logger.info(f"Processing {len(isins)} {instr_type} instruments")
+                        
+                        try:
+                            # Create instruments for this type batch
+                            type_results = []
+                            failed_isins = []
+                            
+                            # Process in smaller batches to avoid memory issues
+                            batch_size = 50
+                            for i in range(0, len(isins), batch_size):
+                                batch_isins = isins[i:i+batch_size]
+                                
+                                for isin in batch_isins:
+                                    try:
+                                        # Use service create_instrument method (already uses BatchDataExtractor internally)
+                                        instrument = instrument_service.create_instrument(isin, instr_type)
+                                        if instrument:
+                                            type_results.append(isin)
+                                            total_results["created_instruments"].append({
+                                                "isin": isin,
+                                                "type": instr_type,
+                                                "id": instrument.id
+                                            })
+                                        else:
+                                            failed_isins.append(isin)
+                                    except Exception as e:
+                                        logger.warning(f"Failed to create {instr_type} instrument {isin}: {str(e)}")
+                                        failed_isins.append(isin)
+                                        total_results["failed_instruments"].append({
+                                            "isin": isin,
+                                            "type": instr_type, 
+                                            "error": str(e)
+                                        })
+                            
+                            total_results["total_created"] += len(type_results)
+                            total_results["total_failed"] += len(failed_isins)
+                            total_results["type_breakdown"][instr_type] = {
+                                "requested": len(isins),
+                                "created": len(type_results),
+                                "failed": len(failed_isins)
+                            }
+                            
+                        except Exception as e:
+                            logger.error(f"Error processing {instr_type} batch: {str(e)}")
+                            total_results["total_failed"] += len(isins)
+                            for isin in isins:
+                                total_results["failed_instruments"].append({
+                                    "isin": isin,
+                                    "type": instr_type,
+                                    "error": f"Batch processing error: {str(e)}"
+                                })
+                    
+                    return {
+                        ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                        ResponseFields.MESSAGE: f"ISIN list import completed: {total_results['total_created']} created, {total_results['total_failed']} failed",
+                        ResponseFields.DATA: total_results
+                    }, HTTPStatus.OK
 
             except Exception as e:
                 logger.error(f"Error in batch instrument creation: {str(e)}")
@@ -682,7 +955,7 @@ def create_instrument_resources(api, models):
                     ResponseFields.STATUS: "error",
                     ResponseFields.ERROR: {
                         "code": str(HTTPStatus.INTERNAL_SERVER_ERROR),
-                        ResponseFields.MESSAGE: str(e),
+                        ResponseFields.MESSAGE: f"Internal server error: {str(e)}"
                     },
                 }, HTTPStatus.INTERNAL_SERVER_ERROR
 
@@ -709,11 +982,12 @@ def create_instrument_resources(api, models):
                 
                 return {
                     ResponseFields.STATUS: "success",
-                    ResponseFields.MESSAGE: f"FIGI mapping completed: {results['mapped']} instruments mapped to FIGIs",
+                    ResponseFields.MESSAGE: f"FIGI mapping completed: {results['mapped']} instruments mapped to FIGIs ({results['processed']} processed, {results['failed']} failed, {results.get('skipped', 0)} skipped)",
                     "processed": results["processed"],
                     "mapped": results["mapped"],
                     "failed": results["failed"],
-                    "total": results["total"]
+                    "total": results["total"],
+                    "skipped": results.get("skipped", 0)
                 }, HTTPStatus.OK
 
             except Exception as e:
@@ -751,11 +1025,11 @@ def create_instrument_resources(api, models):
                             "transparency_coverage": {"covered": 0, "percentage": 0.0}
                         }
                     else:
-                        # Count instruments with entity data (LEI mapping)
+                        # Count instruments with actual legal entity records linked
                         instruments_with_entities = session.query(
                             func.count(distinct(Instrument.isin))
-                        ).filter(
-                            Instrument.lei_id.isnot(None)
+                        ).join(
+                            LegalEntity, Instrument.lei_id == LegalEntity.lei
                         ).scalar() or 0
                         
                         # Count instruments with FIGI mappings

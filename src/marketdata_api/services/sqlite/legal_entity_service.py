@@ -25,6 +25,8 @@ class LegalEntityServiceError(Exception):
 
 
 class LegalEntityService(LegalEntityServiceInterface):
+    _batch_operation_in_progress = False
+    
     def __init__(self):
         self.database_type = "sqlite"
         self.logger = logging.getLogger(__name__)
@@ -195,104 +197,164 @@ class LegalEntityService(LegalEntityServiceInterface):
         """
         Fill missing entity data for instruments with LEI information from GLEIF.
         
-        Finds instruments that have LEI codes in their FIRDS data but no lei_id mapping,
-        then fetches entity information from GLEIF API and creates the necessary entities.
+        Robust implementation with duplicate prevention, proper error handling,
+        and database lock management.
         
         Args:
             batch_size: Maximum number of instruments to process in one batch
             
         Returns:
-            Dict with statistics: {"scanned": int, "updated": int, "failed": int}
+            Dict with statistics: {"scanned": int, "updated": int, "failed": int, "skipped": int}
         """
         from ...models.sqlite.instrument import Instrument
         from ..gleif import fetch_lei_info
+        import time
+        from sqlalchemy.exc import OperationalError
+        
+        # Prevent concurrent batch operations
+        if LegalEntityService._batch_operation_in_progress:
+            self.logger.warning("Batch entity fill already in progress, skipping request")
+            return {
+                "scanned": 0,
+                "updated": 0,
+                "failed": 1,
+                "skipped": 0,
+                "error": "Another batch operation is already in progress"
+            }
+        
+        LegalEntityService._batch_operation_in_progress = True
         
         scanned = 0
         updated = 0  
         failed = 0
+        skipped = 0
         
         session = SessionLocal()
         try:
-            # Find instruments that have FIRDS data with LEI info but no lei_id mapping
+            # Find instruments that have lei_id but no corresponding legal entity record
             instruments_query = session.query(Instrument).filter(
-                Instrument.lei_id.is_(None),
-                Instrument.firds_data.isnot(None)
+                Instrument.lei_id.isnot(None),
+                ~session.query(LegalEntity).filter(
+                    LegalEntity.lei == Instrument.lei_id
+                ).exists()
             ).limit(batch_size)
             
             instruments = instruments_query.all()
             self.logger.info(f"Found {len(instruments)} instruments to process for entity data")
             
+            # Process in smaller sub-batches to reduce lock contention
+            processed_leis = set()  # Track processed LEIs to avoid duplicates
+            
             for instrument in instruments:
                 scanned += 1
                 try:
-                    # Extract LEI from FIRDS data
-                    firds_data = instrument.firds_data or {}
-                    lei_code = None
-                    
-                    # Try different possible LEI field names in FIRDS data
-                    if isinstance(firds_data, dict):
-                        lei_code = (
-                            firds_data.get('Issr') or 
-                            firds_data.get('issuer_lei') or
-                            firds_data.get('LEI') or
-                            firds_data.get('lei')
-                        )
+                    # Get LEI from instrument (now populated during creation)
+                    lei_code = instrument.lei_id
                     
                     if not lei_code or len(lei_code) != 20:
-                        self.logger.debug(f"No valid LEI found in FIRDS data for instrument {instrument.isin}")
+                        self.logger.debug(f"Invalid LEI for instrument {instrument.isin}: '{lei_code}'")
+                        skipped += 1
                         continue
-                        
-                    # Check if LEI entity already exists
+                    
+                    # Skip if we've already processed this LEI in this batch
+                    if lei_code in processed_leis:
+                        self.logger.debug(f"LEI {lei_code} already processed in this batch, skipping")
+                        skipped += 1
+                        continue
+                    
+                    # Double-check if entity already exists (fresh query to avoid stale data)
                     existing_entity = session.query(LegalEntity).filter(
                         LegalEntity.lei == lei_code
                     ).first()
                     
-                    if not existing_entity:
-                        # Fetch entity data from GLEIF API and create entity
-                        self.logger.debug(f"Fetching entity data for LEI: {lei_code}")
-                        gleif_response = fetch_lei_info(lei_code)
-                        
-                        if isinstance(gleif_response, dict) and gleif_response.get('error'):
-                            self.logger.warning(f"Failed to fetch LEI {lei_code}: {gleif_response['error']}")
-                            failed += 1
-                            continue
-                        
-                        # Create entity from GLEIF data using existing mapping logic
+                    if existing_entity:
+                        self.logger.debug(f"Entity already exists for LEI {lei_code}, skipping")
+                        processed_leis.add(lei_code)
+                        skipped += 1
+                        continue
+                    
+                    # Fetch entity data from GLEIF API and create entity
+                    self.logger.debug(f"Fetching entity data for LEI: {lei_code}")
+                    gleif_response = fetch_lei_info(lei_code)
+                    
+                    if isinstance(gleif_response, dict) and gleif_response.get('error'):
+                        self.logger.warning(f"Failed to fetch LEI {lei_code}: {gleif_response['error']}")
+                        failed += 1
+                        continue
+                    
+                    # Create entity from GLEIF data with retry logic
+                    max_retries = 3
+                    for attempt in range(max_retries):
                         try:
                             mapped_data = map_lei_record(gleif_response)
                             existing_entity = self._update_entity_from_data(session, mapped_data)
+                            
+                            # Commit immediately to reduce lock time
+                            session.commit()
+                            
+                            processed_leis.add(lei_code)
+                            updated += 1
                             self.logger.info(f"Created new entity for LEI: {lei_code}")
+                            break
+                            
+                        except OperationalError as e:
+                            if "database is locked" in str(e) and attempt < max_retries - 1:
+                                self.logger.warning(f"Database locked, retrying in {0.5 * (attempt + 1)}s (attempt {attempt + 1}/{max_retries})")
+                                session.rollback()
+                                time.sleep(0.5 * (attempt + 1))  # Exponential backoff
+                                continue
+                            else:
+                                self.logger.error(f"Failed to create entity for LEI {lei_code} after {max_retries} attempts: {str(e)}")
+                                session.rollback()
+                                failed += 1
+                                break
                         except Exception as e:
                             self.logger.error(f"Failed to create entity for LEI {lei_code}: {str(e)}")
+                            session.rollback()
                             failed += 1
-                            continue
-                    
-                    # Link instrument to entity
-                    instrument.lei_id = lei_code
-                    session.flush()  # Ensure the change is persisted
-                    updated += 1
-                    self.logger.debug(f"Linked instrument {instrument.isin} to entity {lei_code}")
+                            break
                     
                 except Exception as e:
                     self.logger.error(f"Error processing instrument {instrument.isin}: {str(e)}")
+                    try:
+                        session.rollback()
+                    except:
+                        pass
                     failed += 1
                     continue
             
-            # Commit all changes
-            session.commit()
-            self.logger.info(f"Batch entity fill completed: {scanned} scanned, {updated} updated, {failed} failed")
+            # Final commit for any remaining changes
+            try:
+                session.commit()
+            except Exception as e:
+                self.logger.warning(f"Final commit failed, but individual commits may have succeeded: {str(e)}")
+                session.rollback()
+            
+            self.logger.info(f"Batch entity fill completed: {scanned} scanned, {updated} updated, {failed} failed, {skipped} skipped")
             
             return {
                 "scanned": scanned,
                 "updated": updated,
-                "failed": failed
+                "failed": failed,
+                "skipped": skipped
             }
             
         except Exception as e:
-            session.rollback()
-            self.logger.error(f"Error in batch entity fill: {str(e)}")
-            raise LegalEntityServiceError(f"Batch entity fill failed: {str(e)}")
+            try:
+                session.rollback()
+            except:
+                pass
+            self.logger.error(f"Critical error in batch entity fill: {str(e)}")
+            # Return partial results instead of raising exception
+            return {
+                "scanned": scanned,
+                "updated": updated,
+                "failed": failed + 1,  # Count this critical error
+                "skipped": skipped,
+                "error": str(e)
+            }
         finally:
+            LegalEntityService._batch_operation_in_progress = False
             session.close()
 
     def delete_entity(self, lei: str) -> bool:

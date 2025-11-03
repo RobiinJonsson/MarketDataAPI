@@ -301,7 +301,7 @@ def bulk_create(ctx, jurisdiction, type, limit, batch_size, skip_existing, enric
 
         with console.status("[bold green]Processing bulk instrument creation..."):
             results = service.create_instruments_bulk(
-                jurisdiction=jurisdiction,
+                competent_authority=jurisdiction,
                 instrument_type=type,
                 limit=limit,
                 skip_existing=skip_existing,

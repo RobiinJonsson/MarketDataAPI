@@ -14,7 +14,7 @@ import logging
 import re
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -33,6 +33,21 @@ from ...models.utils.cfi_instrument_manager import CFIInstrumentTypeManager
 from ...services.interfaces.instrument_service_interface import InstrumentServiceInterface
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_firds_date(date_str: str) -> Optional[datetime]:
+    """Parse FIRDS date string to datetime object."""
+    if not date_str:
+        return None
+    
+    try:
+        # FIRDS dates are typically in YYYY-MM-DD format
+        if isinstance(date_str, str):
+            return datetime.fromisoformat(date_str.replace('Z', ''))
+        return None
+    except (ValueError, AttributeError):
+        # If parsing fails, return None
+        return None
 
 
 class InstrumentServiceError(Exception):
@@ -1238,6 +1253,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
         session = SessionLocal()
         try:
             # Query for instruments without FIGI mappings
+            # We'll filter out recently failed ones in Python for simplicity
             if isins:
                 # Process specific ISINs
                 instruments_query = session.query(Instrument).filter(
@@ -1245,21 +1261,51 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                     ~session.query(FigiMapping).filter(
                         FigiMapping.isin == Instrument.isin
                     ).exists()
-                ).limit(batch_size)
+                ).limit(batch_size * 2)  # Get more to account for filtering
             else:
                 # Process all instruments without FIGI mappings
                 instruments_query = session.query(Instrument).filter(
                     ~session.query(FigiMapping).filter(
                         FigiMapping.isin == Instrument.isin
                     ).exists()
-                ).limit(batch_size)
+                ).limit(batch_size * 2)  # Get more to account for filtering
             
-            instruments = instruments_query.all()
+            all_instruments = instruments_query.all()
+            
+            # Filter out instruments that failed FIGI lookup recently (within 7 days)
+            cutoff_date = datetime.utcnow() - timedelta(days=7)
+            instruments = []
+            
+            skipped_count = 0
+            for instrument in all_instruments:
+                # Check if this instrument has recent failed FIGI attempts
+                processed_attrs = instrument.processed_attributes or {}
+                figi_failed_date = processed_attrs.get('figi_failed_date')
+                
+                if figi_failed_date:
+                    try:
+                        failed_date = datetime.fromisoformat(figi_failed_date)
+                        if failed_date > cutoff_date:
+                            # Failed recently, skip this instrument
+                            skipped_count += 1
+                            self.logger.debug(f"⏭️ Skipping {instrument.isin} - FIGI failed recently on {figi_failed_date}")
+                            continue
+                    except (ValueError, TypeError):
+                        # Invalid date format, treat as eligible for retry
+                        self.logger.warning(f"Invalid figi_failed_date format for {instrument.isin}: {figi_failed_date}")
+                        pass
+                
+                instruments.append(instrument)
+                if len(instruments) >= batch_size:
+                    break  # We have enough instruments
+            
+            self.logger.info(f"🔍 Filtered {skipped_count} recently failed instruments from {len(all_instruments)} candidates")
+            
             total_found = len(instruments)
             
             if not instruments:
-                self.logger.info("No instruments found without FIGI mappings")
-                return {"processed": 0, "mapped": 0, "failed": 0, "total": 0}
+                self.logger.info("No eligible instruments found for FIGI mapping (excluding recently failed)")
+                return {"processed": 0, "mapped": 0, "failed": 0, "total": 0, "skipped": len(all_instruments)}
             
             self.logger.info(f"Found {total_found} instruments to process for FIGI mapping")
             
@@ -1346,23 +1392,37 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                             except Exception as e:
                                 self.logger.error(f"Error processing FIGI results for {isin}: {str(e)}")
                                 failed += 1
+                                # Mark this instrument as having failed FIGI lookup
+                                self._mark_figi_failed(session, instrument)
                         else:
                             self.logger.debug(f"No FIGI results found for {isin} with MIC {mic_code}")
                             failed += 1
+                            # Mark this instrument as having failed FIGI lookup
+                            self._mark_figi_failed(session, instrument)
                             
                 except Exception as e:
                     self.logger.error(f"Error in batch FIGI search for chunk: {str(e)}")
                     failed += len(chunk)
+                
+                # Commit changes after each chunk to persist failed attempt marks
+                try:
+                    session.commit()
+                    self.logger.debug(f"Committed chunk {chunk_num} changes to database")
+                except Exception as commit_error:
+                    self.logger.error(f"Error committing chunk {chunk_num}: {str(commit_error)}")
+                    session.rollback()
             
             # Commit all changes
             session.commit()
-            self.logger.info(f"Batch FIGI enrichment completed: {processed} processed, {mapped} mapped, {failed} failed")
+            skipped = len(all_instruments) - len(instruments)
+            self.logger.info(f"Batch FIGI enrichment completed: {processed} processed, {mapped} mapped, {failed} failed, {skipped} skipped (recently failed)")
             
             return {
                 "processed": processed,
                 "mapped": mapped, 
                 "failed": failed,
-                "total": total_found
+                "total": total_found,
+                "skipped": skipped
             }
             
         except Exception as e:
@@ -1373,24 +1433,58 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             session.close()
     
     def _extract_mic_for_figi_search(self, instrument: Instrument) -> str:
-        """Extract MIC code for FIGI search from instrument data."""
-        # Try relevant_trading_venue first
-        if instrument.relevant_trading_venue:
-            return instrument.relevant_trading_venue
-            
-        # Try to extract from firds_data
-        if instrument.firds_data and isinstance(instrument.firds_data, dict):
-            mic_code = (
-                instrument.firds_data.get('TechAttrbts_RlvntTradgVn') or
-                instrument.firds_data.get('relevant_trading_venue') or
-                instrument.firds_data.get('mic_code') or
-                instrument.firds_data.get('MIC')
-            )
-            if mic_code:
-                return mic_code
+        """
+        Extract MIC code for FIGI search from instrument data.
         
-        # Default to empty string (will trigger broad FIGI search)
-        return ""
+        Prioritizes operating MIC over segment MIC for better OpenFIGI results.
+        Segment MICs (like ONSE, MSTO, DSTO) are converted to their operating MIC (XSTO).
+        """
+        from ...models.sqlite.market_identification_code import MarketIdentificationCode
+        
+        session = SessionLocal()
+        try:
+            # Try relevant_trading_venue first
+            mic_code = None
+            if instrument.relevant_trading_venue:
+                mic_code = instrument.relevant_trading_venue
+            else:
+                # Try to extract from firds_data
+                if instrument.firds_data and isinstance(instrument.firds_data, dict):
+                    mic_code = (
+                        instrument.firds_data.get('TechAttrbts_RlvntTradgVn') or
+                        instrument.firds_data.get('relevant_trading_venue') or
+                        instrument.firds_data.get('mic_code') or
+                        instrument.firds_data.get('MIC')
+                    )
+            
+            if mic_code:
+                # Look up the MIC in our database to get the operating MIC
+                mic_record = session.query(MarketIdentificationCode).filter(
+                    MarketIdentificationCode.mic == mic_code
+                ).first()
+                
+                if mic_record:
+                    # Return the operating MIC for better OpenFIGI results
+                    operating_mic = mic_record.operating_mic
+                    if operating_mic and operating_mic != mic_code:
+                        self.logger.debug(f"🔄 Converting segment MIC {mic_code} to operating MIC {operating_mic} for FIGI search")
+                        return operating_mic
+                    else:
+                        self.logger.debug(f"✅ Using operating MIC {mic_code} for FIGI search")
+                        return mic_code
+                else:
+                    # MIC not found in database, use as-is but log warning
+                    self.logger.warning(f"⚠️ MIC {mic_code} not found in database, using as-is for FIGI search")
+                    return mic_code
+            
+            # Default to empty string (will trigger broad FIGI search)
+            return ""
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting MIC for FIGI search: {str(e)}")
+            return mic_code or ""  # Fallback to original MIC if available
+        finally:
+            session.close()
 
     # Implement required interface methods for backward compatibility
     def get_instruments(
@@ -1500,7 +1594,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
 
     def create_instruments_bulk(
         self,
-        jurisdiction: str = "SE",
+        competent_authority: str = "SE",
         instrument_type: str = "equity",
         limit: Optional[int] = None,
         skip_existing: bool = True,
@@ -1511,7 +1605,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
         Create multiple instruments in bulk with filtering and performance optimization.
 
         Args:
-            jurisdiction: Filter by competent authority jurisdiction (default: "SE" for Sweden)
+            competent_authority: Filter by competent authority (default: "SE" for Sweden, "ALL" for all authorities)
             instrument_type: Target instrument type to create (default: "equity")
             limit: Maximum number of instruments to create (None = no limit)
             skip_existing: Skip instruments already in database (default: True)
@@ -1535,7 +1629,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
 
         try:
             self.logger.info(f"🚀 Starting bulk instrument creation")
-            self.logger.info(f"   Jurisdiction filter: {jurisdiction}")
+            self.logger.info(f"   Competent Authority filter: {competent_authority}")
             self.logger.info(f"   Instrument type: {instrument_type}")
             self.logger.info(f"   Limit: {limit or 'No limit'}")
             self.logger.info(f"   Skip existing: {skip_existing}")
@@ -1544,7 +1638,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
 
             # Get ISINs matching the filters from FIRDS files
             isins_to_process = self._get_filtered_isins_from_firds(
-                jurisdiction=jurisdiction, instrument_type=instrument_type, limit=limit
+                jurisdiction=competent_authority, instrument_type=instrument_type, limit=limit
             )
 
             if not isins_to_process:
@@ -1675,19 +1769,30 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                     )
 
                     if df is not None and not df.empty:
-                        # Filter by jurisdiction
-                        jurisdiction_filtered = df[
-                            df["TechAttrbts_RlvntCmptntAuthrty"] == jurisdiction
-                        ]
+                        # Filter by jurisdiction (or include all if jurisdiction is "ALL")
+                        if jurisdiction.upper() == "ALL":
+                            # Include all jurisdictions for full type import
+                            jurisdiction_filtered = df
+                            self.logger.debug(f"   🌍 Including all jurisdictions from {file_path.name}")
+                        else:
+                            jurisdiction_filtered = df[
+                                df["TechAttrbts_RlvntCmptntAuthrty"] == jurisdiction
+                            ]
 
                         if not jurisdiction_filtered.empty:
                             file_isins = set(jurisdiction_filtered["Id"].dropna().unique())
                             all_isins.update(file_isins)
-                            self.logger.info(
-                                f"   ✅ Found {len(file_isins)} {jurisdiction} ISINs in {file_path.name}"
-                            )
+                            if jurisdiction.upper() == "ALL":
+                                self.logger.info(
+                                    f"   ✅ Found {len(file_isins)} ISINs (all jurisdictions) in {file_path.name}"
+                                )
+                            else:
+                                self.logger.info(
+                                    f"   ✅ Found {len(file_isins)} {jurisdiction} ISINs in {file_path.name}"
+                                )
                         else:
-                            self.logger.debug(f"   ⚪ No {jurisdiction} ISINs in {file_path.name}")
+                            if jurisdiction.upper() != "ALL":
+                                self.logger.debug(f"   ⚪ No {jurisdiction} ISINs in {file_path.name}")
 
                 except Exception as e:
                     self.logger.warning(f"   💥 Error processing {file_path.name}: {str(e)}")
@@ -1753,32 +1858,346 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             "created_instruments": [],
         }
 
-        for isin in isins:
-            try:
-                self.logger.debug(f"   🔨 Creating {isin}...")
-
-                # Create instrument (enrichment is handled inside create_instrument)
-                if enable_enrichment:
-                    instrument = self.create_instrument(isin, instrument_type)
-                else:
-                    # Create without enrichment (would need separate method)
+        if enable_enrichment:
+            # Use individual processing with enrichment (slower but complete)
+            for isin in isins:
+                try:
+                    self.logger.debug(f"   🔨 Creating {isin} with enrichment...")
                     instrument = self.create_instrument(isin, instrument_type)
 
-                if instrument:
-                    batch_result["created"] += 1
-                    batch_result["created_instruments"].append(isin)
-                    self.logger.debug(f"   ✅ Created {isin}")
-                else:
+                    if instrument:
+                        batch_result["created"] += 1
+                        batch_result["created_instruments"].append(isin)
+                        self.logger.debug(f"   ✅ Created {isin}")
+                    else:
+                        batch_result["failed"] += 1
+                        batch_result["failed_instruments"].append(
+                            {"isin": isin, "error": "Creation returned None"}
+                        )
+                        self.logger.warning(f"   ❌ Failed to create {isin}: No instrument returned")
+
+                except Exception as e:
                     batch_result["failed"] += 1
-                    batch_result["failed_instruments"].append(
-                        {"isin": isin, "error": "Creation returned None"}
-                    )
-                    self.logger.warning(f"   ❌ Failed to create {isin}: No instrument returned")
-
+                    error_msg = str(e)
+                    batch_result["failed_instruments"].append({"isin": isin, "error": error_msg})
+                    self.logger.warning(f"   ❌ Failed to create {isin}: {error_msg}")
+        else:
+            # Use bulk processing without enrichment (much faster)
+            try:
+                bulk_result = self._bulk_create_instruments_fast(isins, instrument_type)
+                batch_result["created"] = bulk_result["created"]
+                batch_result["failed"] = bulk_result["failed"] 
+                batch_result["created_instruments"] = bulk_result["created_instruments"]
+                batch_result["failed_instruments"] = bulk_result["failed_instruments"]
+                self.logger.info(f"   🚀 Bulk created {bulk_result['created']} instruments (fast mode)")
             except Exception as e:
-                batch_result["failed"] += 1
-                error_msg = str(e)
-                batch_result["failed_instruments"].append({"isin": isin, "error": error_msg})
-                self.logger.warning(f"   ❌ Failed to create {isin}: {error_msg}")
+                self.logger.error(f"   ❌ Bulk creation failed: {str(e)}")
+                # Fallback to individual processing
+                for isin in isins:
+                    try:
+                        instrument = self.create_instrument_minimal(isin, instrument_type)
+                        if instrument:
+                            batch_result["created"] += 1
+                            batch_result["created_instruments"].append(isin)
+                        else:
+                            batch_result["failed"] += 1
+                            batch_result["failed_instruments"].append({"isin": isin, "error": "Creation failed"})
+                    except Exception as inner_e:
+                        batch_result["failed"] += 1
+                        batch_result["failed_instruments"].append({"isin": isin, "error": str(inner_e)})
 
         return batch_result
+
+    def _bulk_create_instruments_fast(self, isins: List[str], instrument_type: str) -> Dict[str, Any]:
+        """
+        Ultra-fast bulk creation without enrichment - uses batch database operations.
+        
+        This method:
+        1. Loads FIRDS data for all ISINs in one pass
+        2. Creates all instrument records in a single transaction
+        3. Skips all enrichment (FIGI, LEI, entity creation)
+        4. Uses bulk SQL operations for maximum performance
+        """
+        from pathlib import Path
+        import pandas as pd
+        from sqlalchemy import text
+        from datetime import datetime
+        
+        result = {
+            "created": 0,
+            "failed": 0,
+            "created_instruments": [],
+            "failed_instruments": []
+        }
+        
+        try:
+            # Step 1: Load FIRDS data for all ISINs in batch
+            self.logger.debug(f"🔍 Loading FIRDS data for {len(isins)} ISINs...")
+            firds_data_map = self._load_firds_data_bulk(isins, instrument_type)
+            
+            if not firds_data_map:
+                self.logger.warning("❌ No FIRDS data found for any ISINs")
+                result["failed"] = len(isins)
+                result["failed_instruments"] = [{"isin": isin, "error": "No FIRDS data found"} for isin in isins]
+                return result
+            
+            # Step 2: Prepare bulk insert data
+            insert_data = []
+            created_count = 0
+            
+            for isin in isins:
+                if isin in firds_data_map:
+                    firds_record = firds_data_map[isin]
+                    
+                    # Create minimal instrument record for bulk insert
+                    # Convert string boolean to proper boolean
+                    cmdt_deriv_ind = firds_record.get('CmmdtyDerivInd', '')
+                    if isinstance(cmdt_deriv_ind, str):
+                        cmdt_deriv_ind = cmdt_deriv_ind.lower() in ('true', 'yes', '1')
+                    elif cmdt_deriv_ind is None:
+                        cmdt_deriv_ind = None
+                    
+                    instrument_data = {
+                        'isin': isin,
+                        'full_name': firds_record.get('FullNm', f"Instrument {isin}"),
+                        'short_name': firds_record.get('ShrtNm', ''),
+                        'cfi_code': firds_record.get('CFI', ''),
+                        'instrument_type': instrument_type,
+                        'currency': firds_record.get('NtnlCcy', ''),
+                        'competent_authority': firds_record.get('CmptntAuthrty', ''),
+                        'relevant_trading_venue': firds_record.get('TradgVn', ''),
+                        'lei_id': firds_record.get('Issr', ''),
+                        'commodity_derivative_indicator': cmdt_deriv_ind,
+                        'publication_from_date': _parse_firds_date(firds_record.get('PublctnFrDt')),
+                        'firds_data': firds_record,
+                        'processed_attributes': {},
+                        'created_at': datetime.utcnow(),
+                        'updated_at': datetime.utcnow()
+                    }
+                    insert_data.append(instrument_data)
+                    result["created_instruments"].append(isin)
+                    created_count += 1
+                else:
+                    result["failed_instruments"].append({
+                        "isin": isin, 
+                        "error": "ISIN not found in FIRDS data"
+                    })
+            
+            # Step 3: Bulk insert using SQLAlchemy
+            if insert_data:
+                self.logger.debug(f"💾 Bulk inserting {len(insert_data)} instruments...")
+                
+                # Use bulk insert for maximum performance
+                from sqlalchemy.dialects.sqlite import insert
+                from ...models.sqlite.instrument import Instrument
+                
+                stmt = insert(Instrument).values(insert_data)
+                # Use ON CONFLICT IGNORE to handle duplicates gracefully
+                stmt = stmt.on_conflict_do_nothing(index_elements=['isin'])
+                
+                session = SessionLocal()
+                try:
+                    session.execute(stmt)
+                    session.commit()
+                finally:
+                    session.close()
+                    
+                result["created"] = created_count
+                result["failed"] = len(isins) - created_count
+                
+                self.logger.info(f"🚀 Bulk inserted {created_count} instruments successfully")
+            
+            return result
+            
+        except Exception as e:
+            self.logger.error(f"❌ Bulk fast creation failed: {str(e)}")
+            raise
+
+    def _load_firds_data_bulk(self, isins: List[str], instrument_type: str) -> Dict[str, Dict]:
+        """
+        Load FIRDS data for multiple ISINs in one efficient pass.
+        Returns a dictionary mapping ISIN -> FIRDS record.
+        """
+        from pathlib import Path
+        import pandas as pd
+        
+        firds_data_map = {}
+        
+        try:
+            # Get FIRDS file pattern for instrument type
+            from ...services.esma_utils import BatchDataExtractor
+            from ...models.utils.cfi_instrument_manager import get_firds_letter_for_type
+            
+            firds_letter = get_firds_letter_for_type(instrument_type)
+            if not firds_letter:
+                self.logger.warning(f"❌ No FIRDS letter mapping for type: {instrument_type}")
+                return {}
+            
+            # Use BatchDataExtractor for efficient consolidated data loading
+            self.logger.debug(f"📁 Loading consolidated FIRDS data for type '{instrument_type}' (letter: {firds_letter})")
+            
+            # Get consolidated DataFrame for the asset type
+            df = BatchDataExtractor.get_firds_consolidated_dataframe(
+                asset_type=firds_letter,
+                data_directory=str(esmaConfig.firds_path),
+                logger=self.logger
+            )
+            
+            if df is None or df.empty:
+                self.logger.warning(f"❌ No consolidated FIRDS data found for asset type: {firds_letter}")
+                return {}
+            
+            self.logger.debug(f"� Loaded consolidated DataFrame with {len(df)} total records")
+            
+            # Filter to only ISINs we need
+            isin_set = set(isins)  # For fast lookup
+            
+            if 'Id' in df.columns:
+                matching_records = df[df['Id'].isin(isin_set)]
+                
+                # Convert matching records to dictionary format
+                for _, record in matching_records.iterrows():
+                    isin = record['Id']
+                    # Convert DataFrame record to dict and standardize key names
+                    record_dict = record.to_dict()
+                    
+                    # Map FIRDS column names to standard names for compatibility
+                    standardized_record = {
+                        'ISIN': isin,
+                        'FullNm': record_dict.get('FinInstrmGnlAttrbts_FullNm', ''),
+                        'ShrtNm': record_dict.get('FinInstrmGnlAttrbts_ShrtNm', ''),
+                        'CFI': record_dict.get('FinInstrmGnlAttrbts_ClssfctnTp', ''),
+                        'NtnlCcy': record_dict.get('FinInstrmGnlAttrbts_NtnlCcy', ''),
+                        'CmmdtyDerivInd': record_dict.get('FinInstrmGnlAttrbts_CmmdtyDerivInd', ''),
+                        'Issr': record_dict.get('Issr', ''),
+                        'CmptntAuthrty': record_dict.get('TechAttrbts_RlvntCmptntAuthrty', ''),
+                        'PublctnFrDt': record_dict.get('TechAttrbts_PblctnPrd_FrDt', ''),
+                        'TradgVn': record_dict.get('TechAttrbts_RlvntTradgVn', ''),
+                        '_raw_firds': record_dict  # Keep original for debugging
+                    }
+                    
+                    firds_data_map[isin] = standardized_record
+                
+                self.logger.debug(f"📊 Found {len(matching_records)} matching ISINs from consolidated data")
+            else:
+                self.logger.warning(f"❌ Id column not found in consolidated DataFrame")
+            
+            self.logger.info(f"📈 Loaded FIRDS data for {len(firds_data_map)}/{len(isins)} ISINs")
+            return firds_data_map
+            
+        except Exception as e:
+            self.logger.error(f"❌ Failed to load FIRDS data in bulk: {str(e)}")
+            return {}
+
+    def create_instrument_minimal(self, isin: str, instrument_type: str = None):
+        """Create instrument with minimal processing - no enrichment, no entities."""
+        try:
+            # Check if instrument already exists using proper session
+            session = SessionLocal()
+            try:
+                existing = session.query(Instrument).filter(Instrument.isin == isin).first()
+                if existing:
+                    self.logger.debug(f"Instrument {isin} already exists, skipping")
+                    return existing
+            finally:
+                session.close()
+
+            # Load FIRDS data
+            firds_data = self._load_firds_data_for_isin(isin, instrument_type)
+            if not firds_data:
+                self.logger.warning(f"No FIRDS data found for {isin}")
+                return None
+
+            # Create minimal instrument record
+            instrument = self._create_instrument_from_firds_minimal(firds_data, instrument_type)
+            return instrument
+
+        except Exception as e:
+            self.logger.error(f"Failed to create minimal instrument {isin}: {str(e)}")
+            return None
+
+    def _create_instrument_from_firds_minimal(self, firds_data: Dict, instrument_type: str = None):
+        """Create instrument from FIRDS data with minimal processing - no enrichment."""
+        try:
+            from ...models.sqlite.instrument import Instrument
+            from datetime import datetime
+            
+            isin = firds_data.get('ISIN')
+            if not isin:
+                raise ValueError("ISIN missing from FIRDS data")
+
+            # Create basic instrument record
+            # Convert string boolean to proper boolean
+            cmdt_deriv_ind = firds_data.get('CmmdtyDerivInd', '')
+            if isinstance(cmdt_deriv_ind, str):
+                cmdt_deriv_ind = cmdt_deriv_ind.lower() in ('true', 'yes', '1')
+            elif cmdt_deriv_ind is None:
+                cmdt_deriv_ind = None
+                
+            instrument = Instrument(
+                isin=isin,
+                full_name=firds_data.get('FullNm', f"Instrument {isin}"),
+                short_name=firds_data.get('ShrtNm', ''),
+                cfi_code=firds_data.get('CFI', ''),
+                instrument_type=instrument_type or 'unknown',
+                currency=firds_data.get('NtnlCcy', ''),
+                competent_authority=firds_data.get('CmptntAuthrty', ''),
+                relevant_trading_venue=firds_data.get('TradgVn', ''),
+                lei_id=firds_data.get('Issr', ''),
+                commodity_derivative_indicator=cmdt_deriv_ind,
+                publication_from_date=_parse_firds_date(firds_data.get('PublctnFrDt')),
+                firds_data=firds_data,
+                processed_attributes={},
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow()
+            )
+
+            # Save to database
+            session = SessionLocal()
+            try:
+                session.add(instrument)
+                session.commit()
+                session.refresh(instrument)
+            finally:
+                session.close()
+
+            self.logger.debug(f"Created minimal instrument: {isin}")
+            return instrument
+
+        except Exception as e:
+            self.logger.error(f"Failed to create minimal instrument from FIRDS: {str(e)}")
+            return None
+
+    def _load_firds_data_for_isin(self, isin: str, instrument_type: str = None) -> Optional[Dict]:
+        """Load FIRDS data for a single ISIN by reusing bulk logic."""
+        try:
+            # Use the bulk method for a single ISIN
+            firds_data_map = self._load_firds_data_bulk([isin], instrument_type or 'equity')
+            return firds_data_map.get(isin)
+            
+        except Exception as e:
+            self.logger.error(f"Failed to load FIRDS data for {isin}: {str(e)}")
+            return None
+
+    def _mark_figi_failed(self, session, instrument: Instrument):
+        """Mark an instrument as having failed FIGI lookup to avoid re-processing."""
+        try:
+            # Get existing processed_attributes or create empty dict
+            processed_attrs = instrument.processed_attributes or {}
+            
+            # Mark the failure date
+            failure_date = datetime.utcnow().isoformat()
+            processed_attrs['figi_failed_date'] = failure_date
+            
+            # Force SQLAlchemy to detect the JSON change
+            instrument.processed_attributes = processed_attrs
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(instrument, 'processed_attributes')
+            
+            # Update the timestamp
+            instrument.updated_at = datetime.utcnow()
+            
+            self.logger.info(f"🔴 Marked {instrument.isin} as FIGI failed on {failure_date}")
+            
+        except Exception as e:
+            self.logger.error(f"Failed to mark FIGI failure for {instrument.isin}: {str(e)}")

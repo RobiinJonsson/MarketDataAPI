@@ -219,15 +219,27 @@ export class InstrumentService extends BaseApiService {
   }
 
   /**
-   * Create multiple instruments from batch upload
+   * Create multiple instruments using batch import methods
    */
-  async batchCreateInstruments(instruments: any[], config?: RequestConfig): Promise<ApiResponse<any>> {
-    return this.post<any>('/instruments/batch', {
-      instruments
-    }, {
+  async batchCreateInstruments(requestData: any, config?: RequestConfig): Promise<ApiResponse<any>> {
+    return this.post<any>('/instruments/batch', requestData, {
       ...config,
-      timeout: 300000, // 5 minutes for batch operations
+      timeout: 600000, // 10 minutes for batch operations (increased for large imports)
     });
+  }
+
+  /**
+   * Legacy method for backward compatibility - creates instruments from array
+   * @deprecated Use batchCreateInstruments with method-based approach instead
+   */
+  async batchCreateInstrumentsLegacy(instruments: any[], config?: RequestConfig): Promise<ApiResponse<any>> {
+    return this.batchCreateInstruments({
+      method: 'isin_list',
+      instruments: instruments.map(instr => ({
+        isin: instr.isin,
+        type: instr.type || 'equity'
+      }))
+    }, config);
   }
 
   /**

@@ -588,8 +588,8 @@ class BatchDataExtractor:
             return pd.DataFrame()
         
         # Get all FIRDS files for this asset type
-        # FIRDS format: FULINS_{letter}_{date}_{part}.csv
-        pattern = rf"FULINS_{asset_type.upper()}_\d{{8}}_\d+of\d+\.csv"
+        # FIRDS format: FULINS_{letter}_{date}_{part}_firds_data.csv
+        pattern = rf"FULINS_{asset_type.upper()}_\d{{8}}_\d+of\d+_firds_data\.csv"
         
         matching_files = []
         for filename in os.listdir(data_directory):

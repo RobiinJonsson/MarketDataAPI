@@ -515,3 +515,27 @@ def get_valid_instrument_types() -> List[str]:
 def normalize_instrument_type_from_cfi(cfi_code: str) -> str:
     """Get the normalized instrument type from a CFI code"""
     return CFIInstrumentTypeManager.normalize_instrument_type_from_cfi(cfi_code)
+
+
+def get_firds_letter_for_type(instrument_type: str) -> Optional[str]:
+    """
+    Get the FIRDS file letter for a given instrument type.
+    Returns the letter used in FIRDS filenames (e.g., 'E' for equity).
+    """
+    try:
+        # Create reverse mapping from business type to CFI category
+        BUSINESS_TYPE_TO_CFI = {v: k for k, v in CFIInstrumentTypeManager.CFI_TO_BUSINESS_TYPE.items()}
+        
+        # Get CFI category for instrument type
+        cfi_category = BUSINESS_TYPE_TO_CFI.get(instrument_type.lower())
+        if not cfi_category:
+            return None
+        
+        # Find the FIRDS letter for this category
+        for letter, category in CFIInstrumentTypeManager.FIRDS_TO_CFI_MAPPING.items():
+            if category == cfi_category:
+                return letter
+        
+        return None
+    except Exception:
+        return None
