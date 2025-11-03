@@ -220,6 +220,113 @@ class FirdsFieldMappings:
     }
 
 
+# External API Configuration
+class ExternalAPIs:
+    """External API endpoints and base URLs."""
+    GLEIF_BASE_URL = "https://api.gleif.org/api/v1/lei-records"
+    OPENFIGI_BASE_URL = "https://api.openfigi.com/v3/mapping"
+    ISO_MIC_CSV_URL = "https://www.iso20022.org/sites/default/files/ISO10383_MIC/ISO10383_MIC.csv"
+
+
+# API Timeout Configuration
+class APITimeouts:
+    """Timeout values for HTTP requests."""
+    DEFAULT_CONNECT = 5  # Connection timeout in seconds
+    DEFAULT_READ = 30    # Read timeout in seconds
+    DEFAULT_SINGLE = 30  # Single timeout value for simple requests
+    TUPLE_DEFAULT = (5, 30)  # (connect, read) tuple format
+
+
+# Retry Configuration
+class RetryConfig:
+    """Retry logic configuration for API calls."""
+    DEFAULT_MAX_RETRIES = 3
+    DEFAULT_INITIAL_BACKOFF = 2
+    DEFAULT_MAX_BACKOFF = 60
+    DEFAULT_BACKOFF_FACTOR = 2
+    DEFAULT_JITTER = True
+    
+    # HTTP status codes that should trigger retries
+    RETRYABLE_STATUS_CODES = (429, 500, 502, 503, 504)
+    
+    # Exception types that should trigger retries
+    RETRYABLE_EXCEPTIONS = ("RequestException", "ConnectTimeout", "ReadTimeout")
+
+
+# Data Validation Limits
+class ValidationLimits:
+    """Validation constraints for data fields."""
+    ISIN_LENGTH = 12
+    CFI_CODE_LENGTH = 6
+    LEI_CODE_LENGTH = 20
+    MIC_CODE_LENGTH = 4
+    
+    # Maximum values for various operations
+    MAX_BATCH_SIZE = 1000
+    MAX_BATCH_SIZE_ISIN_LIST = 1000  # Specific for isin_list batch operations
+    MAX_FILES_PER_TYPE = 100
+    DEFAULT_RETENTION_DAYS = 30
+
+
+# Database and Service Defaults
+class ServiceDefaults:
+    """Default values for service operations."""
+    DEFAULT_LIMIT = 100
+    DEFAULT_OFFSET = 0
+    DEFAULT_BATCH_SIZE = 10
+    DEFAULT_SEARCH_LIMIT = 100
+    
+    # Transparency service specific
+    TRANSPARENCY_BATCH_SIZE = 10
+    
+    # File processing
+    FILE_PROCESSING_CHUNK_SIZE = 1000
+
+
+# Business Logic Constants
+class BusinessConstants:
+    """Business-specific constants and thresholds."""
+    
+    # Volume and transaction thresholds
+    MIN_VOLUME_THRESHOLD = 0
+    MIN_TRANSACTIONS_THRESHOLD = 0
+    
+    # Data quality percentages (for reference/documentation)
+    FIRDS_DATA_FILL_RATE = 0.95  # 95% typical fill rate
+    TRANSACTION_DATA_FILL_RATE = 0.25  # 25% fill rate
+    THRESHOLD_DATA_FILL_RATE = 0.31  # 31% fill rate
+    
+    # CFI position validation
+    CFI_FIRST_POSITION_MIN_LENGTH = 1
+    
+    # Date format patterns
+    FIRDS_DATE_FORMAT = "%Y-%m-%d"
+    
+    # Boolean value mappings
+    BOOLEAN_TRUE_VALUES = ("true", "1", "yes", "on")
+    BOOLEAN_FALSE_VALUES = ("false", "0", "no", "off")
+
+
+# File Pattern Constants
+class FilePatterns:
+    """Regular expressions and patterns for file processing."""
+    
+    # FIRDS file patterns
+    FIRDS_FILENAME_PATTERN = r"^FULINS_([CDEFHIJORS])_\d{8}_\d+of\d+_firds_data\.csv$"
+    
+    # FITRS file patterns  
+    FITRS_ECR_PATTERN = r"^FULECR_\d{8}_([A-Z])_\d+of\d+_fitrs_data\.csv$"
+    FITRS_NCR_PATTERN = r"^FULNCR_\d{8}_([A-Z])_\d+of\d+_fitrs_data\.csv$"
+    FITRS_COMBINED_PATTERN = r"^FUL(ECR|NCR)_\d{8}_([A-Z])_\d+of\d+_fitrs_data\.csv$"
+    
+    # Date extraction from filenames
+    DATE_EXTRACTION_PATTERN = r"_(\d{8})_"
+    
+    # File grouping patterns
+    FIRDS_GROUP_PATTERN = r"(FULINS_[CDEFHIJORS])_\d{8}"
+    FITRS_GROUP_PATTERN = r"(FUL(?:ECR|NCR)_[A-Z])_\d{8}"
+
+
 # Updated Instrument Types (expanded from original)
 class InstrumentTypes:
     EQUITY = "equity"

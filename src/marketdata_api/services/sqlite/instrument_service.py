@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 
 # Removed old OpenFIGI import - now using enhanced service for both primary and fallback
 from ...config import esmaConfig
-from ...constants import FirdsFieldMappings
+from ...constants import FirdsFieldMappings, ServiceDefaults, ValidationLimits
 from ...models.utils.cfi_instrument_manager import CFIInstrumentTypeManager
 from ...database.session import SessionLocal, get_session
 from ...models.interfaces.instrument_interface import InstrumentInterface
@@ -1589,8 +1589,8 @@ class SqliteInstrumentService(InstrumentServiceInterface):
         """Validate instrument identifier (ISIN)"""
         if not identifier or not isinstance(identifier, str):
             raise ValueError("Instrument identifier must be a non-empty string")
-        if len(identifier) != 12:
-            raise ValueError("ISIN must be 12 characters long")
+        if len(identifier) != ValidationLimits.ISIN_LENGTH:
+            raise ValueError(f"ISIN must be {ValidationLimits.ISIN_LENGTH} characters long")
 
     def create_instruments_bulk(
         self,

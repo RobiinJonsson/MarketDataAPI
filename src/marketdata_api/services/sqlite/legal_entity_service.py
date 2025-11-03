@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 
+from ...constants import RetryConfig
 from ..gleif import flatten_address, map_lei_record
 from ...database.session import SessionLocal, get_session
 
@@ -283,7 +284,7 @@ class LegalEntityService(LegalEntityServiceInterface):
                         continue
                     
                     # Create entity from GLEIF data with retry logic
-                    max_retries = 3
+                    max_retries = RetryConfig.DEFAULT_MAX_RETRIES
                     for attempt in range(max_retries):
                         try:
                             mapped_data = map_lei_record(gleif_response)

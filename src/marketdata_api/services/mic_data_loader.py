@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import requests
 from sqlalchemy.orm import Session
 
+from ..constants import ExternalAPIs, APITimeouts, ValidationLimits
 from ..models.sqlite.market_identification_code import (
     MarketCategoryCode,
     MarketIdentificationCode,
@@ -24,9 +25,6 @@ from ..models.sqlite.market_identification_code import (
 )
 
 logger = logging.getLogger(__name__)
-
-# Official ISO 20022 MIC registry URL
-OFFICIAL_MIC_CSV_URL = "https://www.iso20022.org/sites/default/files/ISO10383_MIC/ISO10383_MIC.csv"
 
 
 class MICDataLoader:
@@ -137,7 +135,7 @@ class MICDataLoader:
         return created_count, updated_count, errors
 
     def load_from_remote_url(
-        self, url: str = OFFICIAL_MIC_CSV_URL, data_version: Optional[str] = None
+        self, url: str = ExternalAPIs.ISO_MIC_CSV_URL, data_version: Optional[str] = None
     ) -> Tuple[int, int, List[str]]:
         """
         Load MIC data from remote CSV URL.
@@ -152,7 +150,7 @@ class MICDataLoader:
         logger.info(f"Downloading MIC data from {url}")
 
         try:
-            response = requests.get(url, timeout=30)
+            response = requests.get(url, timeout=APITimeouts.DEFAULT_SINGLE)
             response.raise_for_status()
 
             # Create StringIO object from response content
@@ -393,12 +391,12 @@ class RemoteMICLookupService:
         self._cache = {}
         self._cache_timestamp = None
 
-    def _fetch_remote_data(self, url: str = OFFICIAL_MIC_CSV_URL) -> Dict[str, Dict[str, Any]]:
+    def _fetch_remote_data(self, url: str = ExternalAPIs.ISO_MIC_CSV_URL) -> Dict[str, Dict[str, Any]]:
         """Fetch and parse MIC data from remote URL."""
         logger.info(f"Fetching MIC data from remote source: {url}")
 
         try:
-            response = requests.get(url, timeout=30)
+            response = requests.get(url, timeout=APITimeouts.DEFAULT_SINGLE)
             response.raise_for_status()
 
             # Parse CSV data

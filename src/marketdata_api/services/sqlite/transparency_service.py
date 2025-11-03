@@ -19,6 +19,7 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 from ...config import Config, esmaConfig
+from ...constants import ServiceDefaults, BusinessConstants, FilePatterns
 from ...database.session import SessionLocal, get_session
 from ...models.sqlite.instrument import Instrument
 from ...models.sqlite.transparency import TransparencyCalculation, TransparencyThreshold
@@ -610,7 +611,7 @@ class TransparencyService(TransparencyServiceInterface):
 
         for filename in all_files:
             # Parse filename format: FUL{ECR|NCR}_{date}_{letter}_{part}_fitrs_data.csv
-            match = re.match(r"^FUL(ECR|NCR)_\d{8}_([A-Z])_\d+of\d+_fitrs_data\.csv$", filename)
+            match = re.match(FilePatterns.FITRS_COMBINED_PATTERN, filename)
             if match:
                 file_type = match.group(1)  # ECR or NCR
                 file_letter = match.group(2)  # C, D, E, F, H, I, J, O, R, S
@@ -690,7 +691,7 @@ class TransparencyService(TransparencyServiceInterface):
             return value
 
         if isinstance(value, str):
-            return value.lower() in ("true", "1", "yes", "on")
+            return value.lower() in BusinessConstants.BOOLEAN_TRUE_VALUES
 
         return bool(value)
 
@@ -718,7 +719,7 @@ class TransparencyService(TransparencyServiceInterface):
                 try:
                     volume_float = float(volume)
                     transactions_int = int(transactions)
-                    if volume_float > 0 or transactions_int > 0:
+                    if volume_float > BusinessConstants.MIN_VOLUME_THRESHOLD or transactions_int > BusinessConstants.MIN_TRANSACTIONS_THRESHOLD:
                         return True
                 except (ValueError, TypeError):
                     pass
@@ -728,7 +729,7 @@ class TransparencyService(TransparencyServiceInterface):
         return None
 
     def create_transparency_bulk(
-        self, limit: Optional[int] = None, batch_size: int = 10, skip_existing: bool = True
+        self, limit: Optional[int] = None, batch_size: int = ServiceDefaults.TRANSPARENCY_BATCH_SIZE, skip_existing: bool = True
     ) -> Dict[str, Any]:
         """
         Create transparency calculations in bulk for instruments that don't have them yet.

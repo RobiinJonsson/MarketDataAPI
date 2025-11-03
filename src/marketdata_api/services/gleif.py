@@ -6,20 +6,18 @@ import requests
 
 from ..models.sqlite.legal_entity import EntityRelationship, EntityRelationshipException
 from .api_utils import ApiError, RetryExhaustedError, log_api_call, retry_with_backoff
+from ..constants import ExternalAPIs, APITimeouts, RetryConfig
 
 # Set up logger
 logger = logging.getLogger(__name__)
-
-GLEIF_BASE_URL = "https://api.gleif.org/api/v1/lei-records"
-DEFAULT_TIMEOUT = (5, 30)  # (connect timeout, read timeout) in seconds
 
 
 class GLEIFService:
     """Service for interacting with the Global LEI Foundation (GLEIF) API."""
 
     def __init__(self):
-        self.base_url = GLEIF_BASE_URL
-        self.timeout = DEFAULT_TIMEOUT
+        self.base_url = ExternalAPIs.GLEIF_BASE_URL
+        self.timeout = APITimeouts.TUPLE_DEFAULT
 
     def get_lei_data(self, lei_code):
         """
@@ -101,13 +99,13 @@ def _create_or_update_child_entity(session, child_data):
 
 
 @log_api_call
-@retry_with_backoff(max_retries=3, initial_backoff=2)
+@retry_with_backoff(max_retries=RetryConfig.DEFAULT_MAX_RETRIES, initial_backoff=RetryConfig.DEFAULT_INITIAL_BACKOFF)
 def fetch_lei_info(lei_code):
     """Fetches issuer info for a given LEI code from the GLEIF API."""
-    url = f"{GLEIF_BASE_URL}/{lei_code}"
+    url = f"{ExternalAPIs.GLEIF_BASE_URL}/{lei_code}"
     try:
         logger.debug(f"Calling GLEIF API for LEI info: {lei_code}")
-        response = requests.get(url, timeout=DEFAULT_TIMEOUT)
+        response = requests.get(url, timeout=APITimeouts.TUPLE_DEFAULT)
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
@@ -116,24 +114,24 @@ def fetch_lei_info(lei_code):
 
 
 @log_api_call
-@retry_with_backoff(max_retries=3, initial_backoff=2)
+@retry_with_backoff(max_retries=RetryConfig.DEFAULT_MAX_RETRIES, initial_backoff=RetryConfig.DEFAULT_INITIAL_BACKOFF)
 def fetch_direct_parent(lei_code):
     """Fetches direct parent information for a given LEI code."""
     # First, check if there's a direct parent relationship
-    url = f"{GLEIF_BASE_URL}/{lei_code}/direct-parent"
+    url = f"{ExternalAPIs.GLEIF_BASE_URL}/{lei_code}/direct-parent"
     try:
         logger.debug(f"Calling GLEIF API for direct parent: {lei_code}")
-        response = requests.get(url, timeout=DEFAULT_TIMEOUT)
+        response = requests.get(url, timeout=APITimeouts.TUPLE_DEFAULT)
         if response.status_code == 200:
             # Direct parent data available
             return response.json()
         elif response.status_code == 404:
             # Check for reporting exception
             logger.debug(f"No direct parent found for {lei_code}, checking for exception")
-            exception_url = f"{GLEIF_BASE_URL}/{lei_code}/direct-parent-reporting-exception"
+            exception_url = f"{ExternalAPIs.GLEIF_BASE_URL}/{lei_code}/direct-parent-reporting-exception"
 
             try:
-                exception_response = requests.get(exception_url, timeout=DEFAULT_TIMEOUT)
+                exception_response = requests.get(exception_url, timeout=APITimeouts.TUPLE_DEFAULT)
                 if exception_response.status_code == 200:
                     return exception_response.json()
                 else:
@@ -152,24 +150,24 @@ def fetch_direct_parent(lei_code):
 
 
 @log_api_call
-@retry_with_backoff(max_retries=3, initial_backoff=2)
+@retry_with_backoff(max_retries=RetryConfig.DEFAULT_MAX_RETRIES, initial_backoff=RetryConfig.DEFAULT_INITIAL_BACKOFF)
 def fetch_ultimate_parent(lei_code):
     """Fetches ultimate parent information for a given LEI code."""
     # First, check if there's an ultimate parent relationship
-    url = f"{GLEIF_BASE_URL}/{lei_code}/ultimate-parent"
+    url = f"{ExternalAPIs.GLEIF_BASE_URL}/{lei_code}/ultimate-parent"
     try:
         logger.debug(f"Calling GLEIF API for ultimate parent: {lei_code}")
-        response = requests.get(url, timeout=DEFAULT_TIMEOUT)
+        response = requests.get(url, timeout=APITimeouts.TUPLE_DEFAULT)
         if response.status_code == 200:
             # Ultimate parent data available
             return response.json()
         elif response.status_code == 404:
             # Check for reporting exception
             logger.debug(f"No ultimate parent found for {lei_code}, checking for exception")
-            exception_url = f"{GLEIF_BASE_URL}/{lei_code}/ultimate-parent-reporting-exception"
+            exception_url = f"{ExternalAPIs.GLEIF_BASE_URL}/{lei_code}/ultimate-parent-reporting-exception"
 
             try:
-                exception_response = requests.get(exception_url, timeout=DEFAULT_TIMEOUT)
+                exception_response = requests.get(exception_url, timeout=APITimeouts.TUPLE_DEFAULT)
                 if exception_response.status_code == 200:
                     return exception_response.json()
                 else:
@@ -188,22 +186,22 @@ def fetch_ultimate_parent(lei_code):
 
 
 @log_api_call
-@retry_with_backoff(max_retries=3, initial_backoff=2)
+@retry_with_backoff(max_retries=RetryConfig.DEFAULT_MAX_RETRIES, initial_backoff=RetryConfig.DEFAULT_INITIAL_BACKOFF)
 def fetch_direct_children(lei_code):
     """Fetches direct children information for a given LEI code."""
     # For children, we also need to handle relationship records
-    url = f"{GLEIF_BASE_URL}/{lei_code}/direct-children"
+    url = f"{ExternalAPIs.GLEIF_BASE_URL}/{lei_code}/direct-children"
     try:
         logger.debug(f"Calling GLEIF API for direct children: {lei_code}")
-        response = requests.get(url, timeout=DEFAULT_TIMEOUT)
+        response = requests.get(url, timeout=APITimeouts.TUPLE_DEFAULT)
         if response.status_code == 200:
             return response.json()
         elif response.status_code == 404:
             # Check for relationship records
             logger.debug(f"No direct children found for {lei_code}, checking relationships")
-            rel_url = f"{GLEIF_BASE_URL}/{lei_code}/direct-child-relationships"
+            rel_url = f"{ExternalAPIs.GLEIF_BASE_URL}/{lei_code}/direct-child-relationships"
             try:
-                rel_response = requests.get(rel_url, timeout=DEFAULT_TIMEOUT)
+                rel_response = requests.get(rel_url, timeout=APITimeouts.TUPLE_DEFAULT)
                 if rel_response.status_code == 200:
                     return rel_response.json()
                 else:
@@ -220,22 +218,22 @@ def fetch_direct_children(lei_code):
 
 
 @log_api_call
-@retry_with_backoff(max_retries=3, initial_backoff=2)
+@retry_with_backoff(max_retries=RetryConfig.DEFAULT_MAX_RETRIES, initial_backoff=RetryConfig.DEFAULT_INITIAL_BACKOFF)
 def fetch_ultimate_children(lei_code):
     """Fetches ultimate children information for a given LEI code."""
     # For children, we also need to handle relationship records
-    url = f"{GLEIF_BASE_URL}/{lei_code}/ultimate-children"
+    url = f"{ExternalAPIs.GLEIF_BASE_URL}/{lei_code}/ultimate-children"
     try:
         logger.debug(f"Calling GLEIF API for ultimate children: {lei_code}")
-        response = requests.get(url, timeout=DEFAULT_TIMEOUT)
+        response = requests.get(url, timeout=APITimeouts.TUPLE_DEFAULT)
         if response.status_code == 200:
             return response.json()
         elif response.status_code == 404:
             # Check for relationship records
             logger.debug(f"No ultimate children found for {lei_code}, checking relationships")
-            rel_url = f"{GLEIF_BASE_URL}/{lei_code}/ultimate-child-relationships"
+            rel_url = f"{ExternalAPIs.GLEIF_BASE_URL}/{lei_code}/ultimate-child-relationships"
             try:
-                rel_response = requests.get(rel_url, timeout=DEFAULT_TIMEOUT)
+                rel_response = requests.get(rel_url, timeout=APITimeouts.TUPLE_DEFAULT)
                 if rel_response.status_code == 200:
                     return rel_response.json()
                 else:

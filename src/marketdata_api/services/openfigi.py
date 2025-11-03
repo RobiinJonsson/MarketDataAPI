@@ -16,6 +16,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
+from ..constants import ExternalAPIs, APITimeouts
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,7 +43,7 @@ class OpenFIGIService:
 
     def __init__(self, api_key: Optional[str] = None):
         self.api_key = api_key or os.getenv("OPENFIGI_API_KEY")
-        self.base_url = "https://api.openfigi.com/v3/mapping"
+        self.base_url = ExternalAPIs.OPENFIGI_BASE_URL
 
     def search_figi(self, isin: str, mic_code: str) -> Tuple[List[OpenFIGISearchResult], str]:
         """
@@ -100,7 +102,7 @@ class OpenFIGIService:
             if self.api_key:
                 headers["X-OPENFIGI-APIKEY"] = self.api_key
 
-            response = requests.post(self.base_url, json=payload, headers=headers, timeout=30)
+            response = requests.post(self.base_url, json=payload, headers=headers, timeout=APITimeouts.DEFAULT_SINGLE)
 
             if response.status_code == 200:
                 data = response.json()
@@ -157,7 +159,7 @@ class OpenFIGIService:
                 headers["X-OPENFIGI-APIKEY"] = self.api_key
             
             logger.debug(f"Sending batch request with {len(payload)} jobs ({search_strategy})")
-            response = requests.post(self.base_url, json=payload, headers=headers, timeout=30)
+            response = requests.post(self.base_url, json=payload, headers=headers, timeout=APITimeouts.DEFAULT_SINGLE)
             
             if response.status_code == 200:
                 api_results = response.json()

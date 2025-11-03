@@ -2,6 +2,7 @@
 
 from typing import Any, Dict, List, Optional
 
+from ...constants import ServiceDefaults
 from ...models.interfaces.instrument_interface import InstrumentInterface
 
 
@@ -15,7 +16,7 @@ class InstrumentServiceInterface:
         raise NotImplementedError("Subclasses must implement this method")
 
     def get_instruments(
-        self, limit: int = 100, offset: int = 0, instrument_type: Optional[str] = None
+        self, limit: int = ServiceDefaults.DEFAULT_LIMIT, offset: int = ServiceDefaults.DEFAULT_OFFSET, instrument_type: Optional[str] = None
     ) -> List[InstrumentInterface]:
         """Get a list of instruments with pagination."""
         raise NotImplementedError("Subclasses must implement this method")
@@ -30,7 +31,7 @@ class InstrumentServiceInterface:
         """Delete an instrument by ISIN or ID, optionally with cascade deletion of related data."""
         raise NotImplementedError("Subclasses must implement this method")
 
-    def search_instruments(self, query: str, limit: int = 100) -> List[InstrumentInterface]:
+    def search_instruments(self, query: str, limit: int = ServiceDefaults.DEFAULT_SEARCH_LIMIT) -> List[InstrumentInterface]:
         """Search instruments by name, symbol, or ISIN."""
         raise NotImplementedError("Subclasses must implement this method")
 
