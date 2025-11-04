@@ -35,7 +35,7 @@ export default class InstrumentsPage extends BasePage {
   private currentFilters: {
     type?: string;
     currency?: string;
-    isin?: string;
+    search?: string;
   } = {};
   private availableTypes: string[] = [];
   
@@ -64,17 +64,59 @@ export default class InstrumentsPage extends BasePage {
   // Transparency tab state
   private transparencyCalculations: TransparencyCalculation[] = [];
   private allTransparencyCalculations: TransparencyCalculation[] = [];
+  private transparencyTotalFromAPI: number = 0;
+  private transparencyStats: { total: number; equity: number; nonEquity: number; liquid: number } = {
+    total: 0,
+    equity: 0,
+    nonEquity: 0,
+    liquid: 0
+  };
   private transparencyFilters: any = {};
+
+  // Pagination state for both tabs
+  private instrumentsCurrentPage = 1;
+  private instrumentsItemsPerPage = 25;
+  private instrumentsTotalCount = 0;
+  private instruments: Instrument[] = [];
+  
+  private transparencyCurrentPage = 1;
+  private transparencyItemsPerPage = 25;
+  private transparencyTotalCount = 0;
 
   constructor(container: HTMLElement, params: Record<string, string> = {}) {
     super(container, params);
     this.instrumentService = ApiServiceFactory.getInstance().instruments;
     this.transparencyService = ApiServiceFactory.getInstance().transparency;
+    
+    // Set initial tab from URL parameter
+    if (params.tab) {
+      const validTabs: Array<'listing' | 'cfi-classification' | 'transparency'> = ['listing', 'cfi-classification', 'transparency'];
+      if (validTabs.includes(params.tab as any)) {
+        this.currentTab = params.tab as 'listing' | 'cfi-classification' | 'transparency';
+        console.log('Setting initial tab from URL parameter:', this.currentTab);
+      }
+    }
   }
   
   async render(): Promise<void> {
     await this.loadInstrumentTypeCounts();
     this.updateUI();
+    
+    // Load data for the initial tab
+    this.loadTabData(this.currentTab);
+  }
+
+  private loadTabData(tab: 'listing' | 'cfi-classification' | 'transparency'): void {
+    if (tab === 'listing') {
+      // Load instruments for listing tab
+      this.loadInstrumentsPaginated();
+    } else if (tab === 'transparency') {
+      // Load transparency data using new paginated approach
+      this.transparencyCurrentPage = 1;
+      this.transparencyFilters = {};
+      this.loadTransparencyPaginated();
+    }
+    // CFI classification tab loads data on demand when user interacts with it
   }
 
   private async loadInstrumentTypeCounts(): Promise<void> {
@@ -110,7 +152,7 @@ export default class InstrumentsPage extends BasePage {
     // Load initial data for the current tab
     if (this.currentTab === 'listing') {
       this.loadInstrumentTypes();
-      this.loadInstrumentsList();
+      this.loadInstrumentsPaginated();
     }
   }
 
@@ -168,66 +210,78 @@ export default class InstrumentsPage extends BasePage {
 
   private renderListingTab(): string {
     return `
-      <!-- Quick Filters -->
+      <!-- Search and Filter Bar -->
       <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">Instrument Type</label>
-            <select id="type-filter" class="w-full border border-gray-300 rounded-md px-3 py-2">
+            <select id="instruments-type-filter" class="w-full border border-gray-300 rounded-md px-3 py-2">
               <option value="">All Types</option>
               <!-- Types will be populated dynamically -->
             </select>
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">Currency</label>
-            <select id="currency-filter" class="w-full border border-gray-300 rounded-md px-3 py-2">
+            <select id="instruments-currency-filter" class="w-full border border-gray-300 rounded-md px-3 py-2">
               <option value="">All Currencies</option>
               <option value="EUR">EUR</option>
               <option value="USD">USD</option>
               <option value="GBP">GBP</option>
+              <option value="SEK">SEK</option>
+              <option value="NOK">NOK</option>
+              <option value="DKK">DKK</option>
             </select>
           </div>
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">Search ISIN</label>
-            <input id="isin-filter" type="text" placeholder="e.g. SE0000242455" class="w-full border border-gray-300 rounded-md px-3 py-2">
+            <input id="instruments-isin-filter" type="text" placeholder="e.g. SE0000242455" class="w-full border border-gray-300 rounded-md px-3 py-2">
           </div>
           <div class="flex items-end">
-            <button id="search-btn" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
+            <button id="instruments-search-btn" class="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors">
               Search
             </button>
           </div>
         </div>
       </div>
 
-      <!-- Results Table -->
-      ${this.createCard(`
-        <div class="overflow-x-auto">
-          <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-              <tr>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ISIN</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CFI Code</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Currency</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Authority</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trading Venue</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Publication Date</th>
-              </tr>
-            </thead>
-            <tbody id="instruments-tbody" class="bg-white divide-y divide-gray-200">
-              <tr>
-                <td colspan="8" class="px-6 py-8 text-center text-gray-500">
-                  <div class="flex items-center justify-center">
-                    <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
-                    Loading instruments...
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
+      <!-- Instruments Table -->
+      <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="p-6 border-b border-gray-200">
+          <div class="flex justify-between items-center">
+            <h3 class="text-lg font-semibold text-gray-900">Instruments</h3>
+            <div class="flex items-center space-x-2">
+              <span class="text-sm text-gray-600">Show:</span>
+              <select id="instruments-items-per-page" class="border border-gray-300 rounded px-2 py-1 text-sm">
+                <option value="10">10</option>
+                <option value="25" selected>25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+          </div>
         </div>
-      `, 'Instruments List')}
+        
+        <!-- Loading State -->
+        <div id="instruments-loading" class="p-8 text-center hidden">
+          <div class="inline-flex items-center">
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Loading instruments...
+          </div>
+        </div>
+        
+        <!-- Instruments Table -->
+        <div id="instruments-table" class="overflow-x-auto">
+          <!-- Table will be populated by JavaScript -->
+        </div>
+        
+        <!-- Pagination -->
+        <div id="instruments-pagination" class="p-4 border-t border-gray-200 bg-gray-50">
+          <!-- Pagination will be populated by JavaScript -->
+        </div>
+      </div>
     `;
   }
 
@@ -500,68 +554,43 @@ export default class InstrumentsPage extends BasePage {
         </div>
 
         <!-- Transparency Results -->
-        ${this.transparencyCalculations.length > 0 ? `
-          <div class="bg-white p-6 rounded-lg shadow">
-            <h2 class="text-xl font-semibold mb-4">
-              Transparency Calculations
-              <span class="text-sm font-normal text-gray-500 ml-2">(${this.totalRecords.toLocaleString()} total)</span>
-            </h2>
-            
-            <div class="overflow-x-auto">
-              <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                  <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ISIN</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">FIRDS File</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Instrument Type</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Activity Status</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Volume</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transactions</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Period</th>
-                  </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">
-                  ${this.transparencyCalculations.map((calc: TransparencyCalculation) => `
-                    <tr class="hover:bg-gray-50 cursor-pointer instrument-row" data-isin="${calc.isin}">
-                      <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-                        ${calc.isin}
-                      </td>
-                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${calc.file_type?.includes('FULECR') ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}">
-                          ${calc.file_type || 'N/A'}
-                        </span>
-                      </td>
-                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                          ${calc.instrument_type || 'N/A'}
-                        </span>
-                      </td>
-                      <td class="px-6 py-4 whitespace-nowrap text-sm">
-                        <span class="${calc.transparency_analysis?.has_trading_activity ? 'text-green-600 font-medium' : 'text-gray-500'}">
-                          ${calc.transparency_analysis?.liquidity_status || 'N/A'}
-                        </span>
-                      </td>
-                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${calc.volume ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(calc.volume) : 'N/A'}</td>
-                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${calc.transactions ? new Intl.NumberFormat('en-US').format(calc.transactions) : 'N/A'}</td>
-                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        ${calc.from_date || 'N/A'} to ${calc.to_date || 'N/A'}
-                      </td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+          <div class="p-6 border-b border-gray-200">
+            <div class="flex justify-between items-center">
+              <h3 class="text-lg font-semibold text-gray-900">Transparency Calculations</h3>
+              <div class="flex items-center space-x-2">
+                <span class="text-sm text-gray-600">Show:</span>
+                <select id="transparency-items-per-page" class="border border-gray-300 rounded px-2 py-1 text-sm">
+                  <option value="10">10</option>
+                  <option value="25" selected>25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                </select>
+              </div>
             </div>
           </div>
-        ` : this.loading ? `
-          <div class="bg-white p-6 rounded-lg shadow text-center">
-            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p class="text-gray-600">Loading transparency data...</p>
+          
+          <!-- Loading State -->
+          <div id="transparency-loading" class="p-8 text-center hidden">
+            <div class="inline-flex items-center">
+              <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Loading transparency calculations...
+            </div>
           </div>
-        ` : `
-          <div class="bg-white p-6 rounded-lg shadow text-center">
-            <p class="text-gray-600">Click "Apply Filters" to load transparency calculations</p>
+          
+          <!-- Transparency Table -->
+          <div id="transparency-table" class="overflow-x-auto">
+            <!-- Table will be populated by JavaScript -->
           </div>
-        `}
+          
+          <!-- Pagination -->
+          <div id="transparency-pagination" class="p-4 border-t border-gray-200 bg-gray-50">
+            <!-- Pagination will be populated by JavaScript -->
+          </div>
+        </div>
       </div>
     `;
   }
@@ -579,12 +608,23 @@ export default class InstrumentsPage extends BasePage {
       });
     });
 
-    // Listing tab event listeners
-    const searchBtn = this.container.querySelector('#search-btn') as HTMLButtonElement;
-    if (searchBtn) {
-      searchBtn.addEventListener('click', () => {
-        this.updateFiltersFromForm();
-        this.loadInstrumentsList();
+    // Instruments listing tab event listeners
+    const instrumentsSearchBtn = this.container.querySelector('#instruments-search-btn') as HTMLButtonElement;
+    const instrumentsItemsPerPageSelect = this.container.querySelector('#instruments-items-per-page') as HTMLSelectElement;
+    
+    if (instrumentsSearchBtn) {
+      instrumentsSearchBtn.addEventListener('click', () => {
+        this.updateInstrumentsFiltersFromForm();
+        this.instrumentsCurrentPage = 1;
+        this.loadInstrumentsPaginated();
+      });
+    }
+    
+    if (instrumentsItemsPerPageSelect) {
+      instrumentsItemsPerPageSelect.addEventListener('change', (e) => {
+        this.instrumentsItemsPerPage = parseInt((e.target as HTMLSelectElement).value);
+        this.instrumentsCurrentPage = 1;
+        this.loadInstrumentsPaginated();
       });
     }
 
@@ -644,128 +684,40 @@ export default class InstrumentsPage extends BasePage {
         if (activitySelect) activitySelect.value = '';
         if (isinInput) isinInput.value = '';
         
-        // Clear filters and show all data
+        // Clear filters and reload data
         this.transparencyFilters = {};
-        this.applyTransparencyFilters();
-        this.updateUI();
-        // Update statistics after UI is rendered
-        setTimeout(() => this.updateTransparencyStatistics(), 200);
+        this.transparencyCurrentPage = 1;
+        this.loadTransparencyPaginated();
+      });
+    }
+
+    // Transparency pagination event listeners
+    const transparencyItemsPerPageSelect = this.container.querySelector('#transparency-items-per-page') as HTMLSelectElement;
+    
+    if (transparencyItemsPerPageSelect) {
+      transparencyItemsPerPageSelect.addEventListener('change', (e) => {
+        this.transparencyItemsPerPage = parseInt((e.target as HTMLSelectElement).value);
+        this.transparencyCurrentPage = 1;
+        this.loadTransparencyPaginated();
       });
     }
   }
 
-  private updateFiltersFromForm(): void {
-    const typeSelect = this.container.querySelector('#type-filter') as HTMLSelectElement;
-    const currencySelect = this.container.querySelector('#currency-filter') as HTMLSelectElement;
-    const isinInput = this.container.querySelector('#isin-filter') as HTMLInputElement;
+  private updateInstrumentsFiltersFromForm(): void {
+    const typeSelect = this.container.querySelector('#instruments-type-filter') as HTMLSelectElement;
+    const currencySelect = this.container.querySelector('#instruments-currency-filter') as HTMLSelectElement;
+    const isinInput = this.container.querySelector('#instruments-isin-filter') as HTMLInputElement;
 
     this.currentFilters = {
       type: typeSelect?.value || undefined,
       currency: currencySelect?.value || undefined,
-      isin: isinInput?.value?.trim() || undefined,
+      search: isinInput?.value?.trim() || undefined,
     };
+    
+    console.log('Updated instruments filters:', this.currentFilters);
   }
 
-  private async loadInstrumentsList(): Promise<void> {
-    const tbody = this.container.querySelector('#instruments-tbody');
-    if (!tbody) return;
 
-    // Show loading state
-    tbody.innerHTML = `
-      <tr>
-        <td colspan="8" class="px-6 py-8 text-center text-gray-500">
-          <div class="flex items-center justify-center">
-            <div class="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-3"></div>
-            Loading instruments...
-          </div>
-        </td>
-      </tr>
-    `;
-
-    try {
-      // Fetch instruments from API
-      const response = await this.instrumentService.listInstruments(
-        {
-          type: this.currentFilters.type,
-          currency: this.currentFilters.currency,
-        },
-        { page: 1, limit: 20 }
-      );
-
-      if (response.status === 'success' && response.data) {
-        // Handle the actual API response structure
-        const instruments = Array.isArray(response.data) ? response.data : [];
-        this.renderInstrumentsTable(instruments);
-      } else {
-        this.showInstrumentError('Failed to load instruments');
-      }
-    } catch (error) {
-      console.error('Error loading instruments:', error);
-      this.showInstrumentError('Error loading instruments. Please try again.');
-    }
-  }
-
-  private renderInstrumentsTable(instruments: Instrument[]): void {
-    const tbody = this.container.querySelector('#instruments-tbody');
-    if (!tbody) return;
-
-    if (instruments.length === 0) {
-      tbody.innerHTML = `
-        <tr>
-          <td colspan="8" class="px-6 py-8 text-center text-gray-500">
-            No instruments found matching your criteria.
-          </td>
-        </tr>
-      `;
-      return;
-    }
-
-    tbody.innerHTML = instruments.map(instrument => `
-      <tr class="hover:bg-gray-50 cursor-pointer instrument-row" data-isin="${instrument.isin}">
-        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-          ${instrument.isin || 'N/A'}
-        </td>
-        <td class="px-6 py-4 whitespace-nowrap">
-          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${this.getTypeColor(instrument.instrument_type)}">
-            ${this.formatInstrumentType(instrument.instrument_type)}
-          </span>
-        </td>
-        <td class="px-6 py-4 text-sm text-gray-900" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">
-          ${instrument.short_name || instrument.full_name || 'N/A'}
-        </td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">
-          ${instrument.cfi_code || instrument.cfi || 'N/A'}
-        </td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-          ${instrument.currency || 'N/A'}
-        </td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-          ${instrument.competent_authority || 'N/A'}
-        </td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-          ${instrument.relevant_trading_venue || 'N/A'}
-        </td>
-        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-          ${this.formatDate(instrument.publication_from_date || undefined) || 'N/A'}
-        </td>
-      </tr>
-    `).join('');
-
-    // Attach click listeners to instrument rows
-    this.attachInstrumentRowListeners();
-  }
-
-  private attachInstrumentRowListeners(): void {
-    const instrumentRows = this.container.querySelectorAll('.instrument-row');
-    instrumentRows.forEach(row => {
-      row.addEventListener('click', async () => {
-        const isin = row.getAttribute('data-isin');
-        if (isin) {
-          await this.selectInstrument(isin);
-        }
-      });
-    });
-  }
 
   private async selectInstrument(isin: string): Promise<void> {
     // Navigate to instrument detail page
@@ -797,22 +749,17 @@ export default class InstrumentsPage extends BasePage {
     this.cfiSearchResults = [];
     this.selectedInstrumentType = '';
     
-    if (tab === 'transparency') {
-      // Only load data if we don't have it already
-      if (this.allTransparencyCalculations.length === 0) {
-        this.handleLoadTransparencyData();
-      } else {
-        // Reset filters and show all data
-        this.transparencyFilters = {};
-        this.applyTransparencyFilters();
-        this.updateUI();
-        // Update statistics after UI is rendered
-        setTimeout(() => this.updateTransparencyStatistics(), 200);
-      }
-    } else {
-      this.transparencyCalculations = [];
-      this.updateUI();
+    if (tab === 'listing') {
+      // Load instruments for listing tab
+      this.loadInstrumentsPaginated();
+    } else if (tab === 'transparency') {
+      // Load transparency data using new paginated approach
+      this.transparencyCurrentPage = 1;
+      this.transparencyFilters = {};
+      this.loadTransparencyPaginated();
     }
+    
+    this.updateUI();
   }
 
   private async handleCFICodeLookup(): Promise<void> {
@@ -884,56 +831,70 @@ export default class InstrumentsPage extends BasePage {
       
       console.log('Loading all transparency data...');
       
-      // Load first page to get total count
-      const firstResponse = await this.transparencyService.getTransparencyCalculations(
-        { page: 1, per_page: 100 }, // API max is 100
-        { timeout: 60000 }
-      );
+      // Get statistics with separate lightweight API calls (like HomePage approach)
+      const [totalResponse, equityResponse, nonEquityResponse] = await Promise.allSettled([
+        this.transparencyService.getTransparencyCalculations({ page: 1, per_page: 1 }, { timeout: 30000 }),
+        this.transparencyService.getTransparencyCalculations({ page: 1, per_page: 1, file_type: 'FULECR' }, { timeout: 30000 }),
+        this.transparencyService.getTransparencyCalculations({ page: 1, per_page: 1, file_type: 'FULNCR' }, { timeout: 30000 })
+      ]);
       
-      if (firstResponse.status === 'success' && firstResponse.data) {
-        let allCalculations = [...firstResponse.data.calculations];
-        const totalRecords = firstResponse.data.pagination.total;
-        const totalPages = Math.ceil(totalRecords / 100);
-        
-        console.log(`Loading ${totalRecords} total calculations across ${totalPages} pages`);
-        
-        // Load remaining pages if needed
-        if (totalPages > 1) {
-          const remainingPages = [];
-          for (let page = 2; page <= totalPages; page++) {
-            remainingPages.push(
-              this.transparencyService.getTransparencyCalculations(
-                { page, per_page: 100 },
-                { timeout: 60000 }
-              )
-            );
-          }
-          
-          const remainingResponses = await Promise.allSettled(remainingPages);
-          
-          remainingResponses.forEach((result, index) => {
-            if (result.status === 'fulfilled' && result.value.status === 'success' && result.value.data) {
-              allCalculations.push(...result.value.data.calculations);
-              console.log(`Loaded page ${index + 2}: ${result.value.data.calculations.length} calculations`);
-            } else {
-              console.error(`Failed to load page ${index + 2}:`, result);
-            }
-          });
-        }
-        
-        // Store all data for filtering
-        this.allTransparencyCalculations = allCalculations;
-        console.log('Loaded transparency calculations:', this.allTransparencyCalculations.length);
-        // Apply current filters (which will be empty initially)
-        this.applyTransparencyFilters();
-        console.log('After filtering:', this.transparencyCalculations.length);
+      // Store statistics from API metadata
+      if (totalResponse.status === 'fulfilled' && totalResponse.value.status === 'success' && totalResponse.value.data) {
+        this.transparencyTotalFromAPI = totalResponse.value.data.pagination.total;
+        console.log('Total calculations:', this.transparencyTotalFromAPI);
       }
       
-    } catch (error) {
+      let equityTotal = 0;
+      if (equityResponse.status === 'fulfilled' && equityResponse.value.status === 'success' && equityResponse.value.data) {
+        equityTotal = equityResponse.value.data.pagination.total;
+        console.log('Equity calculations:', equityTotal);
+      }
+      
+      let nonEquityTotal = 0;
+      if (nonEquityResponse.status === 'fulfilled' && nonEquityResponse.value.status === 'success' && nonEquityResponse.value.data) {
+        nonEquityTotal = nonEquityResponse.value.data.pagination.total;
+        console.log('Non-equity calculations:', nonEquityTotal);
+      }
+      
+      // Store the statistics for later use
+      this.transparencyStats = {
+        total: this.transparencyTotalFromAPI,
+        equity: equityTotal,
+        nonEquity: nonEquityTotal,
+        liquid: 0 // We'll calculate this from loaded data as it requires field inspection
+      };
+      
+      if (this.transparencyTotalFromAPI > 0) {
+        const totalPages = Math.ceil(this.transparencyTotalFromAPI / 100);
+        
+        console.log(`Found ${this.transparencyTotalFromAPI} total calculations across ${totalPages} pages`);          // Now load all data efficiently
+          const firstResponse = await this.transparencyService.getTransparencyCalculations(
+            { page: 1, per_page: 100 },
+            { timeout: 30000 }
+          );
+          
+          if (firstResponse.status === 'success' && firstResponse.data) {
+            let allCalculations = [...firstResponse.data.calculations];
+            let successfullyLoadedPages = 1;
+
+            // Store initial data and show immediately
+            this.allTransparencyCalculations = [...allCalculations];
+            this.applyTransparencyFilters();
+            this.updateUI();
+            console.log(`Showing initial page 1 with ${this.transparencyCalculations.length} calculations`);
+
+            // Load remaining pages in background if needed
+            if (totalPages > 1) {
+              this.loadRemainingTransparencyPages(allCalculations, totalPages, successfullyLoadedPages);
+            }
+          }
+        }
+      } catch (error) {
       console.error('Error loading transparency data:', error);
       this.error = 'Failed to load transparency calculations';
       this.transparencyCalculations = [];
       this.allTransparencyCalculations = [];
+      this.transparencyTotalFromAPI = 0;
     } finally {
       this.loading = false;
       this.updateUI();
@@ -989,6 +950,56 @@ export default class InstrumentsPage extends BasePage {
     console.log('Filtered results:', calculations.length, 'of', this.allTransparencyCalculations.length);
   }
 
+  private async loadRemainingTransparencyPages(allCalculations: TransparencyCalculation[], totalPages: number, successfullyLoadedPages: number): Promise<void> {
+    console.log(`Loading remaining ${totalPages - 1} pages in background...`);
+    
+    for (let page = 2; page <= totalPages; page++) {
+      try {
+        console.log(`Background loading page ${page} of ${totalPages}...`);
+        
+        const pageResponse = await this.transparencyService.getTransparencyCalculations(
+          { page, per_page: 100 },
+          { timeout: 30000 }
+        );
+        
+        if (pageResponse.status === 'success' && pageResponse.data) {
+          // Add new data to existing calculations
+          allCalculations.push(...pageResponse.data.calculations);
+          this.allTransparencyCalculations = [...allCalculations];
+          
+          // Reapply filters and update UI with new data
+          this.applyTransparencyFilters();
+          this.updateUI();
+          
+          successfullyLoadedPages++;
+          console.log(`Background loaded page ${page}: ${pageResponse.data.calculations.length} calculations (total: ${this.allTransparencyCalculations.length})`);
+        } else {
+          console.error(`Failed to background load page ${page}:`, pageResponse);
+        }
+        
+        // Small delay between requests
+        if (page < totalPages) {
+          await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        
+      } catch (error) {
+        console.error(`Error background loading page ${page}:`, error);
+        // Continue with next page on error
+      }
+    }
+    
+    console.log(`Background loading complete: ${successfullyLoadedPages}/${totalPages} pages loaded with ${this.allTransparencyCalculations.length} total calculations`);
+  }
+
+  private hasActiveTransparencyFilters(): boolean {
+    return !!(
+      this.transparencyFilters.file_type || 
+      this.transparencyFilters.instrument_type || 
+      this.transparencyFilters.activity || 
+      this.transparencyFilters.isin
+    );
+  }
+
   private updateTransparencyStatistics(): void {
     // Only update if we're on transparency tab
     if (this.currentTab !== 'transparency') {
@@ -996,7 +1007,8 @@ export default class InstrumentsPage extends BasePage {
       return;
     }
     
-    console.log('Updating transparency statistics with', this.transparencyCalculations.length, 'calculations');
+    const filtersActive = this.hasActiveTransparencyFilters();
+    console.log('Updating transparency statistics with', this.transparencyCalculations.length, 'calculations, filters active:', filtersActive);
     
     const totalElement = this.container.querySelector('#total-calculations');
     const equityElement = this.container.querySelector('#equity-calculations');
@@ -1012,30 +1024,40 @@ export default class InstrumentsPage extends BasePage {
     });
     
     if (totalElement) {
-      const totalCount = this.transparencyCalculations.length;
+      // If filters are active, show filtered count; otherwise use full dataset stats
+      const totalCount = filtersActive ? 
+        this.transparencyTotalCount : 
+        this.transparencyStats.total;
       totalElement.textContent = new Intl.NumberFormat('en-US').format(totalCount);
-      console.log('Updated total count:', totalCount);
+      console.log('Updated total count:', totalCount, '(filters active:', filtersActive, ', full dataset total:', this.transparencyStats.total, ', filtered total:', this.transparencyTotalCount, ')');
     } else {
       console.log('total-calculations element not found');
     }
     
     if (equityElement) {
-      const equityCount = this.transparencyCalculations.filter(c => c.file_type?.includes('FULECR')).length;
+      // If filters are active, use filtered data; otherwise use pre-calculated stats
+      const equityCount = filtersActive ? 
+        this.transparencyCalculations.filter(c => c.file_type?.includes('FULECR')).length :
+        (this.transparencyStats.equity > 0 ? this.transparencyStats.equity : this.transparencyCalculations.filter(c => c.file_type?.includes('FULECR')).length);
       equityElement.textContent = new Intl.NumberFormat('en-US').format(equityCount);
-      console.log('Updated equity count:', equityCount);
+      console.log('Updated equity count:', equityCount, '(filters active:', filtersActive, ', from pre-calc:', this.transparencyStats.equity, ', filtered:', this.transparencyCalculations.filter(c => c.file_type?.includes('FULECR')).length, ')');
     } else {
       console.log('equity-calculations element not found');
     }
     
     if (nonEquityElement) {
-      const nonEquityCount = this.transparencyCalculations.filter(c => c.file_type?.includes('FULNCR')).length;
+      // If filters are active, use filtered data; otherwise use pre-calculated stats
+      const nonEquityCount = filtersActive ? 
+        this.transparencyCalculations.filter(c => c.file_type?.includes('FULNCR')).length :
+        (this.transparencyStats.nonEquity > 0 ? this.transparencyStats.nonEquity : this.transparencyCalculations.filter(c => c.file_type?.includes('FULNCR')).length);
       nonEquityElement.textContent = new Intl.NumberFormat('en-US').format(nonEquityCount);
-      console.log('Updated non-equity count:', nonEquityCount);
+      console.log('Updated non-equity count:', nonEquityCount, '(filters active:', filtersActive, ', from pre-calc:', this.transparencyStats.nonEquity, ', filtered:', this.transparencyCalculations.filter(c => c.file_type?.includes('FULNCR')).length, ')');
     } else {
       console.log('non-equity-calculations element not found');
     }
     
     if (liquidElement) {
+      // Active Trading always uses filtered data since it's dynamic
       const liquidCount = this.transparencyCalculations.filter(c => c.transparency_analysis?.has_trading_activity).length;
       liquidElement.textContent = new Intl.NumberFormat('en-US').format(liquidCount);
       console.log('Updated liquid count:', liquidCount);
@@ -1059,14 +1081,9 @@ export default class InstrumentsPage extends BasePage {
       isin: isinInput?.value?.trim() || undefined
     };
     
-    // Apply filters to existing data
-    this.applyTransparencyFilters();
-    
-    // Update UI to show filtered results
-    this.updateUI();
-    
-    // Update statistics after UI is rendered
-    setTimeout(() => this.updateTransparencyStatistics(), 200);
+    // Reset to first page and load with filters
+    this.transparencyCurrentPage = 1;
+    this.loadTransparencyPaginated();
   }
 
   private async loadInstrumentTypes(): Promise<void> {
@@ -1085,8 +1102,11 @@ export default class InstrumentsPage extends BasePage {
   }
 
   private populateTypeDropdown(): void {
-    const typeSelect = this.container.querySelector('#type-filter') as HTMLSelectElement;
-    if (!typeSelect) return;
+    const typeSelect = this.container.querySelector('#instruments-type-filter') as HTMLSelectElement;
+    if (!typeSelect) {
+      console.warn('instruments-type-filter element not found');
+      return;
+    }
 
     // Clear existing options except "All Types"
     typeSelect.innerHTML = '<option value="">All Types</option>';
@@ -1098,9 +1118,535 @@ export default class InstrumentsPage extends BasePage {
       option.textContent = this.formatInstrumentType(type);
       typeSelect.appendChild(option);
     });
+    
+    console.log('Populated type dropdown with', this.availableTypes.length, 'types:', this.availableTypes);
   }
 
+  // Instruments listing pagination methods
+  private async loadInstrumentsPaginated(): Promise<void> {
+    this.setInstrumentsLoadingState(true);
+    
+    try {
+      console.log('Loading instruments with filters:', this.currentFilters);
+      const response = await this.instrumentService.listInstruments(
+        this.currentFilters,
+        { 
+          page: this.instrumentsCurrentPage, 
+          per_page: this.instrumentsItemsPerPage 
+        }
+      );
 
+      console.log('Instruments API response:', response);
+      console.log('Total count:', response.meta?.total);
+      console.log('Returned instruments:', response.data?.length);
+
+      this.instruments = response.data || [];
+      this.instrumentsTotalCount = response.meta?.total || 0;
+      
+      this.renderInstrumentsTable();
+      this.renderInstrumentsPagination();
+      
+    } catch (error) {
+      console.error('Failed to load instruments:', error);
+      this.showInstrumentsError('Failed to load instruments. Please try again.');
+    } finally {
+      this.setInstrumentsLoadingState(false);
+    }
+  }
+
+  private setInstrumentsLoadingState(loading: boolean): void {
+    const loadingElement = this.container.querySelector('#instruments-loading');
+    const tableElement = this.container.querySelector('#instruments-table');
+    
+    if (loadingElement && tableElement) {
+      if (loading) {
+        loadingElement.classList.remove('hidden');
+        tableElement.innerHTML = '';
+      } else {
+        loadingElement.classList.add('hidden');
+      }
+    }
+  }
+
+  private renderInstrumentsTable(): void {
+    const tableContainer = this.container.querySelector('#instruments-table');
+    if (!tableContainer) return;
+
+    if (this.instruments.length === 0) {
+      tableContainer.innerHTML = `
+        <div class="p-8 text-center text-gray-500">
+          <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <p>No instruments found</p>
+          <p class="text-sm mt-1">Try adjusting your search criteria</p>
+        </div>
+      `;
+      return;
+    }
+
+    const tableHTML = `
+      <table class="w-full">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ISIN</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">CFI Code</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Currency</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Authority</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Trading Venue</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          ${this.instruments.map(instrument => this.renderInstrumentRow(instrument)).join('')}
+        </tbody>
+      </table>
+    `;
+
+    tableContainer.innerHTML = tableHTML;
+  }
+
+  private renderInstrumentRow(instrument: Instrument): string {
+    return `
+      <tr class="hover:bg-gray-50 cursor-pointer" onclick="window.location.hash = '#/instruments/${instrument.isin}'">
+        <td class="px-6 py-4 whitespace-nowrap">
+          <div class="text-sm font-mono text-blue-600">${instrument.isin}</div>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${this.getTypeColor(instrument.instrument_type)}">
+            ${this.formatInstrumentType(instrument.instrument_type)}
+          </span>
+        </td>
+        <td class="px-6 py-4">
+          <div class="text-sm font-medium text-gray-900">${instrument.name || 'N/A'}</div>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap">
+          <div class="text-sm font-mono text-gray-900">${instrument.cfi_code || 'N/A'}</div>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${instrument.currency || 'N/A'}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${instrument.competent_authority || 'N/A'}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${instrument.relevant_trading_venue || 'N/A'}</td>
+      </tr>
+    `;
+  }
+
+  private renderInstrumentsPagination(): void {
+    const paginationContainer = this.container.querySelector('#instruments-pagination');
+    if (!paginationContainer) return;
+
+    const totalPages = Math.ceil(this.instrumentsTotalCount / this.instrumentsItemsPerPage);
+    const startItem = (this.instrumentsCurrentPage - 1) * this.instrumentsItemsPerPage + 1;
+    const endItem = Math.min(this.instrumentsCurrentPage * this.instrumentsItemsPerPage, this.instrumentsTotalCount);
+
+    if (totalPages <= 1) {
+      paginationContainer.innerHTML = `
+        <div class="flex justify-between items-center">
+          <div class="text-sm text-gray-700">
+            Showing ${this.instrumentsTotalCount} instruments
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const pagination = `
+      <div class="flex justify-between items-center">
+        <div class="text-sm text-gray-700">
+          Showing ${startItem} to ${endItem} of ${this.instrumentsTotalCount} instruments
+        </div>
+        <div class="flex space-x-2">
+          <button 
+            id="instruments-prev-page" 
+            class="px-3 py-1 border border-gray-300 rounded text-sm ${this.instrumentsCurrentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}"
+            ${this.instrumentsCurrentPage === 1 ? 'disabled' : ''}
+          >
+            Previous
+          </button>
+          
+          <div class="flex space-x-1">
+            ${this.renderInstrumentsPageNumbers(totalPages)}
+          </div>
+          
+          <button 
+            id="instruments-next-page" 
+            class="px-3 py-1 border border-gray-300 rounded text-sm ${this.instrumentsCurrentPage === totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}"
+            ${this.instrumentsCurrentPage === totalPages ? 'disabled' : ''}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    `;
+
+    paginationContainer.innerHTML = pagination;
+    this.attachInstrumentsPaginationListeners();
+  }
+
+  private renderInstrumentsPageNumbers(totalPages: number): string {
+    const pages: string[] = [];
+    const showPages = 5;
+    let startPage = Math.max(1, this.instrumentsCurrentPage - Math.floor(showPages / 2));
+    let endPage = Math.min(totalPages, startPage + showPages - 1);
+
+    if (endPage - startPage < showPages - 1) {
+      startPage = Math.max(1, endPage - showPages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(`
+        <button 
+          class="px-3 py-1 border border-gray-300 rounded text-sm instruments-page-btn ${i === this.instrumentsCurrentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}"
+          data-page="${i}"
+        >
+          ${i}
+        </button>
+      `);
+    }
+
+    return pages.join('');
+  }
+
+  private attachInstrumentsPaginationListeners(): void {
+    const prevBtn = this.container.querySelector('#instruments-prev-page');
+    const nextBtn = this.container.querySelector('#instruments-next-page');
+    const pageButtons = this.container.querySelectorAll('.instruments-page-btn');
+
+    if (prevBtn) {
+      prevBtn.addEventListener('click', () => {
+        if (this.instrumentsCurrentPage > 1) {
+          this.instrumentsCurrentPage--;
+          this.loadInstrumentsPaginated();
+        }
+      });
+    }
+
+    if (nextBtn) {
+      nextBtn.addEventListener('click', () => {
+        const totalPages = Math.ceil(this.instrumentsTotalCount / this.instrumentsItemsPerPage);
+        if (this.instrumentsCurrentPage < totalPages) {
+          this.instrumentsCurrentPage++;
+          this.loadInstrumentsPaginated();
+        }
+      });
+    }
+
+    pageButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const page = parseInt((e.target as HTMLElement).getAttribute('data-page') || '1');
+        this.instrumentsCurrentPage = page;
+        this.loadInstrumentsPaginated();
+      });
+    });
+  }
+
+  private showInstrumentsError(message: string): void {
+    const tableContainer = this.container.querySelector('#instruments-table');
+    if (tableContainer) {
+      tableContainer.innerHTML = `
+        <div class="p-8 text-center text-red-500">
+          <svg class="mx-auto h-12 w-12 text-red-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p class="font-medium">${message}</p>
+        </div>
+      `;
+    }
+  }
+
+  // Transparency pagination methods
+  private async loadTransparencyPaginated(): Promise<void> {
+    this.setTransparencyLoadingState(true);
+    
+    try {
+      const requestParams = {
+        page: this.transparencyCurrentPage,
+        per_page: this.transparencyItemsPerPage,
+        ...this.transparencyFilters
+      };
+      
+      console.log('Loading transparency with params:', requestParams);
+      
+      const response = await this.transparencyService.getTransparencyCalculations(requestParams);
+
+      if (response.status === 'success' && response.data) {
+        this.transparencyCalculations = response.data.calculations;
+        this.transparencyTotalCount = response.data.pagination?.total || 0;
+        
+        console.log('Transparency API response:', {
+          totalCalculations: this.transparencyCalculations.length,
+          totalCount: this.transparencyTotalCount,
+          pagination: response.data.pagination,
+          currentPage: this.transparencyCurrentPage,
+          filters: this.transparencyFilters
+        });
+        
+        // Update statistics on first load only
+        if (this.transparencyCurrentPage === 1) {
+          console.log('Loading statistics for first page load...');
+          // Load separate statistics call for accurate counts
+          this.loadTransparencyStatistics();
+        } else {
+          // Update statistics with current data for subsequent pages
+          this.updateTransparencyStatistics();
+        }
+        
+        this.renderTransparencyTablePaginated();
+        this.renderTransparencyPagination();
+      }
+      
+    } catch (error) {
+      console.error('Failed to load transparency calculations:', error);
+      this.showTransparencyError('Failed to load transparency calculations. Please try again.');
+    } finally {
+      this.setTransparencyLoadingState(false);
+    }
+  }
+
+  private setTransparencyLoadingState(loading: boolean): void {
+    const loadingElement = this.container.querySelector('#transparency-loading');
+    const tableElement = this.container.querySelector('#transparency-table');
+    
+    if (loadingElement && tableElement) {
+      if (loading) {
+        loadingElement.classList.remove('hidden');
+        tableElement.innerHTML = '';
+      } else {
+        loadingElement.classList.add('hidden');
+      }
+    }
+  }
+
+  private renderTransparencyTablePaginated(): void {
+    const tableContainer = this.container.querySelector('#transparency-table');
+    if (!tableContainer) return;
+
+    if (this.transparencyCalculations.length === 0) {
+      tableContainer.innerHTML = `
+        <div class="p-8 text-center text-gray-500">
+          <svg class="mx-auto h-12 w-12 text-gray-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <p>No transparency calculations found</p>
+          <p class="text-sm mt-1">Try adjusting your filter criteria</p>
+        </div>
+      `;
+      return;
+    }
+
+    const tableHTML = `
+      <table class="w-full">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ISIN</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">FIRDS File</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Instrument Type</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Activity Status</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Volume</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transactions</th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Period</th>
+          </tr>
+        </thead>
+        <tbody class="bg-white divide-y divide-gray-200">
+          ${this.transparencyCalculations.map(calc => this.renderTransparencyRow(calc)).join('')}
+        </tbody>
+      </table>
+    `;
+
+    tableContainer.innerHTML = tableHTML;
+  }
+
+  private renderTransparencyRow(calc: TransparencyCalculation): string {
+    return `
+      <tr class="hover:bg-gray-50 cursor-pointer" onclick="window.location.hash = '#/transparency/${calc.isin}'">
+        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
+          ${calc.isin}
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${calc.file_type?.includes('FULECR') ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}">
+            ${calc.file_type || 'N/A'}
+          </span>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+          <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+            ${calc.instrument_type || 'N/A'}
+          </span>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm">
+          <span class="${calc.transparency_analysis?.has_trading_activity ? 'text-green-600 font-medium' : 'text-gray-500'}">
+            ${calc.transparency_analysis?.liquidity_status || 'N/A'}
+          </span>
+        </td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${calc.volume ? new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 }).format(calc.volume) : 'N/A'}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${calc.transactions ? new Intl.NumberFormat('en-US').format(calc.transactions) : 'N/A'}</td>
+        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+          ${calc.from_date || 'N/A'} to ${calc.to_date || 'N/A'}
+        </td>
+      </tr>
+    `;
+  }
+
+  private renderTransparencyPagination(): void {
+    const paginationContainer = this.container.querySelector('#transparency-pagination');
+    if (!paginationContainer) return;
+
+    const totalPages = Math.ceil(this.transparencyTotalCount / this.transparencyItemsPerPage);
+    const startItem = (this.transparencyCurrentPage - 1) * this.transparencyItemsPerPage + 1;
+    const endItem = Math.min(this.transparencyCurrentPage * this.transparencyItemsPerPage, this.transparencyTotalCount);
+
+    if (totalPages <= 1) {
+      paginationContainer.innerHTML = `
+        <div class="flex justify-between items-center">
+          <div class="text-sm text-gray-700">
+            Showing ${this.transparencyTotalCount} calculations
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    const pagination = `
+      <div class="flex justify-between items-center">
+        <div class="text-sm text-gray-700">
+          Showing ${startItem} to ${endItem} of ${this.transparencyTotalCount} calculations
+        </div>
+        <div class="flex space-x-2">
+          <button 
+            id="transparency-prev-page" 
+            class="px-3 py-1 border border-gray-300 rounded text-sm ${this.transparencyCurrentPage === 1 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}"
+            ${this.transparencyCurrentPage === 1 ? 'disabled' : ''}
+          >
+            Previous
+          </button>
+          
+          <div class="flex space-x-1">
+            ${this.renderTransparencyPageNumbers(totalPages)}
+          </div>
+          
+          <button 
+            id="transparency-next-page" 
+            class="px-3 py-1 border border-gray-300 rounded text-sm ${this.transparencyCurrentPage === totalPages ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white text-gray-700 hover:bg-gray-50'}"
+            ${this.transparencyCurrentPage === totalPages ? 'disabled' : ''}
+          >
+            Next
+          </button>
+        </div>
+      </div>
+    `;
+
+    paginationContainer.innerHTML = pagination;
+    this.attachTransparencyPaginationListeners();
+  }
+
+  private renderTransparencyPageNumbers(totalPages: number): string {
+    const pages: string[] = [];
+    const showPages = 5;
+    let startPage = Math.max(1, this.transparencyCurrentPage - Math.floor(showPages / 2));
+    let endPage = Math.min(totalPages, startPage + showPages - 1);
+
+    if (endPage - startPage < showPages - 1) {
+      startPage = Math.max(1, endPage - showPages + 1);
+    }
+
+    for (let i = startPage; i <= endPage; i++) {
+      pages.push(`
+        <button 
+          class="px-3 py-1 border border-gray-300 rounded text-sm transparency-page-btn ${i === this.transparencyCurrentPage ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-50'}"
+          data-page="${i}"
+        >
+          ${i}
+        </button>
+      `);
+    }
+
+    return pages.join('');
+  }
+
+  private attachTransparencyPaginationListeners(): void {
+    const prevBtn = this.container.querySelector('#transparency-prev-page');
+    const nextBtn = this.container.querySelector('#transparency-next-page');
+    const pageButtons = this.container.querySelectorAll('.transparency-page-btn');
+
+    if (prevBtn) {
+      prevBtn.addEventListener('click', () => {
+        if (this.transparencyCurrentPage > 1) {
+          this.transparencyCurrentPage--;
+          this.loadTransparencyPaginated();
+        }
+      });
+    }
+
+    if (nextBtn) {
+      nextBtn.addEventListener('click', () => {
+        const totalPages = Math.ceil(this.transparencyTotalCount / this.transparencyItemsPerPage);
+        if (this.transparencyCurrentPage < totalPages) {
+          this.transparencyCurrentPage++;
+          this.loadTransparencyPaginated();
+        }
+      });
+    }
+
+    pageButtons.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const page = parseInt((e.target as HTMLElement).getAttribute('data-page') || '1');
+        this.transparencyCurrentPage = page;
+        this.loadTransparencyPaginated();
+      });
+    });
+  }
+
+  private showTransparencyError(message: string): void {
+    const tableContainer = this.container.querySelector('#transparency-table');
+    if (tableContainer) {
+      tableContainer.innerHTML = `
+        <div class="p-8 text-center text-red-500">
+          <svg class="mx-auto h-12 w-12 text-red-400 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p class="font-medium">${message}</p>
+        </div>
+      `;
+    }
+  }
+
+  private async loadTransparencyStatistics(): Promise<void> {
+    try {
+      // Get total count
+      const totalResponse = await this.transparencyService.getTransparencyCalculations({
+        page: 1,
+        per_page: 1
+      });
+      
+      // Get equity count  
+      const equityResponse = await this.transparencyService.getTransparencyCalculations({
+        page: 1,
+        per_page: 1,
+        file_type: 'FULECR'
+      });
+      
+      // Get non-equity count
+      const nonEquityResponse = await this.transparencyService.getTransparencyCalculations({
+        page: 1,
+        per_page: 1,
+        file_type: 'FULNCR'
+      });
+      
+      this.transparencyStats = {
+        total: totalResponse.data?.pagination?.total || 0,
+        equity: equityResponse.data?.pagination?.total || 0,
+        nonEquity: nonEquityResponse.data?.pagination?.total || 0,
+        liquid: 0  // Will be calculated from loaded data
+      };
+      
+      console.log('Loaded transparency statistics:', this.transparencyStats);
+      this.updateTransparencyStatistics();
+      
+    } catch (error) {
+      console.error('Failed to load transparency statistics:', error);
+      // Use fallback calculation from current data
+      this.updateTransparencyStatistics();
+    }
+  }
 
   private formatDate(value?: string): string {
     if (!value) return '';

@@ -19,11 +19,23 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import List, Optional
 
-# Configure logging
+# Import project configuration
+try:
+    from ..config import Config
+except ImportError:
+    # Fallback for direct script execution
+    import sys
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from config import Config
+
+# Configure logging with proper path
+_backup_log_path = Path("logs/database_backup.log")
+_backup_log_path.parent.mkdir(parents=True, exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("backup.log"), logging.StreamHandler()],
+    handlers=[logging.FileHandler(_backup_log_path), logging.StreamHandler()],
 )
 logger = logging.getLogger(__name__)
 
@@ -88,8 +100,10 @@ class DatabaseBackupManager:
             if metadata_file.exists():
                 with open(metadata_file, "r") as f:
                     for line in f:
-                        key, value = line.strip().split(": ", 1)
-                        metadata[key] = value
+                        line = line.strip()
+                        if ": " in line:
+                            key, value = line.split(": ", 1)
+                            metadata[key] = value
 
             stat = backup_file.stat()
             backups.append(
@@ -175,9 +189,9 @@ class DatabaseBackupManager:
 def main():
     parser = argparse.ArgumentParser(description="Database Backup Manager")
     parser.add_argument(
-        "--db-path", default="src/marketdata_api/database/marketdata.db", help="Database file path"
+        "--db-path", default=Config.DATABASE_PATH, help="Database file path"
     )
-    parser.add_argument("--backup-dir", default="database_backups", help="Backup directory")
+    parser.add_argument("--backup-dir", default="data/database_backups", help="Backup directory")
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 

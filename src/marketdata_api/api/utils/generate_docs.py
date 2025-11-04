@@ -977,12 +977,12 @@ def validate_documentation():
         except ImportError as e:
             issues.append(f"Cannot import API module: {e}")
         
-        # Check if main API routes are accessible
+        # Check if main API resources are accessible
         try:
-            from marketdata_api.routes import entity_routes, instrument_routes
-            print("✅ Route modules imported successfully")
+            from marketdata_api.api.resources import legal_entities, instruments
+            print("✅ API resource modules imported successfully")
         except ImportError as e:
-            issues.append(f"Cannot import route modules: {e}")
+            issues.append(f"Cannot import API resource modules: {e}")
         
         if issues:
             print("⚠️  Documentation validation issues found:")

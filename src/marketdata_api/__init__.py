@@ -10,7 +10,7 @@ from marketdata_api.database import init_database
 
 def create_app(config_override=None):
     app = Flask(
-        __name__, template_folder="../../frontend/templates", static_folder="../../frontend/static"
+        __name__, template_folder="../../frontend-modern/dist", static_folder="../../frontend-modern/dist/assets"
     )
     app.config["ENV"] = FLASK_ENV
     app.config["ROOT_PATH"] = Config.ROOT_PATH
@@ -69,20 +69,19 @@ def create_app(config_override=None):
         init_database()
         app.logger.info("Database initialization complete")
 
-    from marketdata_api.routes.common_routes import common_bp, frontend_bp  # Import both blueprints
-    from marketdata_api.routes.docs import docs_bp  # Import the Docs API blueprint
+    from marketdata_api.api.resources.frontend import create_frontend_blueprint  # Import frontend blueprint function
     from marketdata_api.api import (  # Import the consolidated API blueprint
         create_swagger_blueprint,
     )
 
     # Register the consolidated Swagger blueprint (all API endpoints)
-    # This provides: instruments, legal entities, transparency, MIC, schema, files
+    # This provides: instruments, legal entities, transparency, MIC, schema, files, system, docs, frontend
     # AND the SwaggerUI at /api/v1/swagger/
     swagger_bp = create_swagger_blueprint()
     app.register_blueprint(swagger_bp)
 
-    app.register_blueprint(docs_bp)  # Register the Docs API blueprint
-    app.register_blueprint(common_bp)  # Register the common API blueprint
+    # Create and register the frontend blueprint (non-API routes for serving templates)
+    frontend_bp = create_frontend_blueprint()
     app.register_blueprint(frontend_bp)  # Register the frontend blueprint
 
     return app

@@ -51,6 +51,7 @@ def create_instrument_resources(api, models):
                 "currency": "Filter by currency code",
                 "mic_code": "Filter by Market Identification Code",
                 "cfi_code": "Filter by CFI code",
+                "search": "Search by ISIN or instrument name (partial matching supported)",
                 "page": f"Page number for paginated results (default: {Pagination.DEFAULT_PAGE})",
                 "per_page": f"Number of records per page (default: {Pagination.DEFAULT_PER_PAGE}, max: {Pagination.MAX_PER_PAGE})",
                 "limit": "Maximum number of records to return",
@@ -86,6 +87,7 @@ def create_instrument_resources(api, models):
                     'currency': validate_currency_code,
                     'mic_code': validate_mic_code,
                     'cfi_code': validate_cfi_code,
+                    'search': str,  # Search by ISIN or instrument name
                 }
                 filters = validate_filter_params(allowed_filters)
 
@@ -120,6 +122,17 @@ def create_instrument_resources(api, models):
                     
                     if 'cfi_code' in filters:
                         query = query.filter(Instrument.cfi_code == filters['cfi_code'])
+                    
+                    if 'search' in filters:
+                        # Search by ISIN (exact or partial) or instrument name
+                        search_term = filters['search']
+                        query = query.filter(
+                            (Instrument.isin.ilike(f'%{search_term}%')) |
+                            (Instrument.short_name.ilike(f'%{search_term}%')) |
+                            (Instrument.full_name.ilike(f'%{search_term}%'))
+                        )
+                        count = query.count()
+                        logger.debug(f"Swagger: Found {count} instruments matching search='{search_term}'")
 
                     # Get total count for pagination
                     total_count = query.count()

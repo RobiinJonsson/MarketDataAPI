@@ -80,20 +80,32 @@ export class Router {
   private async handleRoute(path: string): Promise<void> {
     this.currentRoute = path;
     
+    // Split path and query string
+    const [basePath, queryString] = path.split('?');
+    
+    // Parse query parameters
+    const queryParams: Record<string, string> = {};
+    if (queryString) {
+      const urlParams = new URLSearchParams(queryString);
+      for (const [key, value] of urlParams) {
+        queryParams[key] = value;
+      }
+    }
+    
     // Find matching route (support both exact match and parameterized routes)
     let matchedRoute: Route | undefined;
-    let params: Record<string, string> = {};
+    let params: Record<string, string> = { ...queryParams };
 
     // First try exact match
-    matchedRoute = this.routes.get(path);
+    matchedRoute = this.routes.get(basePath);
     
     // If no exact match, try parameterized routes
     if (!matchedRoute) {
       for (const [routePath, route] of this.routes) {
-        const match = this.matchRoute(routePath, path);
+        const match = this.matchRoute(routePath, basePath);
         if (match) {
           matchedRoute = route;
-          params = match;
+          params = { ...queryParams, ...match };
           break;
         }
       }
@@ -110,7 +122,7 @@ export class Router {
         document.title = `${matchedRoute.title} - MarketData API`;
         
         // Update active navigation
-        this.updateActiveNavigation(path);
+        this.updateActiveNavigation(basePath);
         
         // Show loading state
         this.container.innerHTML = `

@@ -4,65 +4,79 @@ Comprehensive market data management system with CFI-based instrument classifica
 
 ## Key Features
 
-- **🎯 Type-Specific Intelligence**: Comprehensive attribute extractors for all 10 CFI instrument types with intelligent field mapping from 254 FIRDS data elements
-- **🚀 Rich API Responses**: Enterprise-grade endpoints delivering detailed instrument analysis with contract specifications, risk metrics, and business intelligence
-- **🏗️ Advanced Classification**: CFI-driven smart categorization with automatic sub-type detection (Interest Rate Swaps, Call/Put Options, Government Bonds, etc.)
-- **💰 Financial Analytics**: Time-to-maturity calculations, expiration tracking, strike price analysis, yield calculations, and protection level assessment
-- **🔄 Enhanced Derivatives Support**: Comprehensive swap, future, and option analysis with reference rates, underlying assets, and settlement details
-- **🏛️ MIC Code Integration**: Complete ISO 10383 Market Identification Code system with dual-mode operations
-- **📊 CFI-Based Architecture**: ISO 10962 compliant CFI code system as single source of truth for all instrument routing and validation
-- **🎨 Unified Data Models**: JSON-based architecture supporting all 10 FIRDS instrument types (C,D,E,F,H,I,J,O,R,S) with promoted field optimization
-- **⚡ Performance Optimized**: CFI-driven file filtering and single-pass FIRDS processing reduces I/O operations by 90%
-- **🗄️ Dual Database Support**: SQLite (development) / Azure SQL (production) with unified transparency calculations
-- **🔗 Complete Data Integration**: FIRDS/FITRS integration with intelligent type detection and field normalization
-- **🏢 GLEIF API Integration**: Live LEI data retrieval and entity creation from GLEIF public API
-- **💼 Professional CLI**: Modern command-line interface with Rich formatting and type-specific displays
-- **📋 Smart File Management**: Precise regex-based pattern matching for FIRDS/FITRS files
-- **📖 Complete API Documentation**: Interactive Swagger UI at `/api/v1/swagger` with comprehensive endpoint testing
+- **Type-Specific Intelligence**: Comprehensive attribute extractors for all 10 CFI instrument types with intelligent field mapping from 254 FIRDS data elements
+- **Rich API Responses**: Enterprise-grade endpoints delivering detailed instrument analysis with contract specifications, risk metrics, and business intelligence
+- **Advanced Classification**: CFI-driven smart categorization with automatic sub-type detection (Interest Rate Swaps, Call/Put Options, Government Bonds, etc.)
+- **Financial Analytics**: Time-to-maturity calculations, expiration tracking, strike price analysis, yield calculations, and protection level assessment
+- **Enhanced Derivatives Support**: Comprehensive swap, future, and option analysis with reference rates, underlying assets, and settlement details
+- **MIC Code Integration**: Complete ISO 10383 Market Identification Code system with dual-mode operations
+- **CFI-Based Architecture**: ISO 10962 compliant CFI code system as single source of truth for all instrument routing and validation
+- **Unified Data Models**: JSON-based architecture supporting all 10 FIRDS instrument types (C,D,E,F,H,I,J,O,R,S) with promoted field optimization
+- **Performance Optimized**: CFI-driven file filtering and single-pass FIRDS processing reduces I/O operations by 90%
+- **Dual Database Support**: SQLite (development) / Azure SQL (production) with unified transparency calculations
+- **Complete Data Integration**: FIRDS/FITRS integration with intelligent type detection and field normalization
+- **GLEIF API Integration**: Live LEI data retrieval and entity creation from GLEIF public API
+- **Professional CLI**: Modern command-line interface with Rich formatting and type-specific displays
+- **Smart File Management**: Precise regex-based pattern matching for FIRDS/FITRS files
+- **Complete API Documentation**: Interactive Swagger UI at `/api/v1/swagger` with comprehensive endpoint testing
+
+## Quick Start
+
+```bash
+# Clone and setup
+git clone [repository-url]
+cd MarketDataAPI
+python -m venv venv
+source venv/bin/activate  # Unix
+.\venv\Scripts\activate   # Windows
+
+# Install and initialize
+pip install -r requirements.txt
+pip install -e .
+python -m marketdata_api.database.base
+
+# Verify installation
+marketdata --help
+marketdata stats
+
+# Start API server
+marketdata api start
+```
 
 ## Recent Major Improvements
 
-### 🎯 Type-Specific Attribute Extractors (October 2025)
-- **Complete CFI Coverage**: Intelligent attribute extraction for all 10 major instrument types with comprehensive FIRDS field analysis
-- **Rich Business Logic**: Contract specifications, expiration analysis, pricing information, risk attributes, and intelligent classification
-- **Production-Ready API**: Enhanced `/api/v1/instruments/{isin}` endpoints returning detailed `{instrument_type}_attributes` objects
-- **Advanced Analytics**: Automatic calculations for time-to-maturity, strike analysis, swap classification, fund categorization
-- **Enterprise Intelligence**: 
-  - **Swaps**: Reference rates, settlement types, floating terms, swap classifications
-  - **Options**: Strike prices, exercise styles, barrier features, underlying mapping
-  - **Futures**: Contract specifications, delivery types, expiration tracking
-  - **Debt**: Maturity analysis, convertible detection, yield calculations
-  - **Equity**: Share classifications, voting rights, dividend analysis
-  - **Structured Products**: Capital protection, participation rates, barrier analysis
-  - **Collective Investment**: Fund strategies, distribution policies, geographic focus
+### Type-Specific Attribute Extractors (October 2025)
+- Complete CFI coverage: Intelligent attribute extraction for all 10 major instrument types with comprehensive FIRDS field analysis
+- Rich business logic: Contract specifications, expiration analysis, pricing information, risk attributes, and intelligent classification
+- Production-ready API: Enhanced `/api/v1/instruments/{isin}` endpoints returning detailed `{instrument_type}_attributes` objects
+- Advanced analytics: Automatic calculations for time-to-maturity, strike analysis, swap classification, fund categorization
+- Enterprise intelligence across all major instrument types including swaps, options, futures, debt, equity, structured products, and collective investment
 
 ### Flask-RESTX API Consolidation (October 2025)
-- **Major Architecture Cleanup**: Eliminated dual API systems (routes/ + swagger/), consolidated into single `api/` folder
-- **Massive Code Reduction**: **Removed 2,658 lines** of duplicate endpoint code across 6 obsolete files
-- **Clean Organization**: All API code now properly organized in `api/` with utilities, models, and resources
-- **Zero Breaking Changes**: All endpoints maintain identical functionality and response formats
-- **Enhanced Utilities**: Extracted reusable functions for instrument processing, MIC operations, and response building
-- **Fixed Transparency**: Corrected field mappings and None value handling for all transparency endpoints
-- **Future Ready**: Solid foundation prepared for frontend integration and API enhancements
+- Major architecture cleanup: Eliminated dual API systems, consolidated into single `api/` folder
+- Massive code reduction: Removed 2,658 lines of duplicate endpoint code across 6 obsolete files
+- Clean organization: All API code properly organized with utilities, models, and resources
+- Zero breaking changes: All endpoints maintain identical functionality and response formats
+- Enhanced utilities: Extracted reusable functions for instrument processing, MIC operations, and response building
 
 ### CLI Delete Command & Enrichment Fixes (October 2025)
-- **New Delete Command**: Complete instrument deletion with `--cascade` and `--force` options
-- **LEI Enrichment Fix**: Resolved postal_code constraint errors for real-world addresses (Hong Kong, etc.)
-- **Structured Products**: Full H-category analysis with 500k+ products and real CFI pattern support
-- **Database Migration**: SQLite-compatible table recreation for schema changes
+- New delete command: Complete instrument deletion with `--cascade` and `--force` options
+- LEI enrichment fix: Resolved postal_code constraint errors for real-world addresses
+- Structured products: Full H-category analysis with 500k+ products and real CFI pattern support
+- Database migration: SQLite-compatible table recreation for schema changes
 
 ### Comprehensive Swap CLI Enhancement (October 2025)
-- **Complete Swap Classification System**: Intelligent CFI-driven detection for all 5 major swap types
-- **Professional Display**: Enhanced CLI with type-specific icons (💳📊📈💱🏦) and comprehensive FIRDS data integration
-- **Smart Attribute Extraction**: Reference rates, floating terms, currency pairs, basket ISINs, settlement types
-- **Real-World Validation**: Tested with Credit Default and Interest Rate swaps from live data
+- Complete swap classification system: Intelligent CFI-driven detection for all 5 major swap types
+- Professional display: Enhanced CLI with type-specific indicators and comprehensive FIRDS data integration
+- Smart attribute extraction: Reference rates, floating terms, currency pairs, basket ISINs, settlement types
+- Real-world validation: Tested with Credit Default and Interest Rate swaps from live data
 
 ### Modular CLI Architecture (October 2025)
-- **Complete Modular Refactoring**: Transformed monolithic CLI into maintainable modular structure
-- **9 Focused Command Modules**: Separated instruments, transparency, MIC, FIGI, entities, files into individual modules
-- **39% Code Reduction**: From 2000+ line monolith to focused modules (100-300 lines each)
-- **Standalone Package Ready**: Clean architecture enables independent CLI distribution
-- **Zero Breaking Changes**: All existing commands, imports, and deployment scripts work identically
+- Complete modular refactoring: Transformed monolithic CLI into maintainable modular structure
+- 9 focused command modules: Separated instruments, transparency, MIC, FIGI, entities, files into individual modules
+- 39% code reduction: From 2000+ line monolith to focused modules (100-300 lines each)
+- Standalone package ready: Clean architecture enables independent CLI distribution
+- Zero breaking changes: All existing commands, imports, and deployment scripts work identically
 
 ### Professional CLI Implementation (September 2025)
 - Complete CLI rewrite using Click framework with Rich formatting
@@ -92,205 +106,143 @@ Comprehensive market data management system with CFI-based instrument classifica
 - Auto-detection of instrument types from filenames
 - Promoted frequently-used fields to dedicated columns for performance
 
-## Installation
+## Installation & Configuration
 
+### Installation Options
+
+**Standard Installation:**
 ```bash
-# Clone the repository
-git clone [repository-url]
-cd MarketDataAPI
-
-# Create and activate virtual environment
-python -m venv venv
-source venv/bin/activate  # Unix
-.\venv\Scripts\activate  # Windows
-
-# Install all dependencies (includes CLI: click>=8.0.0, rich>=13.0.0)
 pip install -r requirements.txt
-
-# Install CLI package for global command access (optional)
-pip install -e .
-
-# Initialize database
-python -m marketdata_api.database.base
+pip install -e .  # Development mode with global CLI access via 'marketdata' command
 ```
 
-### CLI Installation Verification
-
-After installation, test the CLI:
-
+**Alternative Methods:**
 ```bash
-# Windows: Use batch wrapper (recommended)
-deployment\mapi.bat --help
-deployment\mapi.bat stats
-
-# Direct Python module execution (cross-platform)
-python -m marketdata_api.cli --help
-python -m marketdata_api.cli stats
-
-# Package installation (if entry points work)
-marketdata --help  # or mapi --help
+pip install .                                              # Production install
+pip install build/dist/marketdata_api-1.0.4-py3-none-any.whl  # From built package
+docker-compose -f deployment/docker-compose.yml up        # Docker deployment
 ```
 
-## Configuration
+### Environment Setup
 
 Create a `.env` file in the project root:
-
 ```env
 FLASK_ENV=development
 OPENFIGI_API_KEY=your_openfigi_key
 DATABASE_URL=sqlite:///marketdata.db
 ```
 
-## Usage
+**Development Environment:**
+```bash
+set "PYTHONPATH=%PROJECT_ROOT%\src;%PYTHONPATH%"
+set "SQLITE_DB_PATH=%PROJECT_ROOT%\src\marketdata_api\database\marketdata.db"
+```
 
-### Starting the Server
+### CLI Access Verification
 
 ```bash
-python -m marketdata_api
+marketdata --help                   # Primary method (after pip install -e .)
+marketdata stats                    # Test with database statistics
+deployment\mapi.bat --help          # Alternative: Windows wrapper
+python -m marketdata_api.cli stats  # Alternative: Direct module execution
 ```
+
+## Usage
+
+### API Server
+
+```bash
+marketdata api start      # Start Flask server on http://localhost:5000
+# Alternative: python -m marketdata_api
+```
+
+**API Documentation:**
+- Interactive Swagger UI: http://127.0.0.1:5000/api/v1/swagger
+- ReDoc Documentation: http://127.0.0.1:5000/api/v1/docs
+- Base URL: http://127.0.0.1:5000/api/v1
 
 ### Command Line Interface
 
-Modern modular CLI built with Click framework and Rich formatting for professional terminal output.
+Modern modular CLI with Rich formatting. Access via:
+```bash
+marketdata [command]                # Primary method (user-friendly)
+deployment\mapi.bat [command]       # Alternative: Windows wrapper
+python -m marketdata_api.cli [cmd]  # Alternative: Direct module execution
+```
 
-**New Modular Architecture**: The CLI has been refactored from a monolithic structure into focused command modules for better maintainability and future standalone packaging capability.
+**Command Groups:**
+- `instruments` - Create, list, get, delete, enrich with CFI validation
+- `transparency` - MiFID II calculations and FITRS data  
+- `mic` - Market Identification Code operations with ISO registry
+- `entities` - Legal entity operations and LEI handling
+- `files` - File management and ESMA integration
+- Core utilities: `stats`, `cfi`, `init`
 
-#### Setup
+**Key Commands:**
+```bash
+# Database operations
+marketdata stats                     # Database statistics
+marketdata init                      # Initialize database
+
+# Instrument operations  
+marketdata instruments list --limit 10 --type equity
+marketdata instruments get SE0000120784
+marketdata instruments delete [ISIN] --cascade --force
+marketdata instruments enrich SE0000120784
+
+# Transparency and MIC operations
+marketdata transparency create SE0000108656
+marketdata mic get XNYS
+
+# API server
+marketdata api start                 # Start Flask server
+```
+
+See CLI help (`marketdata --help`) for complete command reference.
+
+#### Database Backup & Recovery
+
+**Complete backup system with automated safety backups and recovery capabilities.**
 
 ```bash
-# Package installation (enables global commands)
-pip install -e .
+# Create manual backup
+python -m marketdata_api.database.database_backup backup
 
-# Windows batch wrapper (recommended)
-deployment\mapi.bat [command]
+# Create backup with description
+python -m marketdata_api.database.database_backup backup --type manual --description "Before major update"
 
-# Direct module execution
-python -m marketdata_api.cli [command]
+# List all available backups
+python -m marketdata_api.database.database_backup list
 
-# Verify installation
-deployment\mapi.bat --help
-deployment\mapi.bat stats
+# Create daily automated backup
+python -m marketdata_api.database.database_backup daily
+
+# Restore from backup
+python -m marketdata_api.database.database_backup restore [backup_file]
+
+# Verify backup integrity
+python -m marketdata_api.database.database_backup verify [backup_file]
+
+# Clean up old backups
+python -m marketdata_api.database.database_backup cleanup --days 30
 ```
 
-#### Available Command Groups
-- **Core Utilities**: `stats`, `cfi`, `init` - Database operations and analysis
-- **Instruments**: Complete instrument lifecycle management with CFI validation
-- **Transparency**: MiFID II transparency calculations and FITRS data
-- **MIC**: Market Identification Code operations with ISO registry integration
-- **FIGI**: Financial Instrument Global Identifier management
-- **Entities**: Legal entity operations and LEI handling
-- **Files**: File management operations and ESMA integration
+**Features:**
+- **Automated Pre-Operation Backups**: System automatically creates safety backups before major operations
+- **Smart Configuration**: Uses `Config.DATABASE_PATH` and stores backups in `data/database_backups/`
+- **Metadata Tracking**: Each backup includes timestamp, type, and description metadata
+- **Size Monitoring**: Track database growth over time (e.g., 1.1MB → 10.2MB progression)
+- **Integrity Verification**: Built-in backup validation and corruption detection
+- **Retention Management**: Configurable cleanup policies for old backups
 
-#### Core Commands
+**Important Notes:**
+- Always run from project root: `C:\Users\robin\Projects\MarketDataAPI`
+- Use module syntax for proper import resolution: `python -m marketdata_api.database.database_backup`
+- Backup logs are written to `logs/database_backup.log`
+- Pre-operation backups are created automatically by the system
 
-**Database & Statistics**
-```bash
-deployment\mapi.bat stats
-```
-
-**Instrument Management**
-```bash
-# List instruments with filtering
-mapi.bat instruments list --limit 10 --type equity --currency USD
-
-# Get detailed information
-mapi.bat instruments get SE0000120784
-
-# Create from FIRDS data
-mapi.bat instruments create US0378331005 equity
-
-# Show trading venues
-mapi.bat instruments venues SE0000120784
-
-# Delete instruments with cascade options
-mapi.bat instruments delete EZ0F1SLFNWJ8 --force
-mapi.bat instruments delete US0378331005 --cascade  # Delete with related data
-
-# Enrich existing instruments with external data
-mapi.bat instruments enrich SE0000120784
-
-# Comprehensive derivative support with intelligent type detection
-mapi.bat instruments get EZ0XX8PK3511  # Credit Default Swap with full classification
-mapi.bat instruments get EZ8SPFL0BM66  # Interest Rate Swap with reference rate details
-mapi.bat instruments create [ISIN] swap  # Create swap with automatic CFI classification
-```
-
-**CFI Analysis**
-```bash
-# Enhanced CFI decoding with classification levels
-deployment\mapi.bat cfi ESVUFR  # Equity example
-deployment\mapi.bat cfi DBFUFR  # Debt example
-```
-
-**Market Identification Codes**
-```bash
-# List MICs with country filtering
-deployment\mapi.bat mic list --country US --limit 10
-
-# Get detailed MIC information
-deployment\mapi.bat mic get XNYS
-
-# Real-time ISO registry lookup
-deployment\mapi.bat mic remote lookup XLON
-```
-
-**Transparency Calculations**
-```bash
-# List transparency calculations with pagination
-deployment\mapi.bat transparency list --limit 5 --offset 0
-
-# Get detailed transparency calculation
-deployment\mapi.bat transparency get [transparency_id]
-
-# Create transparency calculations from FITRS data
-deployment\mapi.bat transparency create SE0000108656
-```
-
-**Legal Entities & FIGI Operations**
-```bash
-# Legal entity lookup (database)
-deployment\mapi.bat entities list --country US --limit 10
-deployment\mapi.bat entities get [LEI_CODE]
-
-# GLEIF API integration (live data)
-deployment\mapi.bat entities get-remote M312WZV08Y7LYUC71685  # Live GLEIF data without storage
-deployment\mapi.bat entities get-remote M312WZV08Y7LYUC71685 --include-relationships  # With parent/child info (upcoming)
-deployment\mapi.bat entities create M312WZV08Y7LYUC71685  # Create from GLEIF API data
-deployment\mapi.bat entities create M312WZV08Y7LYUC71685 --force  # Overwrite existing
-
-# FIGI operations
-deployment\mapi.bat figi get US0378331005
-deployment\mapi.bat figi search US0378331005 --mic XNYS
-```
-
-**File Management**
-```bash
-# List processed files
-deployment\mapi.bat files list --type FIRDS --limit 20
-
-# Download files from ESMA
-deployment\mapi.bat files download [filename]
-
-# File statistics
-deployment\mapi.bat files stats
-```
-
-#### Rich Terminal Output
-The CLI features beautiful formatting with:
-- **Rich Tables**: Organized data display with colors and borders
-- **Information Panels**: Comprehensive details in bordered sections
-- **Status Indicators**: Loading spinners and progress feedback
-- **Color Coding**: Cyan headers, green success, red errors
-- **Classification Tables**: Clear Yes/No indicators with checkmarks
-
-#### Example Output
-```
-╭─────────────── Database Statistics ────────────────╮
-│ Instruments: 17                                     │
-│ Transparency Calculations: 36                       │ 
-│ MIC Codes: 2,794                                    │
-╰─────────────────────────────────────────────────────╯
-```
+#### Terminal Output
+The CLI provides professional formatting with organized data display, comprehensive details in bordered sections, and clear status indicators for all operations.
 
 ### API Endpoints
 
@@ -321,27 +273,17 @@ The CLI features beautiful formatting with:
 - `GET/POST /api/v1/instruments` - Instrument management with CFI validation
 - `GET/POST /api/v1/entities` - Legal entity operations  
 - `GET/POST /api/v1/transparency` - MiFID II transparency calculations with CFI support
-
-#### File Management
-- `POST /api/v1/files/download-by-criteria` - **Main endpoint** for downloading by date/type/dataset
+- `POST /api/v1/files/download-by-criteria` - Main endpoint for downloading by date/type/dataset
 - `GET /api/v1/files` - List files with advanced filtering
-- `GET /api/v1/esma-files` - Browse ESMA registry
-- `GET /api/v1/files/stats` - Storage statistics and monitoring
-- `POST /api/v1/files/cleanup` - Automated file cleanup
-
-#### Batch Operations
 - `POST /api/v1/batch/instruments` - Bulk instrument processing
-- `POST /api/v1/batch/entities` - Bulk entity processing
 
-**📖 Complete API Documentation**: 
-- **Interactive Swagger UI**: http://127.0.0.1:5000/api/v1/swagger
-- **ReDoc Documentation**: http://127.0.0.1:5000/api/v1/docs
-- **Base URL**: `http://127.0.0.1:5000/api/v1`
-- **Architecture**: Unified Flask-RESTX API with consolidated resource organization and shared utilities
+## Performance Metrics
 
-## Documentation Policy
-
-**⚠️ Documentation Guidelines**: Keep documentation consolidated. Update existing files rather than creating new ones. The project should have ~10 essential .md files maximum, not 68+.
+- **File Search Optimization**: 90% reduction in I/O operations via CFI-based targeting
+- **API Response Time**: <5 seconds for complex instruments (previously 70+ seconds)
+- **Validation Accuracy**: 100% CFI compliance with real-time frontend feedback
+- **Coverage**: All 10 FIRDS instrument types supported (up from 3)
+- **Success Rate**: 100% instrument processing (eliminated timeouts)
 
 ## Integration Examples
 
@@ -382,101 +324,155 @@ curl -X POST "http://localhost:5000/api/v1/instruments" \
 
 ## Development
 
-### Quick Test Commands
+### Development Workflow
+
+**Building and Testing:**
 ```bash
-# Install test dependencies
-deployment\dev.bat install
-
-# Run quick tests
-deployment\dev.bat test-quick
-
-# Run full test suite  
-deployment\dev.bat test
-
-# Test version upgrade compatibility
-deployment\dev.bat test-upgrade
-
-# Generate coverage report
-deployment\dev.bat coverage
+python -m build                           # Build package (creates wheel/source in build/dist/)
+deployment\dev.bat test                   # Full test suite
+deployment\dev.bat test-quick             # Quick tests
+deployment\dev.bat coverage               # Coverage report
 ```
 
-### Development Setup
+**Version Management:**
 ```bash
-# Set PYTHONPATH for development
-set "PYTHONPATH=%PROJECT_ROOT%\src;%PYTHONPATH%"
+deployment\upgrade.bat 1.0.4             # Semi-automated version upgrade
+git tag v1.0.4                           # Create version tag
+git push origin dev --tags               # Push to dev branch
+git checkout main && git merge dev       # Merge to main (release branch)
+```
 
-# Set database path for CLI
-set "SQLITE_DB_PATH=%PROJECT_ROOT%\src\marketdata_api\database\marketdata.db"
+**Development Environment:**
+```bash
+deployment\dev.bat [command]             # Development wrapper script
+```
 
-# Use development wrapper
-deployment\dev.bat [command]
+### Production Deployment
+
+**Docker (Recommended):**
+```bash
+docker-compose -f deployment/docker-compose.yml up -d
+```
+
+**Production Servers:**
+```bash
+# Linux/macOS with Gunicorn
+pip install gunicorn
+gunicorn -w 4 -b 0.0.0.0:5000 "marketdata_api:create_app()"
+
+# Windows with Waitress  
+pip install waitress
+waitress-serve --host=0.0.0.0 --port=5000 marketdata_api:create_app
+```
+
+**Environment Configuration:**
+```env
+# .env file for production
+DATABASE_URL=sqlite:///data/marketdata.db
+FLASK_ENV=production
+FLASK_DEBUG=false
+SECRET_KEY=your-production-secret-key
 ```
 
 ## Project Structure
 
 ```
 MarketDataAPI/
-├── marketdata_api/
-│   ├── models/           # SQLAlchemy models
-│   │   ├── sqlite/       # Unified SQLite models
-│   │   │   ├── instrument.py # Clean instrument models (supports all 10 FIRDS types)
-│   │   │   ├── market_identification_code.py # Complete ISO 10383 MIC model
-│   │   │   ├── transparency.py # Unified transparency models (JSON-based)
-│   │   │   ├── legal_entity.py # Legal Entity models
-│   │   │   └── figi.py   # FIGI mapping models
-│   │   └── utils/        # Model utilities
-│   │       ├── cfi.py    # Complete ISO 10962 CFI decoder
-│   │       └── cfi_instrument_manager.py # CFI-based validation & classification system
-│   ├── services/         # Business logic & external APIs
-│   │   ├── sqlite/       # SQLite service implementations
-│   │   │   ├── instrument_service.py # CFI-aware instrument operations (all 10 types)
-│   │   │   └── transparency_service.py # Unified transparency with CFI-optimized FITRS search
-│   │   ├── mic_data_loader.py # MIC data loading with remote/local support
-│   │   ├── file_management_service.py # Advanced file management
-│   │   ├── esma_data_loader.py # ESMA data loading and processing
-│   │   └── esma_utils.py # ESMA utility functions
-│   ├── routes/          # API endpoints
-│   │   ├── instrument_routes.py # CFI-enhanced instrument endpoints
-│   │   ├── mic_routes.py # Complete MIC API endpoints (8 total)
-│   │   ├── entity_routes.py # Legal entity endpoints
-│   │   ├── transparency_routes.py # Unified transparency endpoints
-│   │   ├── file_management.py # File management endpoints
-│   │   └── swagger.py   # API documentation with CFI models
-│   ├── database/        # Database configuration
-│   ├── config/          # Configuration management
-│   └── tests/           # Test suite
-├── data/
-│   ├── downloads/       # Downloaded ESMA files
-│   │   ├── firds/      # FIRDS files (all 10 types: C,D,E,F,H,I,J,O,R,S)
-│   │   └── fitrs/      # FITRS files (ECR/NCR pattern support)
-│   └── uploads/        # Uploaded files
-├── frontend-modern/     # Modern frontend with CFI validation
-│   ├── src/
-│   │   ├── admin.ts    # CFI-enabled admin interface
-│   │   └── utils/api.ts # CFI validation API calls
-│   ├── admin.html      # Dynamic instrument type loading
-│   └── package.json    # Modern build tooling
-├── setup.py            # Package installation with CLI entry points
-├── scripts/            # Utility scripts
-│   ├── generate_docs.py # OpenAPI documentation generator
-│   └── test_firds_fitrs_patterns.py # CFI pattern validation tests
-├── docs/               # Documentation
-│   ├── api/            # API documentation (auto-generated)
-│   ├── CHANGELOG.md    # Detailed project history
-│   └── development/    # Development guides
-└── alembic/            # Database migrations
+├── src/marketdata_api/              # Main package
+│   ├── api/                         # Unified Flask-RESTX API
+│   │   ├── models/                  # API response models (organized by domain)
+│   │   ├── resources/               # API endpoint implementations
+│   │   ├── utils/                   # Shared API utilities
+│   │   │   ├── type_specific_responses.py  # Type-specific attribute extractors (10 CFI types)
+│   │   │   ├── instrument_utils.py         # Instrument processing utilities
+│   │   │   ├── mic_utils.py               # MIC code operations
+│   │   │   ├── response_builders.py       # Response formatting utilities
+│   │   │   └── transparency_utils.py      # Rich transparency calculations
+│   │   └── config.py                # API configuration
+│   ├── cli/                         # Modular CLI implementation
+│   ├── models/                      # Database models
+│   │   └── sqlite/                  # SQLite model implementations
+│   ├── services/                    # Business logic layer
+│   │   ├── sqlite/                  # SQLite service implementations
+│   │   └── external APIs            # GLEIF, OpenFIGI, MIC integrations
+│   ├── database/                    # Database configuration and initialization
+│   ├── interfaces/                  # Service abstractions and factories
+│   ├── schema/                      # Database schema utilities
+│   ├── tests/                       # Test suite
+│   ├── config.py                    # Application configuration
+│   └── constants.py                 # Centralized constants and configuration
+├── alembic/                         # Database migrations
+├── config/                          # Configuration files
+│   ├── alembic.ini                  # Database migrations config
+│   └── pytest.ini                  # Testing configuration
+├── data/                            # Data storage (gitignored)
+│   ├── downloads/                   # ESMA data downloads
+│   ├── database_backups/            # Database backup files
+│   └── logs/                        # Application logs
+├── deployment/                      # Deployment files and scripts
+│   ├── mapi.bat                     # CLI wrapper script
+│   ├── install.bat/.sh              # Installation scripts
+│   └── upgrade.bat                  # Package upgrade script
+├── docs/                            # Documentation
+├── examples/                        # Usage examples
+├── frontend-modern/                 # Modern TypeScript frontend
+│   ├── src/                         # TypeScript source code
+│   ├── dist/                        # Built frontend assets
+│   └── package.json                 # Frontend build configuration
+├── scripts/                         # Utility scripts
+├── setup.py                         # Package installation with CLI entry points
+├── pyproject.toml                   # Modern Python packaging
+├── requirements.txt                 # Python dependencies
+└── README.md, CHANGELOG.md, LICENSE # Documentation
 ```
 
-## Technologies
+### Key Architecture Benefits
 
-- **Backend**: Python 3.8+, Flask, SQLAlchemy 2.0+
-- **CFI System**: ISO 10962 compliant classification with comprehensive validation
-- **Data Sources**: FIRDS (all 10 types), FITRS, OpenFIGI API, GLEIF API
-- **Database**: SQLite (with PostgreSQL/Azure SQL support)
-- **Frontend**: Modern TypeScript/JavaScript with real-time validation
-- **Documentation**: OpenAPI 3.0 with auto-generated Swagger UI
-- **Testing**: Pytest with comprehensive CFI pattern validation
-- **Migrations**: Alembic for database versioning
+- **Clean separation**: Code, config, deployment, and data are properly separated
+- **Standard Python layout**: Follows PEP 518 and modern packaging standards
+- **Build isolation**: All build artifacts contained in `build/` directory
+- **Unified API**: Single Flask-RESTX implementation eliminates duplicate code
+- **Modular CLI**: Command groups organized by business functionality
+- **CFI-driven design**: All instrument operations use CFI codes as primary classification
+- **Rich utilities**: Shared response formatting and business logic extraction
+- **Type safety**: Comprehensive models and validation throughout the stack
+
+## Technical Stack
+
+- **Backend**: Python 3.8+, Flask, SQLAlchemy 2.0+, Click CLI, Rich formatting
+- **Data Sources**: FIRDS (10 types), FITRS, OpenFIGI API, GLEIF API, ISO 10383 MIC registry
+- **Database**: SQLite (development), Azure SQL (production), Alembic migrations
+- **Frontend**: Modern TypeScript, Vite, Tailwind CSS
+- **API**: Flask-RESTX, OpenAPI 3.0, Swagger UI, comprehensive validation
+- **Classification**: ISO 10962 CFI codes, 254 FIRDS field analysis
+
+## Type-Specific Attributes System
+
+The `api/utils/type_specific_responses.py` module implements comprehensive data extraction and enrichment based on CFI classification:
+
+### CFI Type Extractors
+- **Swaps (S)**: Reference rates, settlement types, floating terms, swap classifications
+- **Futures (F)**: Contract specifications, delivery types, expiration tracking, underlying assets  
+- **Options (O)**: Strike prices, exercise styles, barrier features, underlying mapping
+- **Debt (D)**: Maturity analysis, interest rate types, convertible bond detection
+- **Equity (E)**: Share classifications, voting rights analysis, dividend information
+- **Rights (R)**: Exercise price analysis, underlying mapping, expiry status tracking
+- **Collective Investment (C)**: Fund strategies, distribution policies, geographic focus
+- **Structured Products (I)**: Capital protection analysis, participation rates, barrier classifications
+- **Spot (H)**: FX pair detection, commodity categorization, settlement analysis  
+- **Forward (J)**: Contract terms, underlying assets, maturity calculations
+
+### Intelligence Features
+- **254 FIRDS Fields Analyzed**: Comprehensive categorization into dates, rates, contract specs, underlying assets
+- **Business Logic**: Automatic sub-type detection and intelligent naming
+- **Time Calculations**: Days-to-expiry, time-to-maturity, term classifications
+- **Risk Analysis**: Protection levels, barrier detection, enhanced rights assessment
+
+### API Integration
+- **Rich Responses**: `/api/v1/instruments/{isin}` returns detailed `{instrument_type}_attributes`
+- **Raw Data Access**: `/api/v1/instruments/{isin}/raw` for development comparison
+- **Consistent Structure**: Standardized field normalization across all types
+- **Performance Optimized**: Single-pass FIRDS processing with lazy evaluation
 
 ## CFI Code Support
 
@@ -492,7 +488,7 @@ Complete ISO 10962 CFI code support:
 - **J** - Forwards (Forward contracts, Warrants in FIRDS context)
 - **O** - Options (Calls, Puts, etc.)
 - **R** - Entitlements (Rights, Warrants, etc.)
-- **S** - Swaps (Credit Default 💳, Interest Rate 📊, Equity Total Return 📈, Foreign Exchange 💱, OIS 🏦)
+- **S** - Swaps (Credit Default, Interest Rate, Equity Total Return, Foreign Exchange, OIS)
 - **K** - Commodity derivatives
 - **L** - Structured products
 - **M** - Financing instruments
@@ -503,22 +499,11 @@ Complete ISO 10962 CFI code support:
 CFI codes automatically map to business instrument types:
 - C → `collective_investment`, D → `debt`, E → `equity`, F → `future`, J → `forward`, O → `option`, R → `rights`, S → `swap`
 
-## Performance Metrics
-
-- File Search Optimization: 90% reduction in I/O operations via CFI-based targeting
-- API Response Time: <5 seconds for complex instruments (previously 70+ seconds)
-- Validation Accuracy: 100% CFI compliance with real-time frontend feedback
-- Coverage: All 10 FIRDS instrument types supported (up from 3)
-- Success Rate: 100% instrument processing (eliminated timeouts)
-
 ## Requirements
 
-- Python 3.8 or higher
-- SQLite 3
-- Git
-- Virtual environment (recommended)
-
-See `requirements.txt` for complete Python package dependencies.
+- **Python**: 3.8+ with virtual environment
+- **Database**: SQLite 3 (included) or Azure SQL
+- **Dependencies**: See `requirements.txt` for complete package list
 
 ## Contributing
 

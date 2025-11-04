@@ -11,10 +11,9 @@ This directory contains comprehensive documentation for the MarketDataAPI financ
 
 ## Quick Links
 
-- [Main Project README](../README.md) - Project overview and setup
-- [API Swagger UI](/api/v1/swagger/) - Interactive API documentation
+- [Main Project README](../README.md) - Project overview, setup, and deployment
+- [API Swagger UI](/api/v1/swagger/) - Interactive API documentation  
 - [OpenAPI Specification](/docs/openapi) - Machine-readable API spec
-- [Deployment Guide](../DEPLOYMENT.md) - Production deployment instructions
 
 ## API Access
 

@@ -209,7 +209,7 @@ export default class HomePage extends BasePage {
             </div>
             <h3 class="text-lg font-semibold text-gray-900 mb-2">Transparency Centre</h3>
             <p class="text-gray-600 mb-4">MiFID II transparency calculations and regulatory reporting</p>
-            <a href="#" data-route="/instruments" class="text-blue-600 hover:text-blue-800 font-medium transparency-link">Access Transparency →</a>
+            <a href="#" data-route="/instruments?tab=transparency" class="text-blue-600 hover:text-blue-800 font-medium transparency-link">Access Transparency →</a>
           </div>
         `, '')}
 
