@@ -14,6 +14,7 @@ from .relationships import create_relationship_resources
 from .schema import create_schema_resources
 from .system import create_system_resources
 from .transparency import create_transparency_resources  # Use the working version
+from .venues import create_venue_resources
 
 
 def register_all_resources(api):
@@ -35,6 +36,7 @@ def register_all_resources(api):
     relationships_ns = create_relationship_resources(api, models)
     transparency_ns = create_transparency_resources(api, models)  # Working endpoints
     mic_ns = create_mic_resources(api, models)  # MIC endpoints in Swagger
+    venues_ns = create_venue_resources(api, models)  # Venue endpoints
     schema_ns = create_schema_resources(api, models)  # Schema endpoints migrated to Swagger
     system_ns = create_system_resources(api, models)  # System endpoints migrated from routes
     docs_ns = create_docs_resources(api, models)  # Documentation endpoints migrated from routes
@@ -43,6 +45,7 @@ def register_all_resources(api):
 
     return {
         "mic": mic_ns,  # MIC endpoints now in Swagger
+        "venues": venues_ns,  # Venue endpoints
         "instruments": instruments_ns,
         "legal_entities": legal_entities_ns,
         "relationships": relationships_ns,

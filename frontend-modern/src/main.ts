@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage';
 import InstrumentsPage from './pages/InstrumentsPage';
 import InstrumentDetailPage from './pages/InstrumentDetailPage';
 import EntityDetailPage from './pages/EntityDetailPage';
+import VenuesPage from './pages/VenuesPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import DataOpsPage from './pages/DataOpsPage';
 import SwaggerPage from './pages/SwaggerPage';
@@ -63,6 +64,21 @@ document.addEventListener('DOMContentLoaded', () => {
       title: 'Entity Details',
       component: () => Promise.resolve({ default: EntityDetailPage }),
       description: 'Detailed entity information and corporate relationships'
+    });
+
+    router.addRoute({
+      path: '/venues',
+      title: 'Trading Venues & MIC Codes',
+      component: () => Promise.resolve({ default: VenuesPage }),
+      icon: 'venues',
+      description: 'Market identification codes and venue management'
+    });
+
+    router.addRoute({
+      path: '/venues/:micCode',
+      title: 'Venue Details',
+      component: () => Promise.resolve({ default: VenuesPage }),
+      description: 'Detailed venue information and trading instruments'
     });
 
     router.addRoute({

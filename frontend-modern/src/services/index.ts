@@ -10,6 +10,7 @@ export { InstrumentService } from './InstrumentService';
 export { LegalEntityService } from './LegalEntityService';
 export { FileService } from './FileService';
 export { MicService } from './MicService';
+export { VenueService } from './VenueService';
 export { AnalyticsService } from './AnalyticsService';
 export { TransparencyService } from './TransparencyService';
 export { SchemaService } from './SchemaService';
@@ -22,6 +23,7 @@ import { InstrumentService } from './InstrumentService';
 import { LegalEntityService } from './LegalEntityService';
 import { FileService } from './FileService';
 import { MicService } from './MicService';
+import { VenueService } from './VenueService';
 import { AnalyticsService } from './AnalyticsService';
 import { TransparencyService } from './TransparencyService';
 import { SchemaService } from './SchemaService';
@@ -63,6 +65,10 @@ export class ApiServiceFactory {
 
   get mics(): MicService {
     return new MicService(this.baseURL, this.defaultConfig);
+  }
+
+  get venues(): VenueService {
+    return new VenueService(this.baseURL, this.defaultConfig);
   }
 
   get analytics(): AnalyticsService {

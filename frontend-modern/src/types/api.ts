@@ -113,6 +113,100 @@ export interface VenueData {
   trading_hours?: string;
 }
 
+// ===== VENUE TYPES =====
+
+export interface VenueListFilters {
+  country?: string;
+  status?: string;
+  mic_type?: string;
+  operating_mic?: string;
+  search?: string;
+  has_instruments?: string;
+}
+
+export interface VenueSummary {
+  mic_code: string;
+  operating_mic?: string;
+  market_name: string;
+  legal_entity_name?: string;
+  country_code?: string;
+  city?: string;
+  status?: string;
+  operation_type?: string;
+  market_category?: string;
+  website?: string;
+  instrument_count: number;
+  last_update_date?: string;
+}
+
+export interface VenueDetail extends VenueSummary {
+  acronym?: string;
+  lei?: string;
+  comments?: string;
+  creation_date?: string;
+  last_validation_date?: string;
+  expiry_date?: string;
+  data_source_version?: string;
+  segment_mics?: Array<{
+    mic_code: string;
+    market_name: string;
+    status?: string;
+  }>;
+  instruments?: VenueInstrument[];
+}
+
+export interface VenueInstrument {
+  isin: string;
+  venue_id?: string;
+  instrument_name?: string;
+  cfi_code?: string;
+  instrument_type?: string;
+  issuer_name?: string;
+  first_trade_date?: string;
+  termination_date?: string;
+  venue_currency?: string;
+  venue_status?: string;
+}
+
+export interface VenueStatistics {
+  total_mics: number;
+  operating_mics: number;
+  segment_mics: number;
+  status_breakdown: Record<string, number>;
+  top_countries: Array<{
+    country_code: string;
+    count: number;
+  }>;
+  venues_with_instruments: number;
+  total_trading_venues: number;
+}
+
+export interface CountrySummary {
+  country_code: string;
+  total_mics: number;
+  operating_mics: number;
+  segment_mics: number;
+}
+
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+  pagination?: {
+    page: number;
+    per_page: number;
+    total: number;
+    pages: number;
+  };
+}
+
+// Venue-specific response that matches actual API structure
+export interface VenueListResponse extends ApiResponse<VenueSummary[]> {
+  pagination?: {
+    page: number;
+    per_page: number;
+    total: number;
+    pages: number;
+  };
+}
+
 // ===== LEGAL ENTITY TYPES =====
 
 export interface LegalEntity {

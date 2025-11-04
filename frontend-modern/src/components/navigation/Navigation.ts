@@ -61,6 +61,13 @@ export class Navigation {
                 Entities
               </a>
               
+              <a href="#" data-route="/venues" class="nav-link px-3 py-2 rounded-md text-sm font-medium transition-colors">
+                <svg class="w-4 h-4 mr-2 inline" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"></path>
+                </svg>
+                Venues
+              </a>
+              
               <a href="#" data-route="/analytics" class="nav-link px-3 py-2 rounded-md text-sm font-medium transition-colors">
                 <svg class="w-4 h-4 mr-2 inline" fill="currentColor" viewBox="0 0 20 20">
                   <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path>
@@ -119,6 +126,13 @@ export class Navigation {
                 <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3z"></path>
               </svg>
               Entities
+            </a>
+            
+            <a href="#" data-route="/venues" class="mobile-nav-link block px-3 py-2 rounded-md text-base font-medium transition-colors">
+              <svg class="w-4 h-4 mr-3 inline" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"></path>
+              </svg>
+              Venues
             </a>
             
             <a href="#" data-route="/analytics" class="mobile-nav-link block px-3 py-2 rounded-md text-base font-medium transition-colors">

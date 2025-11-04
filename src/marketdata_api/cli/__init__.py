@@ -9,15 +9,37 @@ Use with: marketdata instruments list
 """
 import click
 
+import importlib.metadata
+
 from .core.utils import CustomGroup, console
 from .commands.utilities import stats, cfi, init
 from .commands.instruments import instruments
+
+
+def version_callback(ctx, param, value):
+    """Callback to show version and exit"""
+    if not value or ctx.resilient_parsing:
+        return
+    try:
+        pkg_version = importlib.metadata.version("marketdata-api")
+    except importlib.metadata.PackageNotFoundError:
+        pkg_version = "unknown"
+    console.print(f"[green]MarketDataAPI CLI version: {pkg_version}[/green]")
+    ctx.exit()
 
 
 @click.group(cls=CustomGroup, invoke_without_command=True)
 @click.option("--verbose", "-v", is_flag=True, help="Enable verbose output")
 @click.option(
     "--format", default="table", type=click.Choice(["table", "json"]), help="Output format"
+)
+@click.option(
+    "--version", 
+    is_flag=True, 
+    expose_value=False, 
+    is_eager=True,
+    callback=version_callback,
+    help="Show version and exit"
 )
 @click.pass_context
 def cli(ctx, verbose, format):

@@ -14,6 +14,7 @@ from .relationships import create_relationship_models
 from .schema import create_schema_models
 from .system import create_system_models
 from .transparency import create_transparency_models
+from .venues import create_venue_models
 
 
 def register_all_models(api):
@@ -40,6 +41,7 @@ def register_all_models(api):
     system_models = create_system_models(api, common_models)
     frontend_models = create_frontend_models(api, common_models)
     file_models = create_file_models(api, common_models)
+    venue_models = create_venue_models(api, common_models)
 
     return {
         "common": common_models,
@@ -52,4 +54,5 @@ def register_all_models(api):
         "system": system_models,
         "frontend": frontend_models,
         "files": file_models,
+        "venues": venue_models,
     }

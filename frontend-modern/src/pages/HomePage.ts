@@ -157,20 +157,21 @@ export default class HomePage extends BasePage {
           </div>
         `, '')}
 
-        <!-- Analytics Dashboard -->
+        <!-- Venues & MIC Codes -->
         ${this.createCard(`
           <div class="flex items-start space-x-4">
             <div class="bg-purple-100 p-3 rounded-lg">
               <svg class="w-6 h-6 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z"></path>
+                <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z"></path>
               </svg>
             </div>
             <div class="flex-1">
-              <h3 class="text-lg font-semibold text-gray-900 mb-2">Analytics Dashboard</h3>
-              <p class="text-gray-600 mb-4">Multi-dimensional analytics across all data types with interactive visualizations</p>
+              <h3 class="text-lg font-semibold text-gray-900 mb-2">Trading Venues & MIC Codes</h3>
+              <p class="text-gray-600 mb-4">Market identification codes, venue management, and instrument trading relationships</p>
               <div class="space-y-2">
-                <a href="#" data-route="/analytics" class="block text-blue-600 hover:text-blue-800 text-sm">→ System Analytics</a>
-                <a href="#" data-route="/analytics/instruments" class="block text-blue-600 hover:text-blue-800 text-sm">→ Instrument Analytics</a>
+                <a href="#" data-route="/venues" class="block text-blue-600 hover:text-blue-800 text-sm">→ Browse Venues</a>
+                <a href="#" data-route="/venues?filter=active" class="block text-blue-600 hover:text-blue-800 text-sm">→ Active Trading Venues</a>
+                <a href="#" class="block text-blue-600 hover:text-blue-800 text-sm mic-lookup-link">→ Quick MIC Lookup</a>
               </div>
             </div>
           </div>
@@ -364,6 +365,15 @@ export default class HomePage extends BasePage {
         target.value = target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
       });
     }
+
+    // MIC lookup functionality
+    const micLookupLink = document.querySelector('.mic-lookup-link');
+    if (micLookupLink) {
+      micLookupLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.showMicLookupModal();
+      });
+    }
   }
 
   private isValidIsin(isin: string): boolean {
@@ -376,6 +386,141 @@ export default class HomePage extends BasePage {
     // LEI validation: exactly 20 alphanumeric characters
     const leiPattern = /^[A-Z0-9]{20}$/;
     return leiPattern.test(lei);
+  }
+
+  private showMicLookupModal(): void {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+    modal.innerHTML = `
+      <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">MIC Code Lookup</h3>
+            <button class="text-gray-500 hover:text-gray-700" onclick="this.closest('.fixed').remove()">
+              <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+              </svg>
+            </button>
+          </div>
+          
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">MIC Code (4 characters)</label>
+            <input
+              type="text"
+              id="mic-lookup-input"
+              placeholder="e.g. XNYS"
+              maxlength="4"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          
+          <div class="flex space-x-3">
+            <button 
+              id="mic-lookup-btn" 
+              class="flex-1 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 focus:ring-2 focus:ring-blue-500"
+            >
+              Lookup MIC
+            </button>
+            <button 
+              id="browse-venues-btn" 
+              class="flex-1 bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 focus:ring-2 focus:ring-gray-500"
+            >
+              Browse All
+            </button>
+          </div>
+          
+          <div id="mic-lookup-result" class="mt-4 hidden">
+            <!-- Results will be displayed here -->
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Add event listeners
+    const micInput = modal.querySelector('#mic-lookup-input') as HTMLInputElement;
+    const lookupBtn = modal.querySelector('#mic-lookup-btn') as HTMLButtonElement;
+    const browseBtn = modal.querySelector('#browse-venues-btn') as HTMLButtonElement;
+    const resultDiv = modal.querySelector('#mic-lookup-result') as HTMLDivElement;
+
+    // Format MIC input
+    micInput.addEventListener('input', (e) => {
+      const target = e.target as HTMLInputElement;
+      target.value = target.value.toUpperCase().replace(/[^A-Z]/g, '');
+    });
+
+    // Lookup functionality
+    const performLookup = async () => {
+      const micCode = micInput.value.trim();
+      if (micCode.length !== 4) {
+        micInput.classList.add('border-red-300');
+        return;
+      }
+
+      lookupBtn.textContent = 'Looking up...';
+      lookupBtn.disabled = true;
+
+      try {
+        const response = await apiServices.venues.getVenueDetail(micCode);
+        const venue = response.data;
+
+        if (venue) {
+          resultDiv.innerHTML = `
+            <div class="p-4 bg-green-50 border border-green-200 rounded-lg">
+              <h4 class="font-semibold text-green-800">${venue.mic_code}</h4>
+              <p class="text-green-700">${venue.market_name}</p>
+              <p class="text-sm text-green-600">${venue.country_code || 'Unknown'} | ${venue.status || 'Unknown'}</p>
+              <div class="mt-2 space-x-2">
+                <button 
+                  onclick="window.location.hash = '#/venues/${venue.mic_code}'; this.closest('.fixed').remove();"
+                  class="text-green-700 hover:text-green-900 text-sm font-medium"
+                >
+                  View Details →
+                </button>
+                <button 
+                  onclick="window.location.hash = '#/venues'; this.closest('.fixed').remove();"
+                  class="text-green-700 hover:text-green-900 text-sm"
+                >
+                  Browse All Venues
+                </button>
+              </div>
+            </div>
+          `;
+          resultDiv.classList.remove('hidden');
+        } else {
+          throw new Error('MIC not found');
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `
+          <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+            <p class="text-red-800">MIC code "${micCode}" not found</p>
+            <button 
+              onclick="window.location.hash = '#/venues'; this.closest('.fixed').remove();"
+              class="text-red-700 hover:text-red-900 text-sm font-medium"
+            >
+              Browse all venues instead →
+            </button>
+          </div>
+        `;
+        resultDiv.classList.remove('hidden');
+      } finally {
+        lookupBtn.textContent = 'Lookup MIC';
+        lookupBtn.disabled = false;
+      }
+    };
+
+    lookupBtn.addEventListener('click', performLookup);
+    micInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        performLookup();
+      }
+    });
+
+    browseBtn.addEventListener('click', () => {
+      window.location.hash = '#/venues';
+      modal.remove();
+    });
+
+    document.body.appendChild(modal);
   }
 
   private async loadDashboardData(): Promise<void> {

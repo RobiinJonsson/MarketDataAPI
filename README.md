@@ -114,6 +114,8 @@ marketdata api start
 ```bash
 pip install -r requirements.txt
 pip install -e .  # Development mode with global CLI access via 'marketdata' command
+pip show marketdata-api #Version checking with packages and license
+marketdata --version # Version checking
 ```
 
 **Alternative Methods:**
@@ -336,10 +338,12 @@ deployment\dev.bat coverage               # Coverage report
 
 **Version Management:**
 ```bash
-deployment\upgrade.bat 1.0.4             # Semi-automated version upgrade
+deployment\upgrade.bat 1.0.5             # Semi-automated version upgrade
 git tag v1.0.4                           # Create version tag
 git push origin dev --tags               # Push to dev branch
 git checkout main && git merge dev       # Merge to main (release branch)
+git push origin main --tags              # Push to main branch
+git checkout dev                         # Continue development
 ```
 
 **Development Environment:**
