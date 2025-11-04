@@ -124,7 +124,7 @@ class TestAPIHealthChecks:
     @pytest.mark.integration
     def test_docs_endpoint_health(self, client):
         """Test documentation endpoint is accessible."""
-        response = client.get("/docs/")
+        response = client.get("/api/v1/docs/")
         assert response.status_code == 200, f"Docs endpoint failed with {response.status_code}"
 
 
