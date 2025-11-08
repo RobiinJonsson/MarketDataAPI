@@ -59,7 +59,7 @@ class SqlServerDatabase(DatabaseInterface):
         connection_string = (
             f"mssql+pyodbc://{AZURE_SQL_USERNAME}:{password_encoded}@"
             f"{AZURE_SQL_SERVER}:{AZURE_SQL_PORT}/{AZURE_SQL_DATABASE}"
-            f"?driver=SQL+Server&Encrypt=yes&TrustServerCertificate=no&autocommit=true"
+            f"?driver=SQL+Server"
         )
 
         # SQL Server optimized engine configuration

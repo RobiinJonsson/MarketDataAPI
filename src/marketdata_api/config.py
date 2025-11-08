@@ -46,6 +46,7 @@ AZURE_SQL_DATABASE = os.getenv("AZURE_SQL_DATABASE")
 AZURE_SQL_USERNAME = os.getenv("AZURE_SQL_USERNAME")
 AZURE_SQL_PASSWORD = os.getenv("AZURE_SQL_PASSWORD")
 AZURE_SQL_PORT = int(os.getenv("AZURE_SQL_PORT", "1433"))
+AZURE_SQL_AUTH_METHOD = os.getenv("AZURE_SQL_AUTH_METHOD", "sql")  # "sql" or "entra"
 
 
 class Config:

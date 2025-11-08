@@ -202,6 +202,48 @@ marketdata api start                 # Start Flask server
 
 See CLI help (`marketdata --help`) for complete command reference.
 
+#### Dual Database Migration Management
+
+**MarketDataAPI supports dual database architecture with separate migration paths for SQLite (development) and SQL Server (production) to prevent version conflicts and maintain environment isolation.**
+
+**Dual Alembic Setup:**
+- `alembic-sqlite/` - SQLite migrations for development
+- `alembic-sqlserver/` - SQL Server migrations for production  
+- Independent version control prevents dev/prod conflicts
+- Schema compatibility maintained across both databases
+
+**Migration Commands:**
+```bash
+# Individual database operations
+python scripts\dual_alembic.py sqlite-revision -m "Dev schema changes"
+python scripts\dual_alembic.py sqlserver-revision -m "Production schema update"
+python scripts\dual_alembic.py sqlite-upgrade      # Apply SQLite migrations
+python scripts\dual_alembic.py sqlserver-upgrade   # Apply SQL Server migrations
+
+# Synchronized operations (same logical change to both databases)
+python scripts\dual_alembic.py sync -m "Add new instrument field"
+
+# Deployment shortcuts
+python scripts\dual_alembic.py deploy-dev          # SQLite upgrade (development)
+python scripts\dual_alembic.py deploy-prod         # SQL Server upgrade (production)
+
+# Status and monitoring
+python scripts\dual_alembic.py status              # Show migration status for both databases
+python scripts\dual_alembic.py sqlite-current      # Current SQLite migration
+python scripts\dual_alembic.py sqlserver-history   # SQL Server migration history
+```
+
+**Environment Requirements:**
+- **SQLite**: No additional configuration required
+- **SQL Server**: Requires environment variables:
+  - `AZURE_SQL_SERVER`, `AZURE_SQL_DATABASE`, `AZURE_SQL_USERNAME`, `AZURE_SQL_PASSWORD`
+
+**Migration Strategy:**
+1. **Development**: Create and test changes using SQLite migrations
+2. **Schema Sync**: Use `sync` command to create matching SQL Server migrations
+3. **Production Deploy**: Apply SQL Server migrations to production database
+4. **Independent Evolution**: Each database maintains separate version history
+
 #### Database Backup & Recovery
 
 **Complete backup system with automated safety backups and recovery capabilities.**
@@ -394,8 +436,9 @@ MarketDataAPI/
 │   │   │   └── transparency_utils.py      # Rich transparency calculations
 │   │   └── config.py                # API configuration
 │   ├── cli/                         # Modular CLI implementation
-│   ├── models/                      # Database models
-│   │   └── sqlite/                  # SQLite model implementations
+│   ├── models/                      # Database models (dual database support)
+│   │   ├── sqlite/                  # SQLite model implementations
+│   │   └── sqlserver/               # SQL Server model implementations
 │   ├── services/                    # Business logic layer
 │   │   ├── sqlite/                  # SQLite service implementations
 │   │   └── external APIs            # GLEIF, OpenFIGI, MIC integrations
@@ -413,10 +456,16 @@ MarketDataAPI/
 │   ├── downloads/                   # ESMA data downloads
 │   ├── database_backups/            # Database backup files
 │   └── logs/                        # Application logs
-├── deployment/                      # Deployment files and scripts
+├── deployment/                      # Deployment files
 │   ├── mapi.bat                     # CLI wrapper script
 │   ├── install.bat/.sh              # Installation scripts
 │   └── upgrade.bat                  # Package upgrade script
+├── alembic-sqlite/                  # SQLite migration configuration
+│   ├── env.py                       # SQLite-specific migration environment
+│   └── versions/                    # SQLite migration history
+├── alembic-sqlserver/               # SQL Server migration configuration
+│   ├── env.py                       # SQL Server-specific migration environment
+│   └── versions/                    # SQL Server migration history
 ├── docs/                            # Documentation
 ├── examples/                        # Usage examples
 ├── frontend-modern/                 # Modern TypeScript frontend
