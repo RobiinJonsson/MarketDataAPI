@@ -652,7 +652,7 @@ class InstrumentList(Resource):
 DATABASE_TYPE=sqlite
 FLASK_ENV=development
 DEBUG=true
-SQLITE_DB_PATH=src/marketdata_api/database/marketdata.db
+SQLITE_DB_PATH=src/marketdata_api/database/marketdata-sqlite-dev.db
 OPENFIGI_API_KEY=your_dev_key
 ```
 

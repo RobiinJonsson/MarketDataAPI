@@ -10,7 +10,7 @@ services:
       - "5000:5000"
     environment:
       - FLASK_ENV=production
-      - DATABASE_URL=sqlite:///data/marketdata.db
+      - DATABASE_URL=sqlite:///data/marketdata-sqlite-dev.db
     volumes:
       - ./data:/app/data
       - ./downloads:/app/downloads

@@ -131,13 +131,13 @@ Create a `.env` file in the project root:
 ```env
 FLASK_ENV=development
 OPENFIGI_API_KEY=your_openfigi_key
-DATABASE_URL=sqlite:///marketdata.db
+DATABASE_URL=sqlite:///marketdata-sqlite-dev.db
 ```
 
 **Development Environment:**
 ```bash
 set "PYTHONPATH=%PROJECT_ROOT%\src;%PYTHONPATH%"
-set "SQLITE_DB_PATH=%PROJECT_ROOT%\src\marketdata_api\database\marketdata.db"
+set "SQLITE_DB_PATH=%PROJECT_ROOT%\src\marketdata_api\database\marketdata-sqlite-dev.db"
 ```
 
 ### CLI Access Verification
@@ -414,12 +414,31 @@ waitress-serve --host=0.0.0.0 --port=5000 marketdata_api:create_app
 **Environment Configuration:**
 ```env
 # .env file for production
-DATABASE_URL=sqlite:///data/marketdata.db
+DATABASE_URL=sqlite:///data/marketdata-sqlite-dev.db
 FLASK_ENV=production
 FLASK_DEBUG=false
 SECRET_KEY=your-production-secret-key
 ```
 
+**Database Schema Migrations:**
+```bash
+# SQLite operations
+alembic -c alembic-sqlite/alembic.ini current
+alembic -c alembic-sqlite/alembic.ini history  
+alembic -c alembic-sqlite/alembic.ini revision --autogenerate -m "message"
+alembic -c alembic-sqlite/alembic.ini upgrade head
+
+# SQL Server operations  
+alembic -c alembic-sqlserver/alembic.ini current
+alembic -c alembic-sqlserver/alembic.ini revision --autogenerate -m "message"
+alembic -c alembic-sqlserver/alembic.ini upgrade head
+
+# Equivalent operations using the script
+python scripts/dual_alembic.py sqlite-current
+python scripts/dual_alembic.py sqlite-revision -m "message" 
+python scripts/dual_alembic.py sqlserver-current
+python scripts/dual_alembic.py status  # Shows both systems at once
+´´´
 ## Project Structure
 
 ```

@@ -34,7 +34,7 @@ SECRET_KEY = os.getenv("SECRET_KEY", "default_secret_key")
 DATABASE_TYPE = os.getenv("DATABASE_TYPE", "sqlite")  # "sqlite" or "azure_sql"
 
 # SQLite Database configuration
-SQLITE_DB_FILE = os.getenv("SQLITE_DB_FILE", "marketdata.db")
+SQLITE_DB_FILE = os.getenv("SQLITE_DB_FILE", "marketdata-sqlite-dev.db")
 SQLITE_DB_PATH = os.getenv(
     "SQLITE_DB_PATH",
     os.path.join(PROJECT_ROOT, "src", "marketdata_api", "database", SQLITE_DB_FILE),
@@ -55,7 +55,7 @@ class Config:
     ROOT_PATH = PROJECT_ROOT  # Use the same project root calculation
 
     # Make database path absolute and relative to project root
-    _db_path = os.getenv("SQLITE_DB_PATH", "src/marketdata_api/database/marketdata.db")
+    _db_path = os.getenv("SQLITE_DB_PATH", "src/marketdata_api/database/marketdata-sqlite-dev.db")
     DATABASE_PATH = _db_path if os.path.isabs(_db_path) else os.path.join(ROOT_PATH, _db_path)
 
     UPLOAD_FOLDER = os.getenv("UPLOAD_FOLDER", "uploads")

@@ -8,8 +8,10 @@ from sqlalchemy import pool
 
 from alembic import context
 
-# Add the parent directory to Python path
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+# Add the src directory to Python path so we can import marketdata_api
+project_root = os.path.dirname(os.path.dirname(__file__))
+src_path = os.path.join(project_root, "src")
+sys.path.append(src_path)
 
 # Import SQL Server-specific models
 from marketdata_api.database.base import Base
@@ -43,11 +45,8 @@ def get_sql_server_url():
     # URL encode the password to handle special characters
     password_encoded = quote_plus(password)
     
-    return (
-        f"mssql+pyodbc://{username}:{password_encoded}@"
-        f"{server}:{port}/{database}"
-        f"?driver=SQL+Server"
-    )
+    # Use pymssql for better Azure SQL compatibility
+    return f"mssql+pymssql://{username}:{password_encoded}@{server}:{port}/{database}"
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
@@ -82,14 +81,9 @@ def run_migrations_online() -> None:
         print(f"Error: {e}")
         return
     
-    # Override the URL in the config
-    config.set_main_option("sqlalchemy.url", url)
-    
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    # Create engine directly with URL to avoid ConfigParser interpolation issues
+    from sqlalchemy import create_engine
+    connectable = create_engine(url, poolclass=pool.NullPool)
 
     with connectable.connect() as connection:
         context.configure(

@@ -21,7 +21,7 @@ try {
     
     # Set environment variables for CLI
     $env:PYTHONPATH = "$ProjectRoot\src;$env:PYTHONPATH"
-    $env:SQLITE_DB_PATH = "$ProjectRoot\src\marketdata_api\database\marketdata.db"
+    $env:SQLITE_DB_PATH = "$ProjectRoot\src\marketdata_api\database\marketdata-sqlite-dev.db"
     
     # Run the CLI using the module entry point
     & python -m marketdata_api.cli @Arguments

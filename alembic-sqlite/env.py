@@ -7,8 +7,10 @@ from sqlalchemy import pool
 
 from alembic import context
 
-# Add the parent directory to Python path
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+# Add the src directory to Python path so we can import marketdata_api
+project_root = os.path.dirname(os.path.dirname(__file__))
+src_path = os.path.join(project_root, "src")
+sys.path.append(src_path)
 
 # Import SQLite-specific models
 from marketdata_api.database.base import Base

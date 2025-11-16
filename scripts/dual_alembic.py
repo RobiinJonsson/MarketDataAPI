@@ -11,6 +11,10 @@ import sys
 import subprocess
 import argparse
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 def run_command(cmd, cwd=None):
     """Run a command and return the result."""

@@ -9,7 +9,7 @@ class CLIConfig:
     """Configuration settings for the CLI."""
     
     # Database settings
-    SQLITE_DB_PATH = os.getenv('SQLITE_DB_PATH', 'marketdata.db')
+    SQLITE_DB_PATH = os.getenv('SQLITE_DB_PATH', 'marketdata-sqlite-dev.db')
     
     # Output settings
     DEFAULT_LIMIT = 20
