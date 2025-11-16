@@ -64,16 +64,17 @@ class OpenFIGIService:
         # Stage 1: Try ISIN + MIC code (venue-specific search)
         results = self._search_with_mic(isin, mic_code)
         if results:
-            logger.info(f"✅ Success with venue-specific search (MIC: {mic_code})")
+            logger.info(f"Success with venue-specific search (MIC: {mic_code})")
             for result in results:
                 result.search_strategy = "mic_specific"
             return results, "mic_specific"
 
         # Stage 2: Try ISIN only (broad search)
+        print(f"🔄 DEBUG: Stage 1 failed, trying broad search for ISIN {isin}")
         logger.info(f"🔄 Venue-specific search failed, trying broad search for ISIN {isin}")
         results = self._search_broad(isin)
         if results:
-            logger.info(f"✅ Success with broad search")
+            logger.info(f"Success with broad search")
             for result in results:
                 result.search_strategy = "broad_search"
             return results, "broad_search"
@@ -85,14 +86,14 @@ class OpenFIGIService:
         """Search using ISIN + MIC code"""
         payload = [{"idType": "ID_ISIN", "idValue": isin, "micCode": mic_code}]
 
-        logger.debug(f"OpenFIGI MIC-specific request: ISIN={isin}, MIC={mic_code}")
+        logger.info(f"🔍 OpenFIGI MIC-specific request: ISIN={isin}, MIC={mic_code}, payload={payload}")
         return self._execute_search(payload)
 
     def _search_broad(self, isin: str) -> List[OpenFIGISearchResult]:
         """Search using ISIN only (no venue restrictions)"""
         payload = [{"idType": "ID_ISIN", "idValue": isin}]
 
-        logger.debug(f"OpenFIGI broad request: ISIN={isin}")
+        logger.info(f"🌐 OpenFIGI broad search (fallback): ISIN={isin}, payload={payload}")
         return self._execute_search(payload)
 
     def _execute_search(self, payload: List[Dict]) -> List[OpenFIGISearchResult]:
@@ -450,8 +451,12 @@ def map_figi_data(data: list, isin: str):
     if not data or len(data) == 0:
         return []
 
-    # Get the FigiMapping model directly
-    from ..models.sqlite.figi import FigiMapping
+    # Get the FigiMapping model based on database type
+    from ..config import DatabaseConfig
+    if DatabaseConfig.get_database_type() == "sqlite":
+        from ..models.sqlite.figi import FigiMapping
+    else:
+        from ..models.sqlserver.figi import SqlServerFigiMapping as FigiMapping
 
     figi_mappings = []
 

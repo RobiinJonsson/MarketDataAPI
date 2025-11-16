@@ -106,6 +106,24 @@ marketdata api start
 - Auto-detection of instrument types from filenames
 - Promoted frequently-used fields to dedicated columns for performance
 
+## System Requirements
+
+### Prerequisites
+
+**Python Dependencies:**
+- Python 3.8 or higher
+- pip package manager
+
+**Database Drivers (SQL Server Support):**
+- **ODBC Driver 17 for SQL Server** (required for Azure SQL/SQL Server connections)
+  - Windows: Download from [Microsoft ODBC Driver](https://docs.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server)
+  - Linux: `sudo apt-get install msodbcsql17` or `yum install msodbcsql17`
+  - Docker: Include in Dockerfile with `apt-get install msodbcsql17`
+
+**Runtime Dependencies:**
+- SQLite 3 (included with Python)
+- Internet connection for FIRDS/FITRS downloads and API enrichment
+
 ## Installation & Configuration
 
 ### Installation Options
@@ -287,6 +305,42 @@ python -m marketdata_api.database.database_backup cleanup --days 30
 
 #### Terminal Output
 The CLI provides professional formatting with organized data display, comprehensive details in bordered sections, and clear status indicators for all operations.
+
+### Production Deployment Considerations
+
+#### Server Environment Setup
+
+**SQL Server Driver Requirements:**
+- **ODBC Driver 17 for SQL Server** must be installed on all production servers
+- Azure App Service: Include driver installation in startup scripts or use custom container
+- Docker: Add driver installation to Dockerfile
+- Linux servers: Install via package manager (`msodbcsql17`)
+
+**Python Dependencies:**
+```bash
+# Production installation includes both SQL Server drivers
+pip install pyodbc>=5.2.0      # Primary ODBC driver (requires ODBC Driver 17)
+pip install pymssql>=2.2.8     # Fallback pure Python driver
+```
+
+**Environment Variables:**
+```env
+DATABASE_TYPE=azure_sql
+AZURE_SQL_SERVER=your-server.database.windows.net
+AZURE_SQL_DATABASE=marketdata-prod
+AZURE_SQL_USERNAME=your-username
+AZURE_SQL_PASSWORD=your-password
+```
+
+**Docker Deployment:**
+```dockerfile
+# Include ODBC driver in Docker image
+RUN apt-get update && apt-get install -y \
+    curl gnupg2 software-properties-common
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add -
+RUN curl https://packages.microsoft.com/config/ubuntu/20.04/prod.list > /etc/apt/sources.list.d/mssql-release.list
+RUN apt-get update && ACCEPT_EULA=Y apt-get install -y msodbcsql17
+```
 
 ### API Endpoints
 

@@ -4,9 +4,9 @@ from typing import Any, Dict
 
 import requests
 
-from ..models.sqlite.legal_entity import EntityRelationship, EntityRelationshipException
 from .api_utils import ApiError, RetryExhaustedError, log_api_call, retry_with_backoff
 from ..constants import ExternalAPIs, APITimeouts, RetryConfig
+from ..config import DatabaseConfig
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -18,6 +18,18 @@ class GLEIFService:
     def __init__(self):
         self.base_url = ExternalAPIs.GLEIF_BASE_URL
         self.timeout = APITimeouts.TUPLE_DEFAULT
+        
+        # Dynamically load models based on database type
+        if DatabaseConfig.get_database_type() == "sqlite":
+            from ..models.sqlite.legal_entity import EntityRelationship, EntityRelationshipException
+        else:
+            from ..models.sqlserver.legal_entity import (
+                SqlServerEntityRelationship as EntityRelationship,
+                SqlServerEntityRelationshipException as EntityRelationshipException,
+            )
+            
+        self.EntityRelationship = EntityRelationship
+        self.EntityRelationshipException = EntityRelationshipException
 
     def get_lei_data(self, lei_code):
         """
@@ -52,8 +64,15 @@ def _create_or_update_child_entity(session, child_data):
         session: SQLAlchemy database session
         child_data: Child entity data from GLEIF API response
     """
-    # Using local map_lei_record function
-    from ..models.sqlite.legal_entity import EntityAddress, EntityRegistration, LegalEntity
+    # Load models dynamically based on database type
+    if DatabaseConfig.get_database_type() == "sqlite":
+        from ..models.sqlite.legal_entity import EntityAddress, EntityRegistration, LegalEntity
+    else:
+        from ..models.sqlserver.legal_entity import (
+            SqlServerEntityAddress as EntityAddress,
+            SqlServerEntityRegistration as EntityRegistration,
+            SqlServerLegalEntity as LegalEntity,
+        )
 
     try:
         # Map the GLEIF data to our entity format
@@ -249,7 +268,7 @@ def fetch_ultimate_children(lei_code):
         return {"error": f"Failed to retrieve ultimate children information: {str(e)}"}
 
 
-def process_parent_relationship(session, lei_code, parent_data, relationship_type):
+def process_parent_relationship(session, lei_code, parent_data, relationship_type, EntityRelationship=None, EntityRelationshipException=None):
     """
     Process parent relationship data from GLEIF API and update the database.
 
@@ -258,10 +277,27 @@ def process_parent_relationship(session, lei_code, parent_data, relationship_typ
         lei_code: LEI code of the child entity
         parent_data: Response data from GLEIF API for parent relationship
         relationship_type: Either 'DIRECT' or 'ULTIMATE'
+        EntityRelationship: Model class (auto-loaded if not provided)
+        EntityRelationshipException: Model class (auto-loaded if not provided)
 
     Returns:
         A dict with results of the operation
     """
+    # Load models dynamically if not provided
+    if EntityRelationship is None or EntityRelationshipException is None:
+        if DatabaseConfig.get_database_type() == "sqlite":
+            from ..models.sqlite.legal_entity import EntityRelationship as ER, EntityRelationshipException as ERE
+        else:
+            from ..models.sqlserver.legal_entity import (
+                SqlServerEntityRelationship as ER,
+                SqlServerEntityRelationshipException as ERE,
+            )
+        
+        if EntityRelationship is None:
+            EntityRelationship = ER
+        if EntityRelationshipException is None:
+            EntityRelationshipException = ERE
+    
     # Check if we received an error
     if "error" in parent_data:
         return {"error": parent_data["error"]}
@@ -356,7 +392,7 @@ def process_parent_relationship(session, lei_code, parent_data, relationship_typ
 
 
 def process_children_relationships(
-    session, parent_lei, children_data, relationship_type, batch_size=100
+    session, parent_lei, children_data, relationship_type, batch_size=100, EntityRelationship=None
 ):
     """
     Process children relationship data from GLEIF API and update the database.
@@ -368,10 +404,18 @@ def process_children_relationships(
         children_data: Response data from GLEIF API for children relationships
         relationship_type: Either 'DIRECT' or 'ULTIMATE'
         batch_size: Number of operations to batch together before flushing (default: 100)
+        EntityRelationship: Model class (auto-loaded if not provided)
 
     Returns:
         A dict with results of the operation
     """
+    # Load models dynamically if not provided
+    if EntityRelationship is None:
+        if DatabaseConfig.get_database_type() == "sqlite":
+            from ..models.sqlite.legal_entity import EntityRelationship
+        else:
+            from ..models.sqlserver.legal_entity import SqlServerEntityRelationship as EntityRelationship
+    
     results = {"processed": 0, "errors": 0, "pruned": 0, "details": [], "batches": 0}
 
     # Check if we received an error
@@ -493,7 +537,7 @@ def process_children_relationships(
     return results
 
 
-def prune_parent_relationship(session, lei_code, relationship_type):
+def prune_parent_relationship(session, lei_code, relationship_type, EntityRelationship=None):
     """
     Prune any parent relationships of the specified type that are no longer valid.
     This is used when a relationship previously existed but is now replaced by an exception.
@@ -502,10 +546,17 @@ def prune_parent_relationship(session, lei_code, relationship_type):
         session: SQLAlchemy database session
         lei_code: LEI code of the child entity
         relationship_type: Either 'DIRECT' or 'ULTIMATE'
+        EntityRelationship: Model class (auto-loaded if not provided)
 
     Returns:
         bool: True if a relationship was pruned, False otherwise
     """
+    # Load models dynamically if not provided
+    if EntityRelationship is None:
+        if DatabaseConfig.get_database_type() == "sqlite":
+            from ..models.sqlite.legal_entity import EntityRelationship
+        else:
+            from ..models.sqlserver.legal_entity import SqlServerEntityRelationship as EntityRelationship
     # Find existing parent relationship of this type
     existing_rel = (
         session.query(EntityRelationship)
@@ -537,6 +588,15 @@ def sync_entity_relationships(session, lei_code, batch_size=100):
     Returns:
         A dict with results of the operation
     """
+    # Load models dynamically
+    if DatabaseConfig.get_database_type() == "sqlite":
+        from ..models.sqlite.legal_entity import EntityRelationship, EntityRelationshipException
+    else:
+        from ..models.sqlserver.legal_entity import (
+            SqlServerEntityRelationship as EntityRelationship,
+            SqlServerEntityRelationshipException as EntityRelationshipException,
+        )
+    
     results = {
         "direct_parent": None,
         "ultimate_parent": None,
@@ -547,14 +607,14 @@ def sync_entity_relationships(session, lei_code, batch_size=100):
     # Process direct parent
     direct_parent_data = fetch_direct_parent(lei_code)
     results["direct_parent"] = process_parent_relationship(
-        session, lei_code, direct_parent_data, "DIRECT"
+        session, lei_code, direct_parent_data, "DIRECT", EntityRelationship, EntityRelationshipException
     )
 
     # Check if we need to prune a direct parent relationship
     if (
         results["direct_parent"].get("message")
         and "exception" in results["direct_parent"]["message"]
-        and prune_parent_relationship(session, lei_code, "DIRECT")
+        and prune_parent_relationship(session, lei_code, "DIRECT", EntityRelationship)
     ):
         # If the current result is an exception but a relationship existed before
         results["direct_parent"]["pruned_relationship"] = True
@@ -562,14 +622,14 @@ def sync_entity_relationships(session, lei_code, batch_size=100):
     # Process ultimate parent
     ultimate_parent_data = fetch_ultimate_parent(lei_code)
     results["ultimate_parent"] = process_parent_relationship(
-        session, lei_code, ultimate_parent_data, "ULTIMATE"
+        session, lei_code, ultimate_parent_data, "ULTIMATE", EntityRelationship, EntityRelationshipException
     )
 
     # Check if we need to prune an ultimate parent relationship
     if (
         results["ultimate_parent"].get("message")
         and "exception" in results["ultimate_parent"]["message"]
-        and prune_parent_relationship(session, lei_code, "ULTIMATE")
+        and prune_parent_relationship(session, lei_code, "ULTIMATE", EntityRelationship)
     ):
         # If the current result is an exception but a relationship existed before
         results["ultimate_parent"]["pruned_relationship"] = True
@@ -577,7 +637,7 @@ def sync_entity_relationships(session, lei_code, batch_size=100):
     # Process direct children only (skip ultimate children to avoid database bloat)
     direct_children_data = fetch_direct_children(lei_code)
     results["direct_children"] = process_children_relationships(
-        session, lei_code, direct_children_data, "DIRECT", batch_size
+        session, lei_code, direct_children_data, "DIRECT", batch_size, EntityRelationship
     )
 
     # Skip ultimate children processing to avoid database bloat

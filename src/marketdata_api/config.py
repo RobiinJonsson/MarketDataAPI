@@ -31,7 +31,10 @@ FLASK_ENV = os.getenv("FLASK_ENV", "production")
 SECRET_KEY = os.getenv("SECRET_KEY", "default_secret_key")
 
 # Database configuration
-DATABASE_TYPE = os.getenv("DATABASE_TYPE", "sqlite")  # "sqlite" or "azure_sql"
+# Note: DATABASE_TYPE is dynamically evaluated to allow runtime changes
+def get_database_type_from_env():
+    """Get database type from environment, allowing runtime changes."""
+    return os.getenv("DATABASE_TYPE", "sqlite").lower()
 
 # SQLite Database configuration
 SQLITE_DB_FILE = os.getenv("SQLITE_DB_FILE", "marketdata-sqlite-dev.db")
@@ -151,7 +154,7 @@ class DatabaseConfig:
     @staticmethod
     def get_database_type() -> str:
         """Get the current database type from environment."""
-        return DATABASE_TYPE.lower()
+        return get_database_type_from_env()
 
     @staticmethod
     def is_sql_server() -> bool:
@@ -192,7 +195,7 @@ class DatabaseConfig:
 def get_database_config():
     """Get database configuration for backward compatibility."""
     return {
-        "type": DATABASE_TYPE,
+        "type": get_database_type_from_env(),
         "sqlite_path": SQLITE_DB_PATH,
         "azure_sql": {
             "server": AZURE_SQL_SERVER,

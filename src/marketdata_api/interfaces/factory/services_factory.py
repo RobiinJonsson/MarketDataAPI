@@ -22,7 +22,7 @@ class ServicesFactory:
             from ...services.sqlite.instrument_service import SqliteInstrumentService
 
             return SqliteInstrumentService()
-        elif db_type == "sqlserver":
+        elif db_type in ["sqlserver", "azure_sql"]:
             from ...services.sqlserver.instrument_service import SqlServerInstrumentService
 
             return SqlServerInstrumentService()

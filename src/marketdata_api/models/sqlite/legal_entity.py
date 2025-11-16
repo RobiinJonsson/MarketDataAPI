@@ -303,12 +303,8 @@ class EntityRelationship(Base):
     __tablename__ = "entity_relationships"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    parent_lei = Column(
-        String(20), ForeignKey("legal_entities.lei", ondelete="NO ACTION"), nullable=False
-    )
-    child_lei = Column(
-        String(20), ForeignKey("legal_entities.lei", ondelete="NO ACTION"), nullable=False
-    )
+    parent_lei = Column(String(20), nullable=False)  # Removed FK constraint
+    child_lei = Column(String(20), nullable=False)   # Removed FK constraint
     relationship_type = Column(String(20), nullable=False)  # 'DIRECT' or 'ULTIMATE'
     relationship_status = Column(String(20), nullable=False)
     relationship_period_start = Column(DateTime, nullable=False)

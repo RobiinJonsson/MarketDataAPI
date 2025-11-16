@@ -17,12 +17,6 @@ import requests
 from sqlalchemy.orm import Session
 
 from ..constants import ExternalAPIs, APITimeouts, ValidationLimits
-from ..models.sqlite.market_identification_code import (
-    MarketCategoryCode,
-    MarketIdentificationCode,
-    MICStatus,
-    MICType,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +47,36 @@ class MICDataLoader:
 
     def __init__(self, session: Session):
         self.session = session
+        
+        # Load models dynamically based on database type
+        from ..config import DatabaseConfig
+        if DatabaseConfig.get_database_type() == "sqlite":
+            from ..models.sqlite.market_identification_code import (
+                MarketCategoryCode,
+                MarketIdentificationCode,
+                MICStatus,
+                MICType,
+            )
+        else:
+            from ..models.sqlserver.market_identification_code import (
+                SqlServerMarketCategoryCode as MarketCategoryCode,
+                SqlServerMarketIdentificationCode as MarketIdentificationCode,
+                SqlServerMICStatus as MICStatus,
+                SqlServerMICType as MICType,
+            )
+        
+        self.MarketCategoryCode = MarketCategoryCode
+        self.MarketIdentificationCode = MarketIdentificationCode
+        self.MICStatus = MICStatus
+        self.MICType = MICType
+        
+        # Helper methods for database queries (handle enum vs string differences)
+        from ..config import DatabaseConfig
+        self._is_sqlite = DatabaseConfig.get_database_type() == "sqlite"
+    
+    def _get_enum_value(self, enum_obj):
+        """Get the appropriate value for database queries (enum for SQLite, string for SQL Server)."""
+        return enum_obj if self._is_sqlite else enum_obj.value
 
     def load_from_csv(
         self, csv_source: Union[str, io.StringIO], data_version: Optional[str] = None
@@ -99,7 +123,7 @@ class MICDataLoader:
                         mic_data = self._transform_csv_row(row, data_version)
                         if mic_data:
                             existing_mic = (
-                                self.session.query(MarketIdentificationCode)
+                                self.session.query(self.MarketIdentificationCode)
                                 .filter_by(mic=mic_data["mic"])
                                 .first()
                             )
@@ -108,7 +132,7 @@ class MICDataLoader:
                                 self._update_mic_record(existing_mic, mic_data)
                                 updated_count += 1
                             else:
-                                new_mic = MarketIdentificationCode(**mic_data)
+                                new_mic = self.MarketIdentificationCode(**mic_data)
                                 self.session.add(new_mic)
                                 created_count += 1
 
@@ -205,32 +229,43 @@ class MICDataLoader:
 
         return mic_data
 
-    def _parse_operation_type(self, value: str) -> Optional[MICType]:
+    def _parse_operation_type(self, value: str) -> Optional[object]:
         """Parse operation type from CSV."""
         if not value:
             return None
         try:
-            return MICType(value.upper())
+            enum_val = self.MICType(value.upper())
+            # Return string value for SQL Server, enum object for SQLite
+            from ..config import DatabaseConfig
+            return enum_val.value if DatabaseConfig.get_database_type() != "sqlite" else enum_val
         except ValueError:
             logger.warning(f"Unknown operation type: {value}")
             return None
 
-    def _parse_status(self, value: str) -> MICStatus:
+    def _parse_status(self, value: str) -> object:
         """Parse status from CSV."""
         if not value:
-            return MICStatus.ACTIVE
-        try:
-            return MICStatus(value.upper())
-        except ValueError:
-            logger.warning(f"Unknown status: {value}, defaulting to ACTIVE")
-            return MICStatus.ACTIVE
+            enum_val = self.MICStatus.ACTIVE
+        else:
+            try:
+                enum_val = self.MICStatus(value.upper())
+            except ValueError:
+                logger.warning(f"Unknown status: {value}, defaulting to ACTIVE")
+                enum_val = self.MICStatus.ACTIVE
+        
+        # Return string value for SQL Server, enum object for SQLite
+        from ..config import DatabaseConfig
+        return enum_val.value if DatabaseConfig.get_database_type() != "sqlite" else enum_val
 
-    def _parse_market_category(self, value: str) -> Optional[MarketCategoryCode]:
+    def _parse_market_category(self, value: str) -> Optional[object]:
         """Parse market category code from CSV."""
         if not value:
             return None
         try:
-            return MarketCategoryCode(value.upper())
+            enum_val = self.MarketCategoryCode(value.upper())
+            # Return string value for SQL Server, enum object for SQLite
+            from ..config import DatabaseConfig
+            return enum_val.value if DatabaseConfig.get_database_type() != "sqlite" else enum_val
         except ValueError:
             logger.warning(f"Unknown market category: {value}")
             return None
@@ -255,7 +290,7 @@ class MICDataLoader:
 
         return None
 
-    def _update_mic_record(self, existing_mic: MarketIdentificationCode, new_data: Dict[str, Any]):
+    def _update_mic_record(self, existing_mic, new_data: Dict[str, Any]):
         """Update existing MIC record with new data."""
         for field, value in new_data.items():
             if field not in ["mic", "created_at"]:  # Don't update primary key or creation time
@@ -265,29 +300,29 @@ class MICDataLoader:
         """Get statistics about loaded MIC data."""
         from sqlalchemy import func
 
-        total_mics = self.session.query(MarketIdentificationCode).count()
+        total_mics = self.session.query(self.MarketIdentificationCode).count()
         active_mics = (
-            self.session.query(MarketIdentificationCode).filter_by(status=MICStatus.ACTIVE).count()
+            self.session.query(self.MarketIdentificationCode).filter_by(status=self._get_enum_value(self.MICStatus.ACTIVE)).count()
         )
         operating_mics = (
-            self.session.query(MarketIdentificationCode)
-            .filter_by(operation_type=MICType.OPRT, status=MICStatus.ACTIVE)
+            self.session.query(self.MarketIdentificationCode)
+            .filter_by(operation_type=self._get_enum_value(self.MICType.OPRT), status=self._get_enum_value(self.MICStatus.ACTIVE))
             .count()
         )
         segment_mics = (
-            self.session.query(MarketIdentificationCode)
-            .filter_by(operation_type=MICType.SGMT, status=MICStatus.ACTIVE)
+            self.session.query(self.MarketIdentificationCode)
+            .filter_by(operation_type=self._get_enum_value(self.MICType.SGMT), status=self._get_enum_value(self.MICStatus.ACTIVE))
             .count()
         )
 
         # Count by country using proper SQL aggregation
         country_stats = (
             self.session.query(
-                MarketIdentificationCode.iso_country_code,
-                func.count(MarketIdentificationCode.mic).label("count"),
+                self.MarketIdentificationCode.iso_country_code,
+                func.count(self.MarketIdentificationCode.mic).label("count"),
             )
-            .filter(MarketIdentificationCode.status == MICStatus.ACTIVE)
-            .group_by(MarketIdentificationCode.iso_country_code)
+            .filter(self.MarketIdentificationCode.status == self._get_enum_value(self.MICStatus.ACTIVE))
+            .group_by(self.MarketIdentificationCode.iso_country_code)
             .all()
         )
 
@@ -308,13 +343,13 @@ class MICDataLoader:
 
         # Check for segment MICs without valid operating MIC
         orphaned_segments = (
-            self.session.query(MarketIdentificationCode)
+            self.session.query(self.MarketIdentificationCode)
             .filter(
-                MarketIdentificationCode.operation_type == MICType.SGMT,
-                ~self.session.query(MarketIdentificationCode)
+                self.MarketIdentificationCode.operation_type == self._get_enum_value(self.MICType.SGMT),
+                ~self.session.query(self.MarketIdentificationCode)
                 .filter(
-                    MarketIdentificationCode.mic == MarketIdentificationCode.operating_mic,
-                    MarketIdentificationCode.operation_type == MICType.OPRT,
+                    self.MarketIdentificationCode.mic == self.MarketIdentificationCode.operating_mic,
+                    self.MarketIdentificationCode.operation_type == self._get_enum_value(self.MICType.OPRT),
                 )
                 .exists(),
             )

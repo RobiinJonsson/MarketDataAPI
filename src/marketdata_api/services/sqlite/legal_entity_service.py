@@ -7,14 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from ...constants import RetryConfig
 from ..gleif import flatten_address, map_lei_record
 from ...database.session import SessionLocal, get_session
-
-# Direct model imports at module level - importing only what this service needs
-from ...models.sqlite.legal_entity import (
-    EntityAddress,
-    EntityRegistration,
-    EntityRelationship,
-    LegalEntity,
-)
+from ...config import DatabaseConfig
 from ..gleif import fetch_lei_info  # Re-enabled for enrichment
 from ..interfaces.legal_entity_service_interface import LegalEntityServiceInterface
 
@@ -29,40 +22,99 @@ class LegalEntityService(LegalEntityServiceInterface):
     _batch_operation_in_progress = False
     
     def __init__(self):
-        self.database_type = "sqlite"
+        self.database_type = DatabaseConfig.get_database_type()
         self.logger = logging.getLogger(__name__)
+        
+        # Dynamic model imports based on database type
+        if self.database_type == 'sqlite':
+            from ...models.sqlite.legal_entity import (
+                EntityAddress,
+                EntityRegistration,
+                EntityRelationship,
+                LegalEntity,
+            )
+            from ...models.sqlite.instrument import Instrument
+        else:  # azure_sql
+            from ...models.sqlserver.legal_entity import (
+                SqlServerEntityAddress as EntityAddress,
+                SqlServerEntityRegistration as EntityRegistration,
+                SqlServerEntityRelationship as EntityRelationship,
+                SqlServerLegalEntity as LegalEntity,
+            )
+            from ...models.sqlserver.instrument import SqlServerInstrument as Instrument
+        
+        self.LegalEntity = LegalEntity
+        self.EntityAddress = EntityAddress
+        self.EntityRegistration = EntityRegistration
+        self.EntityRelationship = EntityRelationship
+        self.Instrument = Instrument
+
+    def create_basic_entity(self, lei: str) -> Tuple[Session, Optional[object]]:
+        """Create basic legal entity without relationships (for instrument creation)."""
+        from ..gleif import fetch_lei_info
+        
+        gleif_data = fetch_lei_info(lei)
+        if not gleif_data:
+            self.logger.warning(f"No GLEIF data found for LEI: {lei}")
+            return None, None
+            
+        session = SessionLocal()
+        try:
+            from ..gleif import map_lei_record
+            mapped_data = map_lei_record(gleif_data)
+            entity_data = mapped_data["lei_record"]
+            
+            # Check if entity already exists
+            existing_entity = session.query(self.LegalEntity).filter(self.LegalEntity.lei == lei).first()
+            if existing_entity:
+                self.logger.info(f"Legal entity {lei} already exists")
+                return session, existing_entity
+                
+            # Create basic entity without relationships
+            entity = self.LegalEntity(**entity_data)
+            session.add(entity)
+            session.commit()
+            session.refresh(entity)
+            
+            self.logger.info(f"Created basic legal entity for LEI: {lei}")
+            return session, entity
+            
+        except Exception as e:
+            session.rollback()
+            self.logger.error(f"Failed to create basic entity {lei}: {str(e)}")
+            raise LegalEntityServiceError(f"Failed to create basic entity: {str(e)}")
 
     def get_entity(self, lei: str) -> Tuple[Session, Optional[object]]:
         """Get legal entity by LEI with all relationships eagerly loaded."""
         session = SessionLocal()
         try:
             entity = (
-                session.query(LegalEntity)
+                session.query(self.LegalEntity)
                 .options(
                     # Eager load addresses
-                    joinedload(LegalEntity.addresses),
+                    joinedload(self.LegalEntity.addresses),
                     # Eager load registration
-                    joinedload(LegalEntity.registration),
+                    joinedload(self.LegalEntity.registration),
                     # Eager load direct parent relationship and the parent entity
-                    joinedload(LegalEntity.direct_parent_relation).joinedload(
-                        EntityRelationship.parent
+                    joinedload(self.LegalEntity.direct_parent_relation).joinedload(
+                        self.EntityRelationship.parent
                     ),
                     # Eager load ultimate parent relationship and the parent entity
-                    joinedload(LegalEntity.ultimate_parent_relation).joinedload(
-                        EntityRelationship.parent
+                    joinedload(self.LegalEntity.ultimate_parent_relation).joinedload(
+                        self.EntityRelationship.parent
                     ),
                     # Eager load direct children relationships and the child entities
-                    joinedload(LegalEntity.direct_children_relations).joinedload(
-                        EntityRelationship.child
+                    joinedload(self.LegalEntity.direct_children_relations).joinedload(
+                        self.EntityRelationship.child
                     ),
                     # Eager load ultimate children relationships and the child entities
-                    joinedload(LegalEntity.ultimate_children_relations).joinedload(
-                        EntityRelationship.child
+                    joinedload(self.LegalEntity.ultimate_children_relations).joinedload(
+                        self.EntityRelationship.child
                     ),
                     # Eager load parent exceptions
-                    joinedload(LegalEntity.parent_exceptions),
+                    joinedload(self.LegalEntity.parent_exceptions),
                 )
-                .filter(LegalEntity.lei == lei)
+                .filter(self.LegalEntity.lei == lei)
                 .first()
             )
 
@@ -103,15 +155,15 @@ class LegalEntityService(LegalEntityServiceInterface):
         """
         session = SessionLocal()
         try:
-            query = session.query(LegalEntity)
+            query = session.query(self.LegalEntity)
 
             # Apply filters if provided
             if filters:
                 filter_conditions = []
                 if "status" in filters and filters["status"]:
-                    filter_conditions.append(LegalEntity.status == filters["status"])
+                    filter_conditions.append(self.LegalEntity.status == filters["status"])
                 if "jurisdiction" in filters and filters["jurisdiction"]:
-                    filter_conditions.append(LegalEntity.jurisdiction == filters["jurisdiction"])
+                    filter_conditions.append(self.LegalEntity.jurisdiction == filters["jurisdiction"])
 
                 if filter_conditions:
                     query = query.filter(and_(*filter_conditions))
@@ -161,9 +213,9 @@ class LegalEntityService(LegalEntityServiceInterface):
         entity_data = mapped_data["lei_record"]
         lei = entity_data["lei"]
 
-        entity = session.query(LegalEntity).filter(LegalEntity.lei == lei).first()
+        entity = session.query(self.LegalEntity).filter(self.LegalEntity.lei == lei).first()
         if not entity:
-            entity = LegalEntity(**entity_data)
+            entity = self.LegalEntity(**entity_data)
             session.add(entity)
         else:
             for key, value in entity_data.items():
@@ -181,7 +233,7 @@ class LegalEntityService(LegalEntityServiceInterface):
         """Helper to update entity addresses."""
         entity.addresses = []
         for addr_data in addresses_data:
-            address = EntityAddress(**addr_data)
+            address = self.EntityAddress(**addr_data)
             entity.addresses.append(address)
 
     def _update_entity_registration(
@@ -192,7 +244,7 @@ class LegalEntityService(LegalEntityServiceInterface):
             for key, value in registration_data.items():
                 setattr(entity.registration, key, value)
         else:
-            entity.registration = EntityRegistration(**registration_data)
+            entity.registration = self.EntityRegistration(**registration_data)
 
     def batch_fill_entity_data(self, batch_size: int = 100) -> Dict[str, Any]:
         """
@@ -233,10 +285,10 @@ class LegalEntityService(LegalEntityServiceInterface):
         session = SessionLocal()
         try:
             # Find instruments that have lei_id but no corresponding legal entity record
-            instruments_query = session.query(Instrument).filter(
-                Instrument.lei_id.isnot(None),
-                ~session.query(LegalEntity).filter(
-                    LegalEntity.lei == Instrument.lei_id
+            instruments_query = session.query(self.Instrument).filter(
+                self.Instrument.lei_id.isnot(None),
+                ~session.query(self.LegalEntity).filter(
+                    self.LegalEntity.lei == self.Instrument.lei_id
                 ).exists()
             ).limit(batch_size)
             
@@ -264,8 +316,8 @@ class LegalEntityService(LegalEntityServiceInterface):
                         continue
                     
                     # Double-check if entity already exists (fresh query to avoid stale data)
-                    existing_entity = session.query(LegalEntity).filter(
-                        LegalEntity.lei == lei_code
+                    existing_entity = session.query(self.LegalEntity).filter(
+                        self.LegalEntity.lei == lei_code
                     ).first()
                     
                     if existing_entity:
@@ -362,18 +414,18 @@ class LegalEntityService(LegalEntityServiceInterface):
         """Delete a legal entity and its relationships."""
         session = SessionLocal()
         try:
-            entity = session.query(LegalEntity).filter(LegalEntity.lei == lei).first()
+            entity = session.query(self.LegalEntity).filter(self.LegalEntity.lei == lei).first()
             if entity:
                 # First, delete any relationships where this entity is a parent or child
 
                 # Delete relationships where this entity is a parent
-                session.query(EntityRelationship).filter(
-                    EntityRelationship.parent_lei == lei
+                session.query(self.EntityRelationship).filter(
+                    self.EntityRelationship.parent_lei == lei
                 ).delete(synchronize_session=False)
 
                 # Delete relationships where this entity is a child
-                session.query(EntityRelationship).filter(
-                    EntityRelationship.child_lei == lei
+                session.query(self.EntityRelationship).filter(
+                    self.EntityRelationship.child_lei == lei
                 ).delete(synchronize_session=False)
 
                 # Now delete the entity itself

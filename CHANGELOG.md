@@ -2,6 +2,38 @@
 
 All notable changes to the MarketDataAPI project will be documented in this file.
 
+## [2025-11-16] - Database Architecture Enhancement
+
+### Dual Database Support
+- Implemented comprehensive dual database architecture supporting SQLite (development) and Azure SQL Server (production)
+- Created database-agnostic service layer with automatic model switching based on environment configuration
+- Added SQL Server specific Alembic migration management with separate migration directory structure
+- Enhanced all services to work seamlessly across both database backends without code changes
+
+### Foreign Key Constraint Optimization
+- Removed blocking foreign key constraints between instruments and legal_entities tables
+- Eliminated entity_relationships table foreign key constraints to prevent cascade failures
+- Enabled flexible data population where instruments can exist with lei_id before legal entity creation
+- Improved system resilience by allowing partial data states during enrichment processes
+
+### Instrument Creation Workflow Refinement
+- Simplified instrument creation to focus exclusively on FIRDS data processing (instruments and venues)
+- Separated enrichment concerns: FIGI and legal entity data now handled exclusively during enrichment phase
+- Eliminated console warning noise and FK constraint errors during normal operations
+- Improved creation performance by removing complex legal entity relationship processing from creation path
+
+### Service Layer Enhancements
+- Added database-agnostic legal entity service with basic entity creation capabilities
+- Enhanced OpenFIGI service with venue-specific search strategy using MIC codes
+- Improved MIC data integration with complete ISO 10383 registry loading (2,794 records)
+- Implemented clean separation between creation (FIRDS) and enrichment (external APIs) workflows
+
+### Production Deployment Improvements
+- Added pymssql dependency alongside pyodbc for SQL Server driver redundancy
+- Documented ODBC Driver 17 for SQL Server requirement for production deployments
+- Enhanced requirements.txt with both primary (pyodbc) and fallback (pymssql) SQL Server drivers
+- Added comprehensive deployment documentation covering Docker, Azure App Service, and Linux environments
+
 ## Recent Highlights
 
 - **[2025-11-04]**: API architecture consolidation with modular endpoint organization, legacy code removal, and frontend modernization

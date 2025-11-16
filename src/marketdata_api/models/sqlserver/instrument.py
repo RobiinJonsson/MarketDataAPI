@@ -7,10 +7,23 @@ from decimal import Decimal
 from typing import Any, Dict, Optional
 
 from sqlalchemy import DECIMAL, Boolean, Column, Date, DateTime, Index, Integer, String, Text, ForeignKey
+from sqlalchemy.dialects.mssql import NVARCHAR
+from sqlalchemy.types import TypeDecorator, NVARCHAR as NVARCHAR_BASE
 from sqlalchemy.orm import relationship
 
 from .base_model import SqlServerBaseModel
 from ...models.interfaces.instrument_interface import InstrumentInterface
+
+
+class LegacyCompatibleText(TypeDecorator):
+    """Custom text type for legacy SQL Server ODBC driver compatibility."""
+    
+    impl = Text
+    cache_ok = True
+    
+    def load_dialect_impl(self, dialect):
+        # For SQL Server, use Text instead of NVARCHAR to avoid precision issues
+        return dialect.type_descriptor(Text())
 
 
 class SqlServerInstrument(SqlServerBaseModel, InstrumentInterface):
@@ -35,20 +48,61 @@ class SqlServerInstrument(SqlServerBaseModel, InstrumentInterface):
     currency = Column(String(3), nullable=True)
     cfi_code = Column(String(6), nullable=True)
     commodity_derivative_indicator = Column(Boolean, nullable=True)
-    lei_id = Column(String(20), ForeignKey("legal_entities.lei", ondelete="SET NULL"), nullable=True)
+    lei_id = Column(String(20), nullable=True)  # Removed FK constraint - lei_id can exist without legal entity
     
     # Publication and regulatory fields
     publication_from_date = Column(DateTime, nullable=True)
     competent_authority = Column(String(10), nullable=True)
     relevant_trading_venue = Column(String(100), nullable=True)
     
-    # Document storage (SQL Server compatible JSON)
-    firds_data = Column(Text, nullable=True)  # JSON as Text for SQL Server
-    processed_attributes = Column(Text, nullable=True)  # JSON as Text for SQL Server
+    # Document storage (SQL Server compatible JSON) 
+    # Using custom type for legacy ODBC driver compatibility
+    _firds_data = Column('firds_data', LegacyCompatibleText, nullable=True)  
+    _processed_attributes = Column('processed_attributes', LegacyCompatibleText, nullable=True)
+    
+    @property
+    def firds_data(self):
+        """Get firds_data as dict (deserialize from JSON)."""
+        import json
+        return json.loads(self._firds_data) if self._firds_data else None
+    
+    @firds_data.setter
+    def firds_data(self, value):
+        """Set firds_data from dict (serialize to JSON)."""
+        import json
+        self._firds_data = json.dumps(value) if value is not None else None
+    
+    @property
+    def processed_attributes(self):
+        """Get processed_attributes as dict (deserialize from JSON)."""
+        import json
+        return json.loads(self._processed_attributes) if self._processed_attributes else None
+    
+    @processed_attributes.setter
+    def processed_attributes(self, value):
+        """Set processed_attributes from dict (serialize to JSON)."""
+        import json
+        self._processed_attributes = json.dumps(value) if value is not None else None
     
     # Relationships
-    legal_entity = relationship("SqlServerLegalEntity", back_populates="instruments")
+    legal_entity = relationship(
+        "SqlServerLegalEntity", 
+        back_populates="instruments",
+        primaryjoin="SqlServerInstrument.lei_id == SqlServerLegalEntity.lei",
+        foreign_keys="SqlServerInstrument.lei_id"
+    )
     trading_venues = relationship("SqlServerTradingVenue", back_populates="instrument", cascade="all, delete-orphan")
+    figi_mappings = relationship(
+        "SqlServerFigiMapping", 
+        back_populates="instrument", 
+        cascade="all, delete-orphan",
+        passive_deletes=True
+    )
+    transparency_calculations = relationship(
+        "SqlServerTransparencyCalculation", 
+        back_populates="instrument", 
+        cascade="all, delete-orphan"
+    )
 
     # Indexes for performance
     __table_args__ = (
@@ -60,8 +114,6 @@ class SqlServerInstrument(SqlServerBaseModel, InstrumentInterface):
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for API responses (matches SQLite interface)."""
-        import json
-        
         return {
             "id": self.id,
             "isin": self.isin,
@@ -75,8 +127,8 @@ class SqlServerInstrument(SqlServerBaseModel, InstrumentInterface):
             "publication_from_date": self.publication_from_date.isoformat() if self.publication_from_date else None,
             "competent_authority": self.competent_authority,
             "relevant_trading_venue": self.relevant_trading_venue,
-            "firds_data": json.loads(self.firds_data) if self.firds_data else None,
-            "processed_attributes": json.loads(self.processed_attributes) if self.processed_attributes else None,
+            "firds_data": self.firds_data,  # Property already deserializes
+            "processed_attributes": self.processed_attributes,  # Property already deserializes
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
@@ -88,6 +140,43 @@ class SqlServerInstrument(SqlServerBaseModel, InstrumentInterface):
             "legal_entity": self.legal_entity,
             "trading_venues": self.trading_venues,
         }
+
+    @classmethod
+    def map_firds_type_to_instrument_type(
+        cls, firds_type: str, cfi_code: Optional[str] = None
+    ) -> str:
+        """Map FIRDS instrument type letter to business instrument type using CFI standards.
+
+        This method now uses the CFI model as the single source of truth.
+        FIRDS file letters directly map to CFI categories following ISO 10962.
+
+        Args:
+            firds_type: Single letter FIRDS type (C, D, E, F, H, I, J, O, R, S)
+            cfi_code: Optional CFI code for validation and refinement
+
+        Returns:
+            String representing the business instrument type
+        """
+        from marketdata_api.models.utils.cfi_instrument_manager import CFIInstrumentTypeManager
+
+        # Use CFI code if available (primary source of truth)
+        if cfi_code:
+            # Validate consistency between FIRDS type and CFI code
+            is_consistent, error_msg = CFIInstrumentTypeManager.validate_cfi_consistency(
+                cfi_code, firds_type
+            )
+            if not is_consistent:
+                # Log warning but continue - data might have inconsistencies
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.warning(f"CFI-FIRDS inconsistency for {firds_type}/{cfi_code}: {error_msg}")
+
+            # Use CFI-based type determination
+            return CFIInstrumentTypeManager.get_business_type_from_cfi(cfi_code)
+
+        # Fallback to FIRDS-based determination (still CFI-compliant)
+        return CFIInstrumentTypeManager.get_business_type_from_firds_file(firds_type)
 
 
 class SqlServerTradingVenue(SqlServerBaseModel):
@@ -127,6 +216,38 @@ class SqlServerTradingVenue(SqlServerBaseModel):
     # Venue-specific attributes (JSON as Text for SQL Server)
     venue_attributes = Column(Text, nullable=True)
     original_firds_record = Column(Text, nullable=True)  # JSON as Text in SQL Server
+    
+    # JSON property setters/getters for compatibility with SQLite
+    @property 
+    def venue_attributes_json(self):
+        """Get venue_attributes as parsed JSON object."""
+        import json
+        return json.loads(self.venue_attributes) if self.venue_attributes else None
+    
+    @venue_attributes_json.setter
+    def venue_attributes_json(self, value):
+        """Set venue_attributes from JSON object."""
+        import json
+        self.venue_attributes = json.dumps(value) if value is not None else None
+    
+    @property
+    def original_firds_record_json(self):
+        """Get original_firds_record as parsed JSON object."""
+        import json
+        return json.loads(self.original_firds_record) if self.original_firds_record else None
+        
+    @original_firds_record_json.setter
+    def original_firds_record_json(self, value):
+        """Set original_firds_record from JSON object."""
+        import json
+        self.original_firds_record = json.dumps(value) if value is not None else None
+    
+    def __setattr__(self, name, value):
+        """Override setattr to handle automatic JSON conversion for compatibility with SQLite."""
+        if name in ('venue_attributes', 'original_firds_record') and isinstance(value, dict):
+            import json
+            value = json.dumps(value)
+        super().__setattr__(name, value)
     
     # Relationships
     instrument = relationship("SqlServerInstrument", back_populates="trading_venues")

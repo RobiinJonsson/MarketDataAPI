@@ -3,11 +3,13 @@
 from datetime import UTC, datetime
 
 from sqlalchemy import Column, DateTime, event
+from sqlalchemy.orm import declarative_base
 
-from ...database.base import Base
+# Create separate MetaData for SQL Server to avoid table collisions with SQLite
+SqlServerBase = declarative_base()
 
 
-class SqlServerBaseModel(Base):
+class SqlServerBaseModel(SqlServerBase):
     """Base model for SQL Server with automatic timestamps"""
 
     __abstract__ = True

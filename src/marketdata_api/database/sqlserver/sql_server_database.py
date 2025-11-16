@@ -55,19 +55,23 @@ class SqlServerDatabase(DatabaseInterface):
         # URL encode the password to handle special characters
         password_encoded = quote_plus(AZURE_SQL_PASSWORD)
 
-        # Azure SQL Database connection string
+        # Azure SQL Database connection string with modern ODBC driver
         connection_string = (
             f"mssql+pyodbc://{AZURE_SQL_USERNAME}:{password_encoded}@"
             f"{AZURE_SQL_SERVER}:{AZURE_SQL_PORT}/{AZURE_SQL_DATABASE}"
-            f"?driver=SQL+Server"
+            f"?driver=ODBC+Driver+17+for+SQL+Server&TrustServerCertificate=yes"
         )
 
-        # SQL Server optimized engine configuration
+        # SQL Server engine configuration optimized for modern ODBC Driver 17
         engine = create_engine(
             connection_string,
             pool_pre_ping=True,
             pool_recycle=300,
-            connect_args={"timeout": 30, "autocommit": True, "fast_executemany": True},
+            connect_args={
+                "timeout": 30, 
+                "autocommit": True,  # Restored for modern driver
+                "fast_executemany": True,  # Re-enabled for better performance
+            },
             echo=False,  # Set to True for SQL debugging
         )
 

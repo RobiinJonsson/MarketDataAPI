@@ -14,7 +14,7 @@ src_path = os.path.join(project_root, "src")
 sys.path.append(src_path)
 
 # Import SQL Server-specific models
-from marketdata_api.database.base import Base
+from marketdata_api.models.sqlserver.base_model import SqlServerBase
 from marketdata_api.models.sqlserver.instrument import SqlServerInstrument, SqlServerTradingVenue
 from marketdata_api.models.sqlserver.legal_entity import SqlServerLegalEntity, SqlServerEntityAddress, SqlServerEntityRegistration, SqlServerEntityRelationship, SqlServerEntityRelationshipException
 from marketdata_api.models.sqlserver.figi import SqlServerFigiMapping
@@ -29,7 +29,7 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 # Add your model's MetaData object here for 'autogenerate' support
-target_metadata = Base.metadata
+target_metadata = SqlServerBase.metadata
 
 def get_sql_server_url():
     """Build SQL Server connection URL from environment variables."""
