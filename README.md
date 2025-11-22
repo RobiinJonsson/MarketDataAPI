@@ -45,6 +45,13 @@ marketdata api start
 
 ## Recent Major Improvements
 
+### Database-Agnostic Service Layer (November 2025)
+- Complete service layer abstraction: All core services (Instrument, LegalEntity, Transparency, Venue) operate identically across SQLite and SQL Server
+- Dynamic model imports: Services automatically load appropriate database models based on environment configuration
+- SQL Server compatibility: Enhanced pagination with ORDER BY clauses, proper column constraints, and transaction handling
+- Unified test infrastructure: Service layer tests validated on both database backends with real-world data patterns
+- Production ready: Service layer foundation enables seamless deployment across development (SQLite) and production (Azure SQL Server) environments
+
 ### Type-Specific Attribute Extractors (October 2025)
 - Complete CFI coverage: Intelligent attribute extraction for all 10 major instrument types with comprehensive FIRDS field analysis
 - Rich business logic: Contract specifications, expiration analysis, pricing information, risk attributes, and intelligent classification
@@ -260,7 +267,8 @@ python scripts\dual_alembic.py sqlserver-history   # SQL Server migration histor
 1. **Development**: Create and test changes using SQLite migrations
 2. **Schema Sync**: Use `sync` command to create matching SQL Server migrations
 3. **Production Deploy**: Apply SQL Server migrations to production database
-4. **Independent Evolution**: Each database maintains separate version history
+4. **Service Layer**: Database-agnostic services automatically work across both environments
+5. **Independent Evolution**: Each database maintains separate version history while service layer provides unified interface
 
 #### Database Backup & Recovery
 
@@ -512,9 +520,10 @@ MarketDataAPI/
 │   ├── models/                      # Database models (dual database support)
 │   │   ├── sqlite/                  # SQLite model implementations
 │   │   └── sqlserver/               # SQL Server model implementations
-│   ├── services/                    # Business logic layer
-│   │   ├── sqlite/                  # SQLite service implementations
-│   │   └── external APIs            # GLEIF, OpenFIGI, MIC integrations
+│   ├── services/                    # Database-agnostic business logic layer
+│   │   ├── core/                    # Database-agnostic service implementations
+│   │   ├── interfaces/              # Service interface definitions
+│   │   └── utils/                   # External API integrations (GLEIF, OpenFIGI, MIC)
 │   ├── database/                    # Database configuration and initialization
 │   ├── interfaces/                  # Service abstractions and factories
 │   ├── schema/                      # Database schema utilities

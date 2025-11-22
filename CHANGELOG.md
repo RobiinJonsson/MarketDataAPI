@@ -2,6 +2,26 @@
 
 All notable changes to the MarketDataAPI project will be documented in this file.
 
+## [2025-11-22] - Database-Agnostic Service Layer Completion
+
+### Service Layer Architecture
+- Completed database-agnostic service layer supporting both SQLite and SQL Server environments
+- Updated all core services (InstrumentService, LegalEntityService, TransparencyService, VenueService) with dynamic model imports
+- Added SQL Server compatibility for all pagination operations with required ORDER BY clauses
+- Enhanced legal entity service to handle all SQL Server variants (sql_server, azure_sql, sqlserver, mssql)
+
+### Test Infrastructure Updates
+- Updated all test files to use database-agnostic service imports instead of database-specific paths
+- Validated service layer functionality across both SQLite and SQL Server databases
+- Implemented real-data testing patterns for comprehensive service validation
+- Maintained backward compatibility while enabling future API/CLI layer rewrites
+
+### SQL Server Compatibility
+- Fixed pagination issues in instruments and transparency APIs with proper ORDER BY implementations
+- Enhanced legal entity service with SQL Server-compatible query patterns
+- Updated database migration system to handle column size constraints (BIC, ticker fields)
+- Validated service layer operates identically across SQLite and Azure SQL Server environments
+
 ## [2025-11-16] - Database Architecture Enhancement
 
 ### Dual Database Support
