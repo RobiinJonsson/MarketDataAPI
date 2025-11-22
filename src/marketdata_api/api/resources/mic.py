@@ -477,7 +477,7 @@ def create_mic_resources(api, models):
             """Direct lookup from ISO registry"""
             try:
                 # Call business logic directly instead of route function
-                from ...services.mic_data_loader import OFFICIAL_MIC_CSV_URL, remote_mic_service
+                from ...services.utils.mic_data_loader import OFFICIAL_MIC_CSV_URL, remote_mic_service
 
                 mic_info = remote_mic_service.lookup_mic(mic_code.upper())
 
@@ -571,7 +571,7 @@ def create_mic_resources(api, models):
             """Real-time search in official data"""
             try:
                 # Call business logic directly instead of route function
-                from ...services.mic_data_loader import remote_mic_service
+                from ...services.utils.mic_data_loader import remote_mic_service
 
                 # Get query parameters
                 name = request.args.get("name", "").strip()
@@ -671,7 +671,7 @@ def create_mic_resources(api, models):
             """Get country MICs from official source"""
             try:
                 # Call business logic directly instead of route function
-                from ...services.mic_data_loader import OFFICIAL_MIC_CSV_URL, remote_mic_service
+                from ...services.utils.mic_data_loader import OFFICIAL_MIC_CSV_URL, remote_mic_service
 
                 results = remote_mic_service.get_country_mics(country_code.upper())
 
@@ -742,7 +742,7 @@ def create_mic_resources(api, models):
             """Official MIC validation"""
             try:
                 # Call business logic directly instead of route function
-                from ...services.mic_data_loader import OFFICIAL_MIC_CSV_URL, remote_mic_service
+                from ...services.utils.mic_data_loader import OFFICIAL_MIC_CSV_URL, remote_mic_service
 
                 validation_result = remote_mic_service.validate_mic(mic_code.upper())
 
@@ -791,7 +791,7 @@ def create_mic_resources(api, models):
             """Clear remote data cache"""
             try:
                 # Call business logic directly instead of route function
-                from ...services.mic_data_loader import remote_mic_service
+                from ...services.utils.mic_data_loader import remote_mic_service
 
                 remote_mic_service.clear_cache()
 

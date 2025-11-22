@@ -34,7 +34,7 @@ TEST_INSTRUMENTS = [
 def test_transparency_service():
     """Test the transparency service with predefined ISINs"""
     try:
-        from marketdata_api.services.sqlite.transparency_service import TransparencyService
+        from marketdata_api.services.core.transparency_service import TransparencyService
 
         # Initialize the service
         service = TransparencyService()

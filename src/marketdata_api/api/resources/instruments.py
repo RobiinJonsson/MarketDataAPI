@@ -137,10 +137,10 @@ def create_instrument_resources(api, models):
                     # Get total count for pagination
                     total_count = query.count()
 
-                    # Apply pagination
+                    # Apply pagination with ORDER BY for SQL Server compatibility
                     limit = pagination['limit'] or pagination['per_page']
                     offset = pagination['offset'] or (pagination['page'] - 1) * pagination['per_page']
-                    instruments = query.limit(limit).offset(offset).all()
+                    instruments = query.order_by(Instrument.isin).limit(limit).offset(offset).all()
 
                     # Use rich instrument response builder following CLI pattern
                     from ..utils.type_specific_responses import build_instrument_response, build_raw_instrument_response
@@ -723,7 +723,7 @@ def create_instrument_resources(api, models):
                     }, HTTPStatus.BAD_REQUEST
 
                 from ...services.sqlite.instrument_service import SqliteInstrumentService
-                from ...services.esma_utils import BatchDataExtractor
+                from ...services.utils.esma_utils import BatchDataExtractor
                 from ...models.utils.cfi_instrument_manager import get_valid_instrument_types, validate_instrument_type
 
                 instrument_service = SqliteInstrumentService()

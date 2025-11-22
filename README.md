@@ -521,7 +521,8 @@ MarketDataAPI/
 │   ├── tests/                       # Test suite
 │   ├── config.py                    # Application configuration
 │   └── constants.py                 # Centralized constants and configuration
-├── alembic/                         # Database migrations
+├── alembic-sqlite/                  # SQLite database migrations (development)
+├── alembic-sqlserver/               # SQL Server database migrations (production)
 ├── config/                          # Configuration files
 │   ├── alembic.ini                  # Database migrations config
 │   └── pytest.ini                  # Testing configuration

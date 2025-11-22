@@ -22,7 +22,7 @@ from marketdata_api.models.sqlite.market_identification_code import (
     MICStatus,
     MICType,
 )
-from marketdata_api.services.mic_data_loader import MICDataLoader, load_mic_data_from_csv
+from marketdata_api.services.utils.mic_data_loader import MICDataLoader, load_mic_data_from_csv
 
 # Configuration
 API_BASE_URL = "http://localhost:5000/api/v1"

@@ -25,7 +25,7 @@ class SqlServerFigiMapping(SqlServerBaseModel):
     )  # FIGI is always 12 characters and must be unique across all instruments
     composite_figi = Column(String(12))
     share_class_figi = Column(String(12))
-    ticker = Column(String(20))
+    ticker = Column(String(100))  # Increased size to handle longer ticker symbols
     security_type = Column(String(50))
     market_sector = Column(String(50))
     security_description = Column(String(255))

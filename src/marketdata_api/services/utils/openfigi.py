@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
-from ..constants import ExternalAPIs, APITimeouts
+from ...constants import ExternalAPIs, APITimeouts
 
 logger = logging.getLogger(__name__)
 
@@ -452,11 +452,11 @@ def map_figi_data(data: list, isin: str):
         return []
 
     # Get the FigiMapping model based on database type
-    from ..config import DatabaseConfig
+    from ...config import DatabaseConfig
     if DatabaseConfig.get_database_type() == "sqlite":
-        from ..models.sqlite.figi import FigiMapping
+        from ...models.sqlite.figi import FigiMapping
     else:
-        from ..models.sqlserver.figi import SqlServerFigiMapping as FigiMapping
+        from ...models.sqlserver.figi import SqlServerFigiMapping as FigiMapping
 
     figi_mappings = []
 

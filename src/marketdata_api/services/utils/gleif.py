@@ -5,8 +5,8 @@ from typing import Any, Dict
 import requests
 
 from .api_utils import ApiError, RetryExhaustedError, log_api_call, retry_with_backoff
-from ..constants import ExternalAPIs, APITimeouts, RetryConfig
-from ..config import DatabaseConfig
+from ...constants import ExternalAPIs, APITimeouts, RetryConfig
+from ...config import DatabaseConfig
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -21,9 +21,9 @@ class GLEIFService:
         
         # Dynamically load models based on database type
         if DatabaseConfig.get_database_type() == "sqlite":
-            from ..models.sqlite.legal_entity import EntityRelationship, EntityRelationshipException
+            from ...models.sqlite.legal_entity import EntityRelationship, EntityRelationshipException
         else:
-            from ..models.sqlserver.legal_entity import (
+            from ...models.sqlserver.legal_entity import (
                 SqlServerEntityRelationship as EntityRelationship,
                 SqlServerEntityRelationshipException as EntityRelationshipException,
             )
@@ -66,9 +66,9 @@ def _create_or_update_child_entity(session, child_data):
     """
     # Load models dynamically based on database type
     if DatabaseConfig.get_database_type() == "sqlite":
-        from ..models.sqlite.legal_entity import EntityAddress, EntityRegistration, LegalEntity
+        from ...models.sqlite.legal_entity import EntityAddress, EntityRegistration, LegalEntity
     else:
-        from ..models.sqlserver.legal_entity import (
+        from ...models.sqlserver.legal_entity import (
             SqlServerEntityAddress as EntityAddress,
             SqlServerEntityRegistration as EntityRegistration,
             SqlServerLegalEntity as LegalEntity,
@@ -286,9 +286,9 @@ def process_parent_relationship(session, lei_code, parent_data, relationship_typ
     # Load models dynamically if not provided
     if EntityRelationship is None or EntityRelationshipException is None:
         if DatabaseConfig.get_database_type() == "sqlite":
-            from ..models.sqlite.legal_entity import EntityRelationship as ER, EntityRelationshipException as ERE
+            from ...models.sqlite.legal_entity import EntityRelationship as ER, EntityRelationshipException as ERE
         else:
-            from ..models.sqlserver.legal_entity import (
+            from ...models.sqlserver.legal_entity import (
                 SqlServerEntityRelationship as ER,
                 SqlServerEntityRelationshipException as ERE,
             )
@@ -412,9 +412,9 @@ def process_children_relationships(
     # Load models dynamically if not provided
     if EntityRelationship is None:
         if DatabaseConfig.get_database_type() == "sqlite":
-            from ..models.sqlite.legal_entity import EntityRelationship
+            from ...models.sqlite.legal_entity import EntityRelationship
         else:
-            from ..models.sqlserver.legal_entity import SqlServerEntityRelationship as EntityRelationship
+            from ...models.sqlserver.legal_entity import SqlServerEntityRelationship as EntityRelationship
     
     results = {"processed": 0, "errors": 0, "pruned": 0, "details": [], "batches": 0}
 
@@ -554,9 +554,9 @@ def prune_parent_relationship(session, lei_code, relationship_type, EntityRelati
     # Load models dynamically if not provided
     if EntityRelationship is None:
         if DatabaseConfig.get_database_type() == "sqlite":
-            from ..models.sqlite.legal_entity import EntityRelationship
+            from ...models.sqlite.legal_entity import EntityRelationship
         else:
-            from ..models.sqlserver.legal_entity import SqlServerEntityRelationship as EntityRelationship
+            from ...models.sqlserver.legal_entity import SqlServerEntityRelationship as EntityRelationship
     # Find existing parent relationship of this type
     existing_rel = (
         session.query(EntityRelationship)
@@ -590,9 +590,9 @@ def sync_entity_relationships(session, lei_code, batch_size=100):
     """
     # Load models dynamically
     if DatabaseConfig.get_database_type() == "sqlite":
-        from ..models.sqlite.legal_entity import EntityRelationship, EntityRelationshipException
+        from ...models.sqlite.legal_entity import EntityRelationship, EntityRelationshipException
     else:
-        from ..models.sqlserver.legal_entity import (
+        from ...models.sqlserver.legal_entity import (
             SqlServerEntityRelationship as EntityRelationship,
             SqlServerEntityRelationshipException as EntityRelationshipException,
         )

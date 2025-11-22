@@ -16,7 +16,7 @@ from ...models.sqlite.market_identification_code import (
     MICStatus,
     MICType,
 )
-from ...services.mic_data_loader import MICDataLoader, load_mic_data_from_csv
+from ...services.utils.mic_data_loader import MICDataLoader, load_mic_data_from_csv
 
 
 def get_mic_segments_data(session, mic_code: str):

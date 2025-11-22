@@ -580,7 +580,7 @@ class BatchDataExtractor:
             logger = logging.getLogger(__name__)
             
         if data_directory is None:
-            from ..config import Config
+            from ...config import Config
             data_directory = os.path.join(Config.ROOT_PATH, "data", "downloads", "firds")
         
         if not os.path.exists(data_directory):
@@ -663,7 +663,7 @@ class BatchDataExtractor:
             logger = logging.getLogger(__name__)
             
         if data_directory is None:
-            from ..config import Config
+            from ...config import Config
             data_directory = os.path.join(Config.ROOT_PATH, "data", "downloads", "fitrs")
         
         if not os.path.exists(data_directory):

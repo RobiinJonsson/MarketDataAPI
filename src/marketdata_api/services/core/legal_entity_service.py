@@ -5,10 +5,10 @@ from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ...constants import RetryConfig
-from ..gleif import flatten_address, map_lei_record
+from ..utils.gleif import flatten_address, map_lei_record
 from ...database.session import SessionLocal, get_session
 from ...config import DatabaseConfig
-from ..gleif import fetch_lei_info  # Re-enabled for enrichment
+from ..utils.gleif import fetch_lei_info  # Re-enabled for enrichment
 from ..interfaces.legal_entity_service_interface import LegalEntityServiceInterface
 
 
@@ -34,7 +34,7 @@ class LegalEntityService(LegalEntityServiceInterface):
                 LegalEntity,
             )
             from ...models.sqlite.instrument import Instrument
-        else:  # azure_sql
+        elif self.database_type in ['azure_sql', 'sqlserver', 'sql_server', 'mssql']:
             from ...models.sqlserver.legal_entity import (
                 SqlServerEntityAddress as EntityAddress,
                 SqlServerEntityRegistration as EntityRegistration,
@@ -42,6 +42,8 @@ class LegalEntityService(LegalEntityServiceInterface):
                 SqlServerLegalEntity as LegalEntity,
             )
             from ...models.sqlserver.instrument import SqlServerInstrument as Instrument
+        else:
+            raise ValueError(f"Unsupported database type: {self.database_type}")
         
         self.LegalEntity = LegalEntity
         self.EntityAddress = EntityAddress
@@ -51,7 +53,7 @@ class LegalEntityService(LegalEntityServiceInterface):
 
     def create_basic_entity(self, lei: str) -> Tuple[Session, Optional[object]]:
         """Create basic legal entity without relationships (for instrument creation)."""
-        from ..gleif import fetch_lei_info
+        from ..utils.gleif import fetch_lei_info
         
         gleif_data = fetch_lei_info(lei)
         if not gleif_data:
@@ -60,7 +62,7 @@ class LegalEntityService(LegalEntityServiceInterface):
             
         session = SessionLocal()
         try:
-            from ..gleif import map_lei_record
+            from ..utils.gleif import map_lei_record
             mapped_data = map_lei_record(gleif_data)
             entity_data = mapped_data["lei_record"]
             
@@ -168,7 +170,8 @@ class LegalEntityService(LegalEntityServiceInterface):
                 if filter_conditions:
                     query = query.filter(and_(*filter_conditions))
 
-            # Apply pagination
+            # Apply pagination with ORDER BY for SQL Server compatibility
+            query = query.order_by(self.LegalEntity.lei)
             if offset is not None:
                 query = query.offset(offset)
             if limit is not None:
@@ -183,7 +186,7 @@ class LegalEntityService(LegalEntityServiceInterface):
     def create_or_update_entity(self, lei: str) -> Tuple[Session, Optional[object]]:
         """Create or update legal entity from GLEIF data."""
         # Lazy import to avoid conflicts
-        from ..gleif import fetch_lei_info, sync_entity_relationships
+        from ..utils.gleif import fetch_lei_info, sync_entity_relationships
 
         gleif_data = fetch_lei_info(lei)
         if not gleif_data:
@@ -260,7 +263,7 @@ class LegalEntityService(LegalEntityServiceInterface):
             Dict with statistics: {"scanned": int, "updated": int, "failed": int, "skipped": int}
         """
         from ...models.sqlite.instrument import Instrument
-        from ..gleif import fetch_lei_info
+        from ..utils.gleif import fetch_lei_info
         import time
         from sqlalchemy.exc import OperationalError
         

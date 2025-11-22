@@ -86,12 +86,12 @@ def list(ctx, type, currency, limit):
 def get_instrument(ctx, isin, full, format):
     """Get detailed instrument information by ISIN with rich formatting"""
     try:
-        from marketdata_api.services.sqlite.instrument_service import SqliteInstrumentService
+        from marketdata_api.services.core.instrument_service import InstrumentService
         import json
         from rich.columns import Columns
         from rich.text import Text
         
-        service = SqliteInstrumentService()
+        service = InstrumentService()
 
         with console.status(f"[bold green]Looking up {isin}..."):
             session, instrument = service.get_instrument(isin)
@@ -126,9 +126,9 @@ def get_instrument(ctx, isin, full, format):
 def create(ctx, isin, instrument_type):
     """Create instrument from external data sources (FIRDS)"""
     try:
-        from marketdata_api.services.sqlite.instrument_service import SqliteInstrumentService
+        from marketdata_api.services.core.instrument_service import InstrumentService
         
-        service = SqliteInstrumentService()
+        service = InstrumentService()
 
         with console.status(f"[bold green]Creating {instrument_type} instrument for {isin}..."):
             instrument = service.create_instrument(isin, instrument_type)
@@ -154,9 +154,9 @@ def create(ctx, isin, instrument_type):
 def enrich(ctx, isin):
     """Enrich existing instrument with external data (FIGI, LEI, etc.)"""
     try:
-        from marketdata_api.services.sqlite.instrument_service import SqliteInstrumentService
+        from marketdata_api.services.core.instrument_service import InstrumentService
         
-        service = SqliteInstrumentService()
+        service = InstrumentService()
 
         # First get the instrument
         with console.status(f"[bold green]Looking up instrument {isin}..."):
@@ -208,9 +208,9 @@ def enrich(ctx, isin):
 def delete(ctx, isin, cascade, force):
     """Delete an instrument and optionally its related data"""
     try:
-        from marketdata_api.services.sqlite.instrument_service import SqliteInstrumentService
+        from marketdata_api.services.core.instrument_service import InstrumentService
         
-        service = SqliteInstrumentService()
+        service = InstrumentService()
 
         # First verify the instrument exists
         with console.status(f"[bold green]Looking up instrument {isin}..."):
@@ -285,9 +285,9 @@ def delete(ctx, isin, cascade, force):
 def bulk_create(ctx, jurisdiction, type, limit, batch_size, skip_existing, enrichment):
     """Create multiple instruments in bulk with filtering"""
     try:
-        from marketdata_api.services.sqlite.instrument_service import SqliteInstrumentService
+        from marketdata_api.services.core.instrument_service import InstrumentService
         
-        service = SqliteInstrumentService()
+        service = InstrumentService()
 
         # Show configuration
         console.print(f"[cyan]Bulk Creation Configuration:[/cyan]")
@@ -391,9 +391,9 @@ def bulk_create(ctx, jurisdiction, type, limit, batch_size, skip_existing, enric
 def venues(ctx, identifier, type):
     """Get trading venues for an instrument"""
     try:
-        from marketdata_api.services.sqlite.instrument_service import SqliteInstrumentService
+        from marketdata_api.services.core.instrument_service import InstrumentService
         
-        service = SqliteInstrumentService()
+        service = InstrumentService()
 
         with console.status(f"[bold green]Fetching venues for {identifier}..."):
             venues_data = service.get_instrument_venues(identifier, type)

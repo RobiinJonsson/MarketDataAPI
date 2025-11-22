@@ -80,8 +80,9 @@ def create_legal_entity_resources(api, models):
 
                 # Use rich legal entity response builder like CLI
                 from ..utils.legal_entity_utils import build_legal_entity_response
+                from ...services import LegalEntityService
                 
-                service = ServicesFactory.get_legal_entity_service()
+                service = LegalEntityService()
                 
                 # First get total count without pagination (like instruments endpoint)
                 session_count, all_entities = service.get_all_entities(
@@ -200,7 +201,7 @@ def create_legal_entity_resources(api, models):
         def post(self):
             """Fill missing entity data for all incomplete records"""
             try:
-                from ...services.sqlite.legal_entity_service import LegalEntityService
+                from ...services import LegalEntityService
                 
                 # Use service layer for business logic
                 entity_service = LegalEntityService()

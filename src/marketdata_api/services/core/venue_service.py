@@ -2,7 +2,7 @@
 Venue Service Implementation
 
 This service provides comprehensive trading venue operations with MIC integration.
-Supports venue listing, filtering, search, and instrument relationships.
+Supports venue listing, filtering, search, and self.Instrument relationships.
 """
 
 import logging
@@ -13,18 +13,32 @@ from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from ...database.session import get_session
-from ...models.sqlite.instrument import Instrument, TradingVenue
-from ...models.sqlite.market_identification_code import MarketIdentificationCode, MICStatus, MICType
+from ...config import DatabaseConfig
 
 logger = logging.getLogger(__name__)
 
 
-class SqliteVenueService:
+class VenueService:
     """Service for trading venue operations with MIC integration."""
 
     def __init__(self):
         """Initialize the venue service."""
-        pass
+        self.database_type = DatabaseConfig.get_database_type()
+        self.logger = logging.getLogger(__name__)
+        
+        # Dynamic model imports based on database type
+        if self.database_type == 'sqlite':
+            from ...models.sqlite.instrument import Instrument, TradingVenue
+            from ...models.sqlite.market_identification_code import MarketIdentificationCode, MICStatus, MICType
+        else:  # azure_sql
+            from ...models.sqlserver.instrument import SqlServerInstrument as Instrument, SqlServerTradingVenue as TradingVenue
+            from ...models.sqlserver.market_identification_code import SqlServerMarketIdentificationCode as MarketIdentificationCode, SqlServerMICStatus as MICStatus, SqlServerMICType as MICType
+        
+        self.self.Instrument = self.Instrument
+        self.self.TradingVenue = self.TradingVenue
+        self.self.MarketIdentificationCode = self.MarketIdentificationCode
+        self.self.MICStatus = self.MICStatus
+        self.self.MICType = self.MICType
 
     def get_venues_list(
         self, filters: Dict[str, Any], page: int = 1, per_page: int = 50
@@ -42,49 +56,49 @@ class SqliteVenueService:
         """
         try:
             with get_session() as session:
-                # Build query - using MarketIdentificationCode as primary source
-                query = session.query(MarketIdentificationCode).options(
-                    joinedload(MarketIdentificationCode.trading_venues)
+                # Build query - using self.MarketIdentificationCode as primary source
+                query = session.query(self.self.MarketIdentificationCode).options(
+                    joinedload(self.self.MarketIdentificationCode.trading_venues)
                 )
                 
                 # Apply filters
                 if filters.get("country"):
                     query = query.filter(
-                        MarketIdentificationCode.iso_country_code == filters["country"].upper()
+                        self.MarketIdentificationCode.iso_country_code == filters["country"].upper()
                     )
                 
                 if filters.get("status"):
                     query = query.filter(
-                        MarketIdentificationCode.status == filters["status"].upper()
+                        self.MarketIdentificationCode.status == filters["status"].upper()
                     )
                 
                 if filters.get("mic_type"):
                     query = query.filter(
-                        MarketIdentificationCode.operation_type == filters["mic_type"].upper()
+                        self.MarketIdentificationCode.operation_type == filters["mic_type"].upper()
                     )
                 
                 if filters.get("operating_mic"):
                     query = query.filter(
-                        MarketIdentificationCode.operating_mic == filters["operating_mic"].upper()
+                        self.MarketIdentificationCode.operating_mic == filters["operating_mic"].upper()
                     )
                 
                 if filters.get("search"):
                     search_term = f"%{filters['search']}%"
                     query = query.filter(
                         or_(
-                            MarketIdentificationCode.market_name.ilike(search_term),
-                            MarketIdentificationCode.legal_entity_name.ilike(search_term),
-                            MarketIdentificationCode.mic.ilike(search_term),
+                            self.MarketIdentificationCode.market_name.ilike(search_term),
+                            self.MarketIdentificationCode.legal_entity_name.ilike(search_term),
+                            self.MarketIdentificationCode.mic.ilike(search_term),
                         )
                     )
                 
                 if filters.get("has_instruments"):
                     has_instruments = filters["has_instruments"].lower() == "true"
                     if has_instruments:
-                        query = query.join(TradingVenue)
+                        query = query.join(self.TradingVenue)
                     else:
                         # Left join and filter for null
-                        query = query.outerjoin(TradingVenue).filter(TradingVenue.mic_code.is_(None))
+                        query = query.outerjoin(self.TradingVenue).filter(self.TradingVenue.mic_code.is_(None))
                 
                 # Get total count before pagination
                 total = query.count()
@@ -124,8 +138,8 @@ class SqliteVenueService:
         """
         try:
             with get_session() as session:
-                mic = session.query(MarketIdentificationCode).filter(
-                    MarketIdentificationCode.mic == mic_code.upper()
+                mic = session.query(self.MarketIdentificationCode).filter(
+                    self.MarketIdentificationCode.mic == mic_code.upper()
                 ).first()
                 
                 if not mic:
@@ -137,9 +151,9 @@ class SqliteVenueService:
                 if include_instruments:
                     # Get instruments traded on this venue
                     instruments_query = (
-                        session.query(TradingVenue)
-                        .join(Instrument)
-                        .filter(TradingVenue.mic_code == mic_code.upper())
+                        session.query(self.TradingVenue)
+                        .join(self.Instrument)
+                        .filter(self.TradingVenue.mic_code == mic_code.upper())
                         .limit(instrument_limit)
                     )
                     
@@ -156,18 +170,18 @@ class SqliteVenueService:
                             "venue_status": tv.venue_status,
                         }
                         
-                        # Add instrument details if available
-                        if tv.instrument:
+                        # Add self.Instrument details if available
+                        if tv.self.Instrument:
                             instrument_info.update({
-                                "instrument_name": tv.instrument.instrument_name,
-                                "cfi_code": tv.instrument.cfi_code,
-                                "instrument_type": tv.instrument.instrument_type,
+                                "self.Instrument_name": tv.self.Instrument.self.Instrument_name,
+                                "cfi_code": tv.self.Instrument.cfi_code,
+                                "instrument_type": tv.self.Instrument.instrument_type,
                             })
                         
                         instruments.append(instrument_info)
                     
                     venue_detail["instruments"] = instruments
-                    venue_detail["instrument_count"] = len(instruments)
+                    venue_detail["self.Instrument_count"] = len(instruments)
                 
                 return venue_detail
 
@@ -183,7 +197,7 @@ class SqliteVenueService:
         
         Args:
             mic_code: MIC code for the venue
-            instrument_type: Optional instrument type filter
+            instrument_type: Optional self.Instrument type filter
             page: Page number for pagination
             per_page: Number of items per page
             
@@ -193,8 +207,8 @@ class SqliteVenueService:
         try:
             with get_session() as session:
                 # First verify the MIC exists
-                mic_exists = session.query(MarketIdentificationCode).filter(
-                    MarketIdentificationCode.mic == mic_code.upper()
+                mic_exists = session.query(self.MarketIdentificationCode).filter(
+                    self.MarketIdentificationCode.mic == mic_code.upper()
                 ).first()
                 
                 if not mic_exists:
@@ -202,13 +216,13 @@ class SqliteVenueService:
                 
                 # Build instruments query
                 query = (
-                    session.query(TradingVenue)
-                    .join(Instrument)
-                    .filter(TradingVenue.mic_code == mic_code.upper())
+                    session.query(self.TradingVenue)
+                    .join(self.Instrument)
+                    .filter(self.TradingVenue.mic_code == mic_code.upper())
                 )
                 
                 if instrument_type:
-                    query = query.filter(Instrument.instrument_type == instrument_type.lower())
+                    query = query.filter(self.Instrument.instrument_type == instrument_type.lower())
                 
                 # Get total count
                 total = query.count()
@@ -229,13 +243,13 @@ class SqliteVenueService:
                         "venue_status": tv.venue_status,
                     }
                     
-                    # Add instrument details
-                    if tv.instrument:
+                    # Add self.Instrument details
+                    if tv.self.Instrument:
                         instrument_info.update({
-                            "instrument_name": tv.instrument.instrument_name,
-                            "cfi_code": tv.instrument.cfi_code,
-                            "instrument_type": tv.instrument.instrument_type,
-                            "issuer_name": tv.instrument.issuer_name,
+                            "self.Instrument_name": tv.self.Instrument.self.Instrument_name,
+                            "cfi_code": tv.self.Instrument.cfi_code,
+                            "instrument_type": tv.self.Instrument.instrument_type,
+                            "issuer_name": tv.self.Instrument.issuer_name,
                         })
                     
                     instruments.append(instrument_info)
@@ -268,24 +282,24 @@ class SqliteVenueService:
                 # Build search query
                 search_term = f"%{query}%"
                 
-                db_query = session.query(MarketIdentificationCode).filter(
+                db_query = session.query(self.MarketIdentificationCode).filter(
                     or_(
-                        MarketIdentificationCode.market_name.ilike(search_term),
-                        MarketIdentificationCode.legal_entity_name.ilike(search_term),
-                        MarketIdentificationCode.mic.ilike(search_term),
-                        MarketIdentificationCode.acronym.ilike(search_term),
+                        self.MarketIdentificationCode.market_name.ilike(search_term),
+                        self.MarketIdentificationCode.legal_entity_name.ilike(search_term),
+                        self.MarketIdentificationCode.mic.ilike(search_term),
+                        self.MarketIdentificationCode.acronym.ilike(search_term),
                     )
                 )
                 
                 # Apply additional filters
                 if filters.get("country"):
                     db_query = db_query.filter(
-                        MarketIdentificationCode.iso_country_code == filters["country"].upper()
+                        self.MarketIdentificationCode.iso_country_code == filters["country"].upper()
                     )
                 
                 if filters.get("status"):
                     db_query = db_query.filter(
-                        MarketIdentificationCode.status == filters["status"].upper()
+                        self.MarketIdentificationCode.status == filters["status"].upper()
                     )
                 
                 # Limit results
@@ -313,44 +327,44 @@ class SqliteVenueService:
         try:
             with get_session() as session:
                 # Basic MIC counts
-                total_mics = session.query(MarketIdentificationCode).count()
-                operating_mics = session.query(MarketIdentificationCode).filter(
-                    MarketIdentificationCode.operation_type == MICType.OPRT
+                total_mics = session.query(self.MarketIdentificationCode).count()
+                operating_mics = session.query(self.MarketIdentificationCode).filter(
+                    self.MarketIdentificationCode.operation_type == self.MICType.OPRT
                 ).count()
-                segment_mics = session.query(MarketIdentificationCode).filter(
-                    MarketIdentificationCode.operation_type == MICType.SGMT
+                segment_mics = session.query(self.MarketIdentificationCode).filter(
+                    self.MarketIdentificationCode.operation_type == self.MICType.SGMT
                 ).count()
                 
                 # Status breakdown
                 status_counts = {}
-                for status in MICStatus:
-                    count = session.query(MarketIdentificationCode).filter(
-                        MarketIdentificationCode.status == status
+                for status in self.MICStatus:
+                    count = session.query(self.MarketIdentificationCode).filter(
+                        self.MarketIdentificationCode.status == status
                     ).count()
                     status_counts[status.value] = count
                 
                 # Country breakdown (top 10)
                 country_counts = (
                     session.query(
-                        MarketIdentificationCode.iso_country_code,
-                        func.count(MarketIdentificationCode.mic).label('count')
+                        self.MarketIdentificationCode.iso_country_code,
+                        func.count(self.MarketIdentificationCode.mic).label('count')
                     )
-                    .group_by(MarketIdentificationCode.iso_country_code)
-                    .order_by(func.count(MarketIdentificationCode.mic).desc())
+                    .group_by(self.MarketIdentificationCode.iso_country_code)
+                    .order_by(func.count(self.MarketIdentificationCode.mic).desc())
                     .limit(10)
                     .all()
                 )
                 
                 # Venues with instruments
                 venues_with_instruments = (
-                    session.query(MarketIdentificationCode)
-                    .join(TradingVenue)
+                    session.query(self.MarketIdentificationCode)
+                    .join(self.TradingVenue)
                     .distinct()
                     .count()
                 )
                 
                 # Total trading venues (individual venue records)
-                total_trading_venues = session.query(TradingVenue).count()
+                total_trading_venues = session.query(self.TradingVenue).count()
                 
                 return {
                     "total_mics": total_mics,
@@ -380,23 +394,23 @@ class SqliteVenueService:
             with get_session() as session:
                 country_data = (
                     session.query(
-                        MarketIdentificationCode.iso_country_code,
-                        func.count(MarketIdentificationCode.mic).label('total_mics'),
+                        self.MarketIdentificationCode.iso_country_code,
+                        func.count(self.MarketIdentificationCode.mic).label('total_mics'),
                         func.sum(
                             case(
-                                (MarketIdentificationCode.operation_type == MICType.OPRT, 1),
+                                (self.MarketIdentificationCode.operation_type == self.MICType.OPRT, 1),
                                 else_=0
                             )
                         ).label('operating_mics'),
                         func.sum(
                             case(
-                                (MarketIdentificationCode.operation_type == MICType.SGMT, 1),
+                                (self.MarketIdentificationCode.operation_type == self.MICType.SGMT, 1),
                                 else_=0
                             )
                         ).label('segment_mics'),
                     )
-                    .group_by(MarketIdentificationCode.iso_country_code)
-                    .order_by(MarketIdentificationCode.iso_country_code)
+                    .group_by(self.MarketIdentificationCode.iso_country_code)
+                    .order_by(self.MarketIdentificationCode.iso_country_code)
                     .all()
                 )
                 
@@ -415,10 +429,10 @@ class SqliteVenueService:
             logger.error(f"Error getting venue countries: {str(e)}")
             raise
 
-    def _format_venue_summary(self, mic: MarketIdentificationCode) -> Dict[str, Any]:
+    def _format_venue_summary(self, mic) -> Dict[str, Any]:
         """Format MIC data for venue summary display."""
         # Count associated instruments
-        instrument_count = len(mic.trading_venues) if mic.trading_venues else 0
+        self.Instrument_count = len(mic.trading_venues) if mic.trading_venues else 0
         
         try:
             return {
@@ -432,7 +446,7 @@ class SqliteVenueService:
                 "operation_type": mic.operation_type.value if mic.operation_type else None,
                 "market_category": mic.market_category_code.value if mic.market_category_code else None,
                 "website": mic.website,
-                "instrument_count": instrument_count,
+                "self.Instrument_count": self.Instrument_count,
                 "last_update_date": mic.last_update_date.isoformat() if mic.last_update_date else None,
             }
         except Exception as e:
@@ -449,11 +463,11 @@ class SqliteVenueService:
                 "operation_type": str(mic.operation_type) if mic.operation_type else None,
                 "market_category": str(mic.market_category_code) if mic.market_category_code else None,
                 "website": mic.website,
-                "instrument_count": instrument_count,
+                "self.Instrument_count": self.Instrument_count,
                 "last_update_date": str(mic.last_update_date) if mic.last_update_date else None,
             }
 
-    def _format_venue_detail(self, mic: MarketIdentificationCode) -> Dict[str, Any]:
+    def _format_venue_detail(self, mic) -> Dict[str, Any]:
         """Format MIC data for detailed venue display."""
         venue_data = self._format_venue_summary(mic)
         
@@ -469,11 +483,11 @@ class SqliteVenueService:
         })
         
         # Add segment MICs if this is an operating MIC
-        if mic.operation_type == MICType.OPRT:
+        if mic.operation_type == self.MICType.OPRT:
             try:
                 with get_session() as session:
-                    segments = session.query(MarketIdentificationCode).filter(
-                        MarketIdentificationCode.operating_mic == mic.mic
+                    segments = session.query(self.MarketIdentificationCode).filter(
+                        self.MarketIdentificationCode.operating_mic == mic.mic
                     ).all()
                     
                     venue_data["segment_mics"] = [

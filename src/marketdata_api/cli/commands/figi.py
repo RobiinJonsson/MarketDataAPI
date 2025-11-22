@@ -20,9 +20,9 @@ def figi():
 def get_figi(ctx, isin):
     """Get FIGI mappings for an ISIN"""
     try:
-        from marketdata_api.services.sqlite.instrument_service import SqliteInstrumentService
+        from marketdata_api.services.core.instrument_service import InstrumentService
         
-        service = SqliteInstrumentService()
+        service = InstrumentService()
         session, instrument = service.get_instrument(isin)
 
         if not instrument:
@@ -75,7 +75,7 @@ def get_figi(ctx, isin):
 def search(ctx, isin, mic):
     """Search for FIGI data using the enhanced OpenFIGI service"""
     try:
-        from marketdata_api.services.openfigi import OpenFIGIService
+        from marketdata_api.services.utils.openfigi import OpenFIGIService
         
         openfigi_service = OpenFIGIService()
 

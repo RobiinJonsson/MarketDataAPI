@@ -80,7 +80,7 @@ def list(ctx, country, limit):
 def get_entity(ctx, lei, full):
     """Get detailed legal entity information by LEI with comprehensive display"""
     try:
-        from marketdata_api.services.sqlite.legal_entity_service import LegalEntityService
+        from marketdata_api.services.core.legal_entity_service import LegalEntityService
         from rich.columns import Columns
         from rich.text import Text
         
@@ -112,7 +112,7 @@ def get_entity(ctx, lei, full):
 def create(ctx, lei, force):
     """Create a new legal entity from GLEIF API data"""
     try:
-        from marketdata_api.services.sqlite.legal_entity_service import LegalEntityService
+        from marketdata_api.services.core.legal_entity_service import LegalEntityService
         from marketdata_api.database.session import get_session
         
         # Validate LEI format
@@ -177,7 +177,7 @@ def get_remote(ctx, lei, include_relationships):
             return
         
         # Import here to avoid issues with module loading
-        from marketdata_api.services.gleif import fetch_lei_info
+        from marketdata_api.services.utils.gleif import fetch_lei_info
         
         # Fetch basic entity information
         with console.status(f"[bold green]Fetching LEI {lei} from GLEIF API..."):
@@ -223,7 +223,7 @@ def _display_gleif_data_rich(gleif_data):
         
         if gleif_data and not gleif_data.get('error'):
             try:
-                from marketdata_api.services.gleif import map_lei_record
+                from marketdata_api.services.utils.gleif import map_lei_record
                 mapped_data = map_lei_record(gleif_data)
                 
                 # Extract from the correct nested structure

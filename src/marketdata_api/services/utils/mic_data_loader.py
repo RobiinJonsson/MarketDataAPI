@@ -16,7 +16,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import requests
 from sqlalchemy.orm import Session
 
-from ..constants import ExternalAPIs, APITimeouts, ValidationLimits
+from ...constants import ExternalAPIs, APITimeouts, ValidationLimits
 
 logger = logging.getLogger(__name__)
 
@@ -49,16 +49,16 @@ class MICDataLoader:
         self.session = session
         
         # Load models dynamically based on database type
-        from ..config import DatabaseConfig
+        from ...config import DatabaseConfig
         if DatabaseConfig.get_database_type() == "sqlite":
-            from ..models.sqlite.market_identification_code import (
+            from ...models.sqlite.market_identification_code import (
                 MarketCategoryCode,
                 MarketIdentificationCode,
                 MICStatus,
                 MICType,
             )
         else:
-            from ..models.sqlserver.market_identification_code import (
+            from ...models.sqlserver.market_identification_code import (
                 SqlServerMarketCategoryCode as MarketCategoryCode,
                 SqlServerMarketIdentificationCode as MarketIdentificationCode,
                 SqlServerMICStatus as MICStatus,
@@ -71,7 +71,7 @@ class MICDataLoader:
         self.MICType = MICType
         
         # Helper methods for database queries (handle enum vs string differences)
-        from ..config import DatabaseConfig
+        from ...config import DatabaseConfig
         self._is_sqlite = DatabaseConfig.get_database_type() == "sqlite"
     
     def _get_enum_value(self, enum_obj):
@@ -236,7 +236,7 @@ class MICDataLoader:
         try:
             enum_val = self.MICType(value.upper())
             # Return string value for SQL Server, enum object for SQLite
-            from ..config import DatabaseConfig
+            from ...config import DatabaseConfig
             return enum_val.value if DatabaseConfig.get_database_type() != "sqlite" else enum_val
         except ValueError:
             logger.warning(f"Unknown operation type: {value}")
@@ -254,7 +254,7 @@ class MICDataLoader:
                 enum_val = self.MICStatus.ACTIVE
         
         # Return string value for SQL Server, enum object for SQLite
-        from ..config import DatabaseConfig
+        from ...config import DatabaseConfig
         return enum_val.value if DatabaseConfig.get_database_type() != "sqlite" else enum_val
 
     def _parse_market_category(self, value: str) -> Optional[object]:
@@ -264,7 +264,7 @@ class MICDataLoader:
         try:
             enum_val = self.MarketCategoryCode(value.upper())
             # Return string value for SQL Server, enum object for SQLite
-            from ..config import DatabaseConfig
+            from ...config import DatabaseConfig
             return enum_val.value if DatabaseConfig.get_database_type() != "sqlite" else enum_val
         except ValueError:
             logger.warning(f"Unknown market category: {value}")

@@ -357,7 +357,7 @@ def remote():
 def lookup(ctx, mic_code):
     """Look up MIC from official ISO registry"""
     try:
-        from marketdata_api.services.mic_data_loader import remote_mic_service
+        from marketdata_api.services.utils.mic_data_loader import remote_mic_service
         
         with console.status(f"[bold green]Looking up {mic_code} from ISO registry..."):
             result = remote_mic_service.lookup_mic(mic_code.upper())

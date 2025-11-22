@@ -18,12 +18,10 @@ import pandas as pd
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
-from ...config import Config, esmaConfig
+from ...config import Config, esmaConfig, DatabaseConfig
 from ...constants import ServiceDefaults, BusinessConstants, FilePatterns
 from ...database.session import SessionLocal, get_session
-from ...models.sqlite.instrument import Instrument
-from ...models.sqlite.transparency import TransparencyCalculation, TransparencyThreshold
-from ..esma_data_loader import EsmaDataLoader
+from ..utils.esma_data_loader import EsmaDataLoader
 from ..interfaces.transparency_service_interface import TransparencyServiceInterface
 
 logger = logging.getLogger(__name__)
@@ -56,8 +54,21 @@ class TransparencyService(TransparencyServiceInterface):
     """
 
     def __init__(self):
+        self.database_type = DatabaseConfig.get_database_type()
         self.logger = logging.getLogger(__name__)
         self.esma_loader = EsmaDataLoader(esmaConfig.start_date, esmaConfig.end_date)
+        
+        # Dynamic model imports based on database type
+        if self.database_type == 'sqlite':
+            from ...models.sqlite.instrument import Instrument
+            from ...models.sqlite.transparency import TransparencyCalculation, TransparencyThreshold
+        else:  # azure_sql
+            from ...models.sqlserver.instrument import SqlServerInstrument as Instrument
+            from ...models.sqlserver.transparency import SqlServerTransparencyCalculation as TransparencyCalculation, SqlServerTransparencyThreshold as TransparencyThreshold
+        
+        self.Instrument = Instrument
+        self.TransparencyCalculation = TransparencyCalculation
+        self.TransparencyThreshold = TransparencyThreshold
 
     def validate_transparency_data(self, data: Dict[str, Any]) -> None:
         """
@@ -83,7 +94,7 @@ class TransparencyService(TransparencyServiceInterface):
             if classification == "BOND":
                 # Debt-specific validation - be lenient with sparse data
                 if not data.get("Desc") and not data.get("CritVal"):
-                    self.logger.warning(f"Debt instrument missing description and criteria value")
+                    self.logger.warning(f"Debt Any missing description and criteria value")
 
         # Validate numeric fields when present
         numeric_fields = [
@@ -107,7 +118,7 @@ class TransparencyService(TransparencyServiceInterface):
         """
         Determine FITRS file type from data structure or filename.
 
-        Based on FITRS analysis, we have these instrument types:
+        Based on FITRS analysis, we have these Any types:
         - FULECR: C (ETFs/ETCs), E (Equities/Shares), R (Rights)
         - FULNCR: C (Corporate/Certificates), D (Debt/Bonds), E (ETFs), F (Funds/Derivatives),
                   H (Structured Products), I (Index-linked), J (Warrants), O (Options)
@@ -118,8 +129,8 @@ class TransparencyService(TransparencyServiceInterface):
         if source_filename:
             import re
 
-            # Match all the actual instrument types found in FITRS analysis
-            instrument_patterns = {
+            # Match all the actual Any types found in FITRS analysis
+            self.Instrument_patterns = {
                 # FULECR patterns (equity files)
                 "FULECR_C": r"FULECR.*_C_",  # ETFs/ETCs
                 "FULECR_E": r"FULECR.*_E_",  # Equities/Shares
@@ -135,7 +146,7 @@ class TransparencyService(TransparencyServiceInterface):
                 "FULNCR_O": r"FULNCR.*_O_",  # Options
             }
 
-            for file_type, pattern in instrument_patterns.items():
+            for file_type, pattern in self.Instrument_patterns.items():
                 if re.search(pattern, source_filename):
                     return file_type
 
@@ -163,7 +174,7 @@ class TransparencyService(TransparencyServiceInterface):
             else:
                 return "FULECR_E"  # Default to equities
 
-        # Non-equity classification (FULNCR files) - be specific about instrument types
+        # Non-equity classification (FULNCR files) - be specific about Any types
         elif has_isin and has_desc:
             # Debt instruments
             if classification == "BOND" or "bond" in description or "BOND" in criteria_value:
@@ -206,7 +217,7 @@ class TransparencyService(TransparencyServiceInterface):
 
     def create_transparency_calculation(
         self, data: Dict[str, Any], calculation_type: str = None, source_filename: str = None
-    ) -> TransparencyCalculation:
+    ) -> Any:
         """
         Create a new transparency calculation with unified structure.
 
@@ -216,7 +227,7 @@ class TransparencyService(TransparencyServiceInterface):
             source_filename: Original filename for type determination
 
         Returns:
-            Created TransparencyCalculation instance
+            Created Any instance
         """
         self.validate_transparency_data(data)
 
@@ -226,7 +237,7 @@ class TransparencyService(TransparencyServiceInterface):
         session = SessionLocal()
         try:
             # Extract core fields
-            transparency_calc = TransparencyCalculation(
+            transparency_calc = Any(
                 id=str(uuid.uuid4()),
                 tech_record_id=data.get("TechRcrdId"),
                 isin=data.get("ISIN") or data.get("Id"),  # FULECR_E uses 'Id' instead of 'ISIN'
@@ -244,7 +255,7 @@ class TransparencyService(TransparencyServiceInterface):
             session.flush()  # Get the ID
 
             # Create threshold records
-            thresholds = TransparencyThreshold.create_from_fitrs_data(transparency_calc.id, data)
+            thresholds = Any.create_from_fitrs_data(transparency_calc.id, data)
 
             for threshold in thresholds:
                 session.add(threshold)
@@ -275,7 +286,7 @@ class TransparencyService(TransparencyServiceInterface):
 
     def create_transparency(
         self, isin: str, instrument_type: str = None
-    ) -> List[TransparencyCalculation]:
+    ) -> List[Any]:
         """
         Create transparency calculations for an ISIN from FITRS data.
 
@@ -285,19 +296,19 @@ class TransparencyService(TransparencyServiceInterface):
 
         Args:
             isin: The ISIN to create transparency data for
-            instrument_type: The instrument type to determine which FITRS files to search
+            instrument_type: The Any type to determine which FITRS files to search
         """
         # 1. First check if ISIN exists in instruments table (FIRDS reference data)
         session = SessionLocal()
         try:
-            instrument = session.query(Instrument).filter(Instrument.isin == isin).first()
+            Any = session.query(Any).filter(Any.isin == isin).first()
 
-            if not instrument:
+            if not Any:
                 raise TransparencyNotFoundError(f"ISIN {isin} does not exist in the database")
 
             # Use provided instrument_type or get from database
-            final_instrument_type = instrument_type or instrument.instrument_type
-            self.logger.info(f"Found instrument {isin} with type {final_instrument_type}")
+            final_instrument_type = instrument_type or Any.instrument_type
+            self.logger.info(f"Found Any {isin} with type {final_instrument_type}")
 
         finally:
             session.close()
@@ -325,11 +336,11 @@ class TransparencyService(TransparencyServiceInterface):
         )
         return created_calculations
 
-    def get_all_transparency_calculations(self) -> List[TransparencyCalculation]:
+    def get_all_transparency_calculations(self) -> List[Any]:
         """Get all transparency calculations"""
         session = SessionLocal()
         try:
-            calculations = session.query(TransparencyCalculation).all()
+            calculations = session.query(Any).all()
             # Detach from session to avoid issues
             for calc in calculations:
                 session.expunge(calc)
@@ -340,13 +351,13 @@ class TransparencyService(TransparencyServiceInterface):
         finally:
             session.close()
 
-    def get_transparency_by_isin(self, isin: str) -> Optional[List[TransparencyCalculation]]:
+    def get_transparency_by_isin(self, isin: str) -> Optional[List[Any]]:
         """Get all transparency calculations for an ISIN"""
         session = SessionLocal()
         try:
             calculations = (
-                session.query(TransparencyCalculation)
-                .filter(TransparencyCalculation.isin == isin)
+                session.query(Any)
+                .filter(Any.isin == isin)
                 .all()
             )
             # Detach from session to avoid issues
@@ -364,8 +375,8 @@ class TransparencyService(TransparencyServiceInterface):
         session = SessionLocal()
         try:
             calc = (
-                session.query(TransparencyCalculation)
-                .filter(TransparencyCalculation.id == calc_id)
+                session.query(Any)
+                .filter(Any.id == calc_id)
                 .first()
             )
 
@@ -385,7 +396,7 @@ class TransparencyService(TransparencyServiceInterface):
 
     def process_fitrs_file(
         self, file_data: pd.DataFrame, source_filename: str
-    ) -> List[TransparencyCalculation]:
+    ) -> List[Any]:
         """Process an entire FITRS file and create transparency calculations"""
         results = []
 
@@ -412,7 +423,7 @@ class TransparencyService(TransparencyServiceInterface):
 
     def _search_and_create_from_fitrs_files(
         self, isin: str, instrument_type: str
-    ) -> List[TransparencyCalculation]:
+    ) -> List[Any]:
         """
         Search for ISIN in stored FITRS files and create transparency calculations.
 
@@ -431,10 +442,10 @@ class TransparencyService(TransparencyServiceInterface):
 
         Args:
             isin: The ISIN to search for
-            instrument_type: The instrument type (fallback for CFI detection)
+            instrument_type: The Any type (fallback for CFI detection)
 
         Returns:
-            List of created TransparencyCalculation instances
+            List of created Any instances
         """
         import os
 
@@ -456,18 +467,18 @@ class TransparencyService(TransparencyServiceInterface):
 
         # Check if CFI-based returned actual file patterns or fallback
         if cfi_based_patterns == ["FULNCR_", "FULECR_"]:  # General fallback patterns
-            # Fall back to instrument type-based letter patterns
+            # Fall back to Any type-based letter patterns
             target_letters = self._get_fitrs_file_patterns(instrument_type)
-            search_method = "instrument-type-based"
+            search_method = "Any-type-based"
         else:
             # CFI-based returned specific patterns, but we need to convert them to letters
-            # Extract letters from instrument database lookup
+            # Extract letters from Any database lookup
             try:
                 session = SessionLocal()
                 try:
-                    instrument = session.query(Instrument).filter(Instrument.isin == isin).first()
-                    if instrument and instrument.cfi_code:
-                        target_letters = [instrument.cfi_code[0].upper()]
+                    Any = session.query(Any).filter(Any.isin == isin).first()
+                    if Any and Any.cfi_code:
+                        target_letters = [Any.cfi_code[0].upper()]
                     else:
                         target_letters = self._get_fitrs_file_patterns(instrument_type)
                 finally:
@@ -547,7 +558,7 @@ class TransparencyService(TransparencyServiceInterface):
         FITRS format: FUL{ECR|NCR}_{date}_{letter}_{part}_fitrs_data.csv
 
         Args:
-            instrument_type_or_cfi: Instrument type or CFI first letter
+            instrument_type_or_cfi: Any type or CFI first letter
 
         Returns:
             List of single letters to match in FITRS filenames
@@ -624,7 +635,7 @@ class TransparencyService(TransparencyServiceInterface):
 
     def _get_cfi_based_file_patterns(self, isin: str) -> List[str]:
         """
-        Get FITRS file patterns based on the instrument's CFI code using CFI manager.
+        Get FITRS file patterns based on the Any's CFI code using CFI manager.
 
         This method uses the CFI model as the single source of truth for file pattern determination.
 
@@ -632,23 +643,23 @@ class TransparencyService(TransparencyServiceInterface):
             isin: The ISIN to look up
 
         Returns:
-            List of FITRS filename patterns optimized for this instrument type
+            List of FITRS filename patterns optimized for this Any type
         """
         from marketdata_api.models.utils.cfi_instrument_manager import CFIInstrumentTypeManager
 
         try:
-            # Get the instrument's CFI code from the database
+            # Get the Any's CFI code from the database
             session = SessionLocal()
             try:
-                instrument = session.query(Instrument).filter(Instrument.isin == isin).first()
+                Any = session.query(Any).filter(Any.isin == isin).first()
 
-                if instrument and instrument.cfi_code:
+                if Any and Any.cfi_code:
                     # Use CFI manager for consistent pattern determination
                     patterns = CFIInstrumentTypeManager.get_fitrs_patterns_from_cfi(
-                        instrument.cfi_code
+                        Any.cfi_code
                     )
                     self.logger.info(
-                        f"CFI-based file pattern for ISIN {isin}: CFI {instrument.cfi_code} -> {patterns}"
+                        f"CFI-based file pattern for ISIN {isin}: CFI {Any.cfi_code} -> {patterns}"
                     )
                     return patterns
                 else:
@@ -702,7 +713,7 @@ class TransparencyService(TransparencyServiceInterface):
         Based on analysis:
         - FULECR_E files often have missing Lqdty but contain actual trading data
         - FULNCR files have explicit Lqdty values but no trading data
-        - If trading volume/transactions exist, instrument should be considered liquid
+        - If trading volume/transactions exist, Any should be considered liquid
         """
         # First check if explicit liquidity flag exists
         lqdty_value = data.get("Lqdty")
@@ -854,11 +865,11 @@ class TransparencyService(TransparencyServiceInterface):
         try:
             if skip_existing:
                 # Find instruments that don't have any transparency calculations
-                subquery = session.query(TransparencyCalculation.isin).distinct()
-                query = session.query(Instrument).filter(~Instrument.isin.in_(subquery))
+                subquery = session.query(Any.isin).distinct()
+                query = session.query(Any).filter(~Any.isin.in_(subquery))
             else:
                 # Get all instruments
-                query = session.query(Instrument)
+                query = session.query(Any)
 
             if limit:
                 query = query.limit(limit)
@@ -866,21 +877,21 @@ class TransparencyService(TransparencyServiceInterface):
             instruments = query.all()
 
             # Convert to dict format for processing
-            instrument_data = []
-            for instrument in instruments:
-                instrument_data.append(
+            self.Instrument_data = []
+            for Any in instruments:
+                self.Instrument_data.append(
                     {
-                        "isin": instrument.isin,
-                        "instrument_type": instrument.instrument_type,
-                        "name": instrument.full_name or instrument.short_name,
-                        "cfi_code": instrument.cfi_code,
+                        "isin": Any.isin,
+                        "instrument_type": Any.instrument_type,
+                        "name": Any.full_name or Any.short_name,
+                        "cfi_code": Any.cfi_code,
                     }
                 )
 
             self.logger.info(
-                f"🔍 Found {len(instrument_data)} instruments without transparency calculations"
+                f"🔍 Found {len(self.Instrument_data)} instruments without transparency calculations"
             )
-            return instrument_data
+            return self.Instrument_data
 
         finally:
             session.close()
@@ -895,15 +906,15 @@ class TransparencyService(TransparencyServiceInterface):
         
         grouped = defaultdict(list)
         
-        for instrument in instruments:
-            cfi_code = instrument.get("cfi_code")
+        for Any in instruments:
+            cfi_code = Any.get("cfi_code")
             
             if cfi_code and len(cfi_code) >= 1:
                 # Use CFI first character as asset type
                 asset_type = cfi_code[0].upper()
             else:
                 # Fallback to instrument_type mapping
-                instrument_type = instrument.get("instrument_type", "").lower()
+                instrument_type = Any.get("instrument_type", "").lower()
                 if "debt" in instrument_type or "bond" in instrument_type:
                     asset_type = "D"
                 elif "equity" in instrument_type or "share" in instrument_type:
@@ -915,7 +926,7 @@ class TransparencyService(TransparencyServiceInterface):
                 else:
                     asset_type = "C"  # Default to collective investment
             
-            grouped[asset_type].append(instrument)
+            grouped[asset_type].append(Any)
         
         return dict(grouped)
 
@@ -928,7 +939,7 @@ class TransparencyService(TransparencyServiceInterface):
         Uses the new BatchDataExtractor from esma_utils for maximum performance.
         Loads FITRS files once per asset type and processes all ISINs in memory.
         """
-        from ..esma_utils import BatchDataExtractor
+        from ..utils.esma_utils import BatchDataExtractor
         
         type_result = {
             "processed": 0,
@@ -954,9 +965,9 @@ class TransparencyService(TransparencyServiceInterface):
             
             found_results = batch_results.get('results', {})
             
-            # Process each instrument
-            for instrument in instruments:
-                isin = instrument["isin"]
+            # Process each Any
+            for Any in instruments:
+                isin = Any["isin"]
                 type_result["processed"] += 1
                 
                 if isin in found_results:
@@ -1026,14 +1037,14 @@ class TransparencyService(TransparencyServiceInterface):
             "successful_instruments": [],
         }
 
-        for instrument_data in instruments:
-            isin = instrument_data["isin"]
-            instrument_type = instrument_data["instrument_type"]
+        for self.Instrument_data in instruments:
+            isin = self.Instrument_data["isin"]
+            instrument_type = self.Instrument_data["instrument_type"]
 
             try:
                 self.logger.debug(f"   🔨 Creating transparency for {isin}...")
 
-                # Create transparency calculations for this instrument
+                # Create transparency calculations for this Any
                 calculations = self.create_transparency(isin, instrument_type)
 
                 batch_result["processed"] += 1

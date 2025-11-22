@@ -99,9 +99,9 @@ def create_transparency_resources(api, models):
                     # Get total count
                     total = query.count()
 
-                    # Apply pagination
+                    # Apply pagination with ORDER BY for SQL Server compatibility
                     offset = (page - 1) * per_page
-                    calculations = query.offset(offset).limit(per_page).all()
+                    calculations = query.order_by(TransparencyCalculation.id).offset(offset).limit(per_page).all()
 
                     # Use rich transparency response builder like CLI
                     from ..utils.transparency_utils import build_transparency_response

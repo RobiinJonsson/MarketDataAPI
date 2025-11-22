@@ -53,7 +53,7 @@ def create_file_resources(api, models):
         def get(self):
             """Get all files organized by type with optional filters"""
             try:
-                from ...services.file_management_service import FileManagementService
+                from ...services.utils.file_management_service import FileManagementService
 
                 file_type = request.args.get("type")
                 extension = request.args.get("extension")
@@ -139,7 +139,7 @@ def create_file_resources(api, models):
         def get(self):
             """Get available ESMA files from the registry"""
             try:
-                from ...services.file_management_service import FileManagementService
+                from ...services.utils.file_management_service import FileManagementService
 
                 # Extract query parameters
                 datasets = request.args.getlist('datasets') or ["firds", "fitrs"]
@@ -196,7 +196,7 @@ def create_file_resources(api, models):
         def post(self):
             """Download and parse ESMA files"""
             try:
-                from ...services.file_management_service import FileManagementService
+                from ...services.utils.file_management_service import FileManagementService
 
                 data = request.get_json()
                 if not data or not data.get("files"):
@@ -242,7 +242,7 @@ def create_file_resources(api, models):
         def get(self):
             """Get detailed file statistics with filtering"""
             try:
-                from ...services.file_management_service import FileManagementService
+                from ...services.utils.file_management_service import FileManagementService
 
                 file_type = request.args.get("type")
                 extension = request.args.get("extension")
@@ -279,7 +279,7 @@ def create_file_resources(api, models):
         def get(self):
             """Get storage statistics"""
             try:
-                from ...services.file_management_service import FileManagementService
+                from ...services.utils.file_management_service import FileManagementService
 
                 service = FileManagementService()
                 raw_stats = service.get_storage_stats()
@@ -343,7 +343,7 @@ def create_file_resources(api, models):
         def delete(self):
             """Delete files based on criteria"""
             try:
-                from ...services.file_management_service import FileManagementService
+                from ...services.utils.file_management_service import FileManagementService
 
                 # Get query parameters for deletion criteria
                 file_type = request.args.get("type")
@@ -387,7 +387,7 @@ def create_file_resources(api, models):
         def get(self):
             """Get file summary information"""
             try:
-                from ...services.file_management_service import FileManagementService
+                from ...services.utils.file_management_service import FileManagementService
 
                 service = FileManagementService()
                 result = service.get_file_summary()
@@ -419,7 +419,7 @@ def create_file_resources(api, models):
         def post(self):
             """Download files by specified criteria"""
             try:
-                from ...services.file_management_service import FileManagementService
+                from ...services.utils.file_management_service import FileManagementService
 
                 data = request.get_json()
                 if not data:
@@ -454,7 +454,7 @@ def create_file_resources(api, models):
         def post(self):
             """Auto cleanup old files based on retention policies"""
             try:
-                from ...services.file_management_service import FileManagementService
+                from ...services.utils.file_management_service import FileManagementService
 
                 data = request.get_json() or {}
                 dry_run = data.get("dry_run", True)

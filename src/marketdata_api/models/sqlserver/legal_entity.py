@@ -36,7 +36,7 @@ class SqlServerLegalEntity(SqlServerBase):
     legal_form = Column(String(255), nullable=False)
     registered_as = Column(String(255), nullable=False)
     status = Column(String(20), nullable=False)
-    bic = Column(String(255))  # Multiple BIC codes separated by commas
+    bic = Column(String(1000))  # Multiple BIC codes separated by commas - increased size
     next_renewal_date = Column(DateTime)
     registration_status = Column(String(20), nullable=False)
     managing_lou = Column(String(20), nullable=False)

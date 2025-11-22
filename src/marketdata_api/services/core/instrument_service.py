@@ -1,4 +1,4 @@
-﻿"""
+"""
 Unified Instrument Service Implementation
 
 This service implements the document-based approach for ALL FIRDS instrument types:
@@ -60,7 +60,7 @@ class InstrumentNotFoundError(InstrumentServiceError):
     pass
 
 
-class SqliteInstrumentService(InstrumentServiceInterface):
+class InstrumentService(InstrumentServiceInterface):
     """Unified instrument service using document-based approach."""
 
     def __init__(self):
@@ -125,7 +125,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             # Check for existing and delete if present (with transaction optimization)
             existing = session.query(self.Instrument).filter(self.Instrument.isin == identifier).first()
             if existing:
-                self.logger.info(f"ðŸ—‘ï¸  Deleting existing instrument {identifier}")
+                self.logger.info(f"🗑️  Deleting existing instrument {identifier}")
                 # Delete related venues first to avoid constraint issues
                 session.query(self.TradingVenue).filter(
                     self.TradingVenue.instrument_id == existing.id
@@ -146,26 +146,26 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             # Create venue records for ALL venues
             venue_creation_start = time.time()
             venue_records = []
-            self.logger.info(f"ðŸ¢ Creating {len(all_venue_records)} venue records...")
+            self.logger.info(f"🏢 Creating {len(all_venue_records)} venue records...")
 
             for i, venue_data in enumerate(all_venue_records, 1):
                 venue_record = self._create_venue_record(instrument.id, venue_data)
                 venue_records.append(venue_record)
                 session.add(venue_record)
                 if i % 10 == 0:  # Log progress every 10 venues
-                    self.logger.debug(f"  ðŸ“ Created {i}/{len(all_venue_records)} venues...")
+                    self.logger.debug(f"  📍 Created {i}/{len(all_venue_records)} venues...")
 
             venue_creation_elapsed = time.time() - venue_creation_start
             self.logger.info(
-                f"âœ… Created {len(venue_records)} venue records in {venue_creation_elapsed:.1f}s"
+                f"✅ Created {len(venue_records)} venue records in {venue_creation_elapsed:.1f}s"
             )
 
             # Commit all changes
             commit_start = time.time()
-            self.logger.info("ðŸ’¾ Committing to database...")
+            self.logger.info("💾 Committing to database...")
             session.commit()
             commit_elapsed = time.time() - commit_start
-            self.logger.info(f"âœ… Database commit completed in {commit_elapsed:.1f}s")
+            self.logger.info(f"✅ Database commit completed in {commit_elapsed:.1f}s")
 
             self.logger.info(
                 f"Created {business_instrument_type} instrument {identifier} with {len(venue_records)} venue records"
@@ -238,7 +238,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
         try:
             from pathlib import Path
 
-            self.logger.info(f"ðŸ” Starting FIRDS search for {identifier}")
+            self.logger.info(f"🔍 Starting FIRDS search for {identifier}")
             search_start = time.time()
 
             # If preferred type is provided, try it first
@@ -254,37 +254,37 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                 if preferred_type in business_to_firds:
                     firds_type = business_to_firds[preferred_type]
                     self.logger.info(
-                        f"ðŸŽ¯ Trying CFI-validated type: {preferred_type} â†’ FIRDS {firds_type}"
+                        f"🎯 Trying CFI-validated type: {preferred_type} → FIRDS {firds_type}"
                     )
                     records = self._search_firds_files_for_type(identifier, firds_type)
                     if records:
                         elapsed = time.time() - search_start
-                        self.logger.info(f"âœ… Found in CFI type {firds_type} in {elapsed:.1f}s")
+                        self.logger.info(f"✅ Found in CFI type {firds_type} in {elapsed:.1f}s")
                         return records, firds_type
                     else:
                         elapsed = time.time() - search_start
                         self.logger.warning(
-                            f"âŒ {identifier} not found in CFI-validated type {firds_type} ({elapsed:.1f}s)"
+                            f"❌ {identifier} not found in CFI-validated type {firds_type} ({elapsed:.1f}s)"
                         )
                         self.logger.info(
-                            f"ðŸš« Stopping search - CFI type {firds_type} is definitive for business type '{preferred_type}'"
+                            f"🚫 Stopping search - CFI type {firds_type} is definitive for business type '{preferred_type}'"
                         )
                         return None, None
                 elif preferred_type in {"E", "D", "F", "C"}:  # Legacy direct FIRDS types
                     firds_type = preferred_type
-                    self.logger.info(f"ðŸŽ¯ Trying legacy FIRDS type: {firds_type}")
+                    self.logger.info(f"🎯 Trying legacy FIRDS type: {firds_type}")
                     records = self._search_firds_files_for_type(identifier, firds_type)
                     if records:
                         elapsed = time.time() - search_start
-                        self.logger.info(f"âœ… Found in legacy type {firds_type} in {elapsed:.1f}s")
+                        self.logger.info(f"✅ Found in legacy type {firds_type} in {elapsed:.1f}s")
                         return records, firds_type
                     else:
                         self.logger.info(
-                            f"âŒ Not found in legacy type {firds_type}, will try all types"
+                            f"❌ Not found in legacy type {firds_type}, will try all types"
                         )
                 else:
                     self.logger.warning(
-                        f"âŒ Unknown business type '{preferred_type}' - not in CFI mapping"
+                        f"❌ Unknown business type '{preferred_type}' - not in CFI mapping"
                     )
 
             # Only search all types if no preferred type was given OR it was a legacy/unknown type
@@ -292,13 +292,13 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                 # Use CFI manager to get all valid FIRDS types
                 types_to_search = list(CFIInstrumentTypeManager.FIRDS_TO_CFI_MAPPING.keys())
                 self.logger.info(
-                    f"ðŸ”„ Fallback: Searching {len(types_to_search)} FIRDS types: {types_to_search}"
+                    f"🔄 Fallback: Searching {len(types_to_search)} FIRDS types: {types_to_search}"
                 )
 
                 for i, firds_type in enumerate(types_to_search, 1):
                     type_start = time.time()
                     self.logger.debug(
-                        f"  ðŸ“‚ [{i}/{len(types_to_search)}] Searching type {firds_type}..."
+                        f"  📂 [{i}/{len(types_to_search)}] Searching type {firds_type}..."
                     )
                     records = self._search_firds_files_for_type(identifier, firds_type)
                     type_elapsed = time.time() - type_start
@@ -306,22 +306,22 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                     if records:
                         total_elapsed = time.time() - search_start
                         self.logger.info(
-                            f"âœ… Found {identifier} in FIRDS type {firds_type} (searched {i} types, {total_elapsed:.1f}s total)"
+                            f"✅ Found {identifier} in FIRDS type {firds_type} (searched {i} types, {total_elapsed:.1f}s total)"
                         )
                         return records, firds_type
                     else:
                         self.logger.debug(
-                            f"  âŒ Not found in type {firds_type} ({type_elapsed:.1f}s)"
+                            f"  ❌ Not found in type {firds_type} ({type_elapsed:.1f}s)"
                         )
 
             total_elapsed = time.time() - search_start
             self.logger.warning(
-                f"âŒ {identifier} not found in any FIRDS files after {total_elapsed:.1f}s"
+                f"❌ {identifier} not found in any FIRDS files after {total_elapsed:.1f}s"
             )
             return None, None
 
         except Exception as e:
-            self.logger.error(f"ðŸ’¥ Error fetching FIRDS data from storage: {str(e)}")
+            self.logger.error(f"💥 Error fetching FIRDS data from storage: {str(e)}")
             return None, None
 
     def _search_firds_files_for_type(
@@ -337,7 +337,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
 
             firds_path = Path(esmaConfig.firds_path)
             if not firds_path.exists():
-                self.logger.error(f"âŒ FIRDS storage path does not exist: {firds_path}")
+                self.logger.error(f"❌ FIRDS storage path does not exist: {firds_path}")
                 return None
 
             # Find files matching the pattern for this FIRDS type
@@ -346,11 +346,11 @@ class SqliteInstrumentService(InstrumentServiceInterface):
 
             if not matching_files:
                 self.logger.debug(
-                    f"    ðŸ“ No {firds_type} files found matching pattern: {file_pattern}"
+                    f"    📁 No {firds_type} files found matching pattern: {file_pattern}"
                 )
                 return None
 
-            self.logger.debug(f"    ðŸ“ Found {len(matching_files)} files for type {firds_type}")
+            self.logger.debug(f"    📁 Found {len(matching_files)} files for type {firds_type}")
 
             # Search through files for the identifier (newest files first for better cache hit)
             matching_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
@@ -359,7 +359,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                 try:
                     file_start = time.time()
                     self.logger.debug(
-                        f"      ðŸ“„ [{file_idx}/{len(matching_files)}] Reading {file_path.name}..."
+                        f"      📄 [{file_idx}/{len(matching_files)}] Reading {file_path.name}..."
                     )
 
                     # Read with optimizations
@@ -384,7 +384,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                         if not isin_data.empty:
                             total_time = time.time() - search_start
                             self.logger.info(
-                                f"      âœ… Found {len(isin_data)} records in {file_path.name} (read: {file_read_time:.1f}s, search: {search_time:.1f}s, total: {total_time:.1f}s)"
+                                f"      ✅ Found {len(isin_data)} records in {file_path.name} (read: {file_read_time:.1f}s, search: {search_time:.1f}s, total: {total_time:.1f}s)"
                             )
 
                             # Return ALL records for this ISIN, handling NaN values efficiently
@@ -392,23 +392,23 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                             return all_records
                         else:
                             self.logger.debug(
-                                f"      âŒ Not in {file_path.name} ({len(df)} total records, read: {file_read_time:.1f}s, search: {search_time:.1f}s)"
+                                f"      ❌ Not in {file_path.name} ({len(df)} total records, read: {file_read_time:.1f}s, search: {search_time:.1f}s)"
                             )
                     else:
-                        self.logger.warning(f"      âš ï¸  Invalid file structure in {file_path.name}")
+                        self.logger.warning(f"      ⚠️  Invalid file structure in {file_path.name}")
 
                 except Exception as e:
-                    self.logger.warning(f"      ðŸ’¥ Error reading file {file_path}: {str(e)}")
+                    self.logger.warning(f"      💥 Error reading file {file_path}: {str(e)}")
                     continue
 
             total_search_time = time.time() - search_start
             self.logger.debug(
-                f"    âŒ Not found in any {firds_type} files ({total_search_time:.1f}s)"
+                f"    ❌ Not found in any {firds_type} files ({total_search_time:.1f}s)"
             )
             return None
 
         except Exception as e:
-            self.logger.error(f"ðŸ’¥ Error searching FIRDS files for type {firds_type}: {str(e)}")
+            self.logger.error(f"💥 Error searching FIRDS files for type {firds_type}: {str(e)}")
             return None
 
     def get_instrument_venues(
@@ -1036,7 +1036,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
 
     def _enrich_figi(self, session: Session, instrument) -> None:
         """Helper method to handle FIGI enrichment with enhanced OpenFIGI service and multiple FIGI support."""
-        from ...services.openfigi import map_figi_data
+        from ...services.utils.openfigi import map_figi_data
 
         self.logger.debug(f"Starting FIGI enrichment for {instrument.isin}")
 
@@ -1049,7 +1049,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
 
         # Use the new enhanced OpenFIGI service
         try:
-            from ..openfigi import OpenFIGIService
+            from ..utils.openfigi import OpenFIGIService
 
             openfigi_service = OpenFIGIService()
 
@@ -1271,7 +1271,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             Dict with statistics: {"processed": int, "mapped": int, "failed": int, "total": int}
         """
         # FigiMapping already available as self.FigiMapping from constructor
-        from ..openfigi import OpenFIGIService, map_figi_data
+        from ..utils.openfigi import OpenFIGIService, map_figi_data
         
         processed = 0
         mapped = 0
@@ -1315,7 +1315,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                         if failed_date > cutoff_date:
                             # Failed recently, skip this instrument
                             skipped_count += 1
-                            self.logger.debug(f"â­ï¸ Skipping {instrument.isin} - FIGI failed recently on {figi_failed_date}")
+                            self.logger.debug(f"⏭️ Skipping {instrument.isin} - FIGI failed recently on {figi_failed_date}")
                             continue
                     except (ValueError, TypeError):
                         # Invalid date format, treat as eligible for retry
@@ -1326,7 +1326,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                 if len(instruments) >= batch_size:
                     break  # We have enough instruments
             
-            self.logger.info(f"ðŸ” Filtered {skipped_count} recently failed instruments from {len(all_instruments)} candidates")
+            self.logger.info(f"🔍 Filtered {skipped_count} recently failed instruments from {len(all_instruments)} candidates")
             
             total_found = len(instruments)
             
@@ -1497,14 +1497,14 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                     # Return the operating MIC for better OpenFIGI results
                     operating_mic = mic_record.operating_mic
                     if operating_mic and operating_mic != mic_code:
-                        self.logger.debug(f"ðŸ”„ Converting segment MIC {mic_code} to operating MIC {operating_mic} for FIGI search")
+                        self.logger.debug(f"🔄 Converting segment MIC {mic_code} to operating MIC {operating_mic} for FIGI search")
                         return operating_mic
                     else:
-                        self.logger.debug(f"âœ… Using operating MIC {mic_code} for FIGI search")
+                        self.logger.debug(f"✅ Using operating MIC {mic_code} for FIGI search")
                         return mic_code
                 else:
                     # MIC not found in database, use as-is but log warning
-                    self.logger.warning(f"âš ï¸ MIC {mic_code} not found in database, using as-is for FIGI search")
+                    self.logger.warning(f"⚠️ MIC {mic_code} not found in database, using as-is for FIGI search")
                     return mic_code
             
             # Default to empty string (will trigger broad FIGI search)
@@ -1660,7 +1660,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
         }
 
         try:
-            self.logger.info(f"ðŸš€ Starting bulk instrument creation")
+            self.logger.info(f"🚀 Starting bulk instrument creation")
             self.logger.info(f"   Competent Authority filter: {competent_authority}")
             self.logger.info(f"   Instrument type: {instrument_type}")
             self.logger.info(f"   Limit: {limit or 'No limit'}")
@@ -1674,17 +1674,17 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             )
 
             if not isins_to_process:
-                self.logger.warning(f"âŒ No instruments found matching filters")
+                self.logger.warning(f"❌ No instruments found matching filters")
                 return results
 
             results["total_found"] = len(isins_to_process)
-            self.logger.info(f"ðŸ“Š Found {len(isins_to_process)} instruments matching filters")
+            self.logger.info(f"📊 Found {len(isins_to_process)} instruments matching filters")
 
             # Filter out existing instruments if requested
             if skip_existing:
                 isins_to_process = self._filter_existing_instruments(isins_to_process)
                 self.logger.info(
-                    f"ðŸ“Š After filtering existing: {len(isins_to_process)} instruments to create"
+                    f"📊 After filtering existing: {len(isins_to_process)} instruments to create"
                 )
 
             # Process in batches for better performance and error handling
@@ -1697,7 +1697,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
 
                 batch_start_time = time.time()
                 self.logger.info(
-                    f"ðŸ”„ Processing batch {batch_idx + 1}/{total_batches} ({len(batch_isins)} instruments)"
+                    f"🔄 Processing batch {batch_idx + 1}/{total_batches} ({len(batch_isins)} instruments)"
                 )
 
                 batch_result = self._process_instrument_batch(
@@ -1715,20 +1715,20 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                 results["batch_results"].append(batch_result)
 
                 self.logger.info(
-                    f"âœ… Batch {batch_idx + 1} completed: {batch_result['created']} created, {batch_result['failed']} failed ({batch_elapsed:.1f}s)"
+                    f"✅ Batch {batch_idx + 1} completed: {batch_result['created']} created, {batch_result['failed']} failed ({batch_elapsed:.1f}s)"
                 )
 
                 # Progress update
                 total_processed = results["total_created"] + results["total_failed"]
                 progress_pct = (total_processed / len(isins_to_process)) * 100
                 self.logger.info(
-                    f"ðŸ“ˆ Overall progress: {total_processed}/{len(isins_to_process)} ({progress_pct:.1f}%)"
+                    f"📈 Overall progress: {total_processed}/{len(isins_to_process)} ({progress_pct:.1f}%)"
                 )
 
             results["elapsed_time"] = time.time() - start_time
 
             # Final summary
-            self.logger.info(f"ðŸŽ‰ Bulk creation completed!")
+            self.logger.info(f"🎉 Bulk creation completed!")
             self.logger.info(f"   Total found: {results['total_found']}")
             self.logger.info(f"   Total created: {results['total_created']}")
             self.logger.info(f"   Total failed: {results['total_failed']}")
@@ -1742,7 +1742,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
 
         except Exception as e:
             results["elapsed_time"] = time.time() - start_time
-            self.logger.error(f"ðŸ’¥ Bulk creation failed: {str(e)}")
+            self.logger.error(f"💥 Bulk creation failed: {str(e)}")
             raise InstrumentServiceError(f"Bulk creation failed: {str(e)}") from e
 
     def _get_filtered_isins_from_firds(
@@ -1755,7 +1755,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             import pandas as pd
 
             self.logger.info(
-                f"ðŸ” Scanning FIRDS files for {jurisdiction} {instrument_type} instruments..."
+                f"🔍 Scanning FIRDS files for {jurisdiction} {instrument_type} instruments..."
             )
 
             firds_path = Path(esmaConfig.firds_path)
@@ -1771,17 +1771,17 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                     business_to_firds[business_type] = firds_letter
 
             firds_type = business_to_firds.get(instrument_type, "E")
-            self.logger.info(f"ðŸŽ¯ Mapped {instrument_type} â†’ FIRDS type {firds_type}")
+            self.logger.info(f"🎯 Mapped {instrument_type} → FIRDS type {firds_type}")
 
             # Find matching files
             file_pattern = f"*FULINS_{firds_type}*_firds_data.csv"
             matching_files = list(firds_path.glob(file_pattern))
 
             if not matching_files:
-                self.logger.warning(f"âŒ No FIRDS files found for type {firds_type}")
+                self.logger.warning(f"❌ No FIRDS files found for type {firds_type}")
                 return []
 
-            self.logger.info(f"ðŸ“ Found {len(matching_files)} FIRDS files for type {firds_type}")
+            self.logger.info(f"📁 Found {len(matching_files)} FIRDS files for type {firds_type}")
 
             # Collect ISINs from all files
             all_isins = set()
@@ -1789,7 +1789,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             for file_idx, file_path in enumerate(matching_files, 1):
                 try:
                     self.logger.info(
-                        f"ðŸ“„ [{file_idx}/{len(matching_files)}] Processing {file_path.name}..."
+                        f"📄 [{file_idx}/{len(matching_files)}] Processing {file_path.name}..."
                     )
 
                     # Read with jurisdiction filter
@@ -1805,7 +1805,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                         if jurisdiction.upper() == "ALL":
                             # Include all jurisdictions for full type import
                             jurisdiction_filtered = df
-                            self.logger.debug(f"   ðŸŒ Including all jurisdictions from {file_path.name}")
+                            self.logger.debug(f"   🌍 Including all jurisdictions from {file_path.name}")
                         else:
                             jurisdiction_filtered = df[
                                 df["TechAttrbts_RlvntCmptntAuthrty"] == jurisdiction
@@ -1816,18 +1816,18 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                             all_isins.update(file_isins)
                             if jurisdiction.upper() == "ALL":
                                 self.logger.info(
-                                    f"   âœ… Found {len(file_isins)} ISINs (all jurisdictions) in {file_path.name}"
+                                    f"   ✅ Found {len(file_isins)} ISINs (all jurisdictions) in {file_path.name}"
                                 )
                             else:
                                 self.logger.info(
-                                    f"   âœ… Found {len(file_isins)} {jurisdiction} ISINs in {file_path.name}"
+                                    f"   ✅ Found {len(file_isins)} {jurisdiction} ISINs in {file_path.name}"
                                 )
                         else:
                             if jurisdiction.upper() != "ALL":
-                                self.logger.debug(f"   âšª No {jurisdiction} ISINs in {file_path.name}")
+                                self.logger.debug(f"   ⚪ No {jurisdiction} ISINs in {file_path.name}")
 
                 except Exception as e:
-                    self.logger.warning(f"   ðŸ’¥ Error processing {file_path.name}: {str(e)}")
+                    self.logger.warning(f"   💥 Error processing {file_path.name}: {str(e)}")
                     continue
 
             isin_list = list(all_isins)
@@ -1836,14 +1836,14 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             if limit and len(isin_list) > limit:
                 isin_list = isin_list[:limit]
                 self.logger.info(
-                    f"ðŸ”¢ Applied limit: {limit} ISINs selected from {len(all_isins)} total"
+                    f"🔢 Applied limit: {limit} ISINs selected from {len(all_isins)} total"
                 )
 
-            self.logger.info(f"âœ… Collection complete: {len(isin_list)} ISINs ready for processing")
+            self.logger.info(f"✅ Collection complete: {len(isin_list)} ISINs ready for processing")
             return isin_list
 
         except Exception as e:
-            self.logger.error(f"ðŸ’¥ Error collecting ISINs from FIRDS: {str(e)}")
+            self.logger.error(f"💥 Error collecting ISINs from FIRDS: {str(e)}")
             raise
 
     def _filter_existing_instruments(self, isins: List[str]) -> List[str]:
@@ -1865,7 +1865,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
 
                 filtered_isins = [isin for isin in isins if isin not in existing_isins]
 
-                self.logger.info(f"ðŸ” Filtering existing instruments:")
+                self.logger.info(f"🔍 Filtering existing instruments:")
                 self.logger.info(f"   Total ISINs: {len(isins)}")
                 self.logger.info(f"   Already exist: {len(existing_isins)}")
                 self.logger.info(f"   To create: {len(filtered_isins)}")
@@ -1876,7 +1876,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                 session.close()
 
         except Exception as e:
-            self.logger.error(f"ðŸ’¥ Error filtering existing instruments: {str(e)}")
+            self.logger.error(f"💥 Error filtering existing instruments: {str(e)}")
             return isins  # Return all if filtering fails
 
     def _process_instrument_batch(
@@ -1894,25 +1894,25 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             # Use individual processing with enrichment (slower but complete)
             for isin in isins:
                 try:
-                    self.logger.debug(f"   ðŸ”¨ Creating {isin} with enrichment...")
+                    self.logger.debug(f"   🔨 Creating {isin} with enrichment...")
                     instrument = self.create_instrument(isin, instrument_type)
 
                     if instrument:
                         batch_result["created"] += 1
                         batch_result["created_instruments"].append(isin)
-                        self.logger.debug(f"   âœ… Created {isin}")
+                        self.logger.debug(f"   ✅ Created {isin}")
                     else:
                         batch_result["failed"] += 1
                         batch_result["failed_instruments"].append(
                             {"isin": isin, "error": "Creation returned None"}
                         )
-                        self.logger.warning(f"   âŒ Failed to create {isin}: No instrument returned")
+                        self.logger.warning(f"   ❌ Failed to create {isin}: No instrument returned")
 
                 except Exception as e:
                     batch_result["failed"] += 1
                     error_msg = str(e)
                     batch_result["failed_instruments"].append({"isin": isin, "error": error_msg})
-                    self.logger.warning(f"   âŒ Failed to create {isin}: {error_msg}")
+                    self.logger.warning(f"   ❌ Failed to create {isin}: {error_msg}")
         else:
             # Use bulk processing without enrichment (much faster)
             try:
@@ -1921,9 +1921,9 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                 batch_result["failed"] = bulk_result["failed"] 
                 batch_result["created_instruments"] = bulk_result["created_instruments"]
                 batch_result["failed_instruments"] = bulk_result["failed_instruments"]
-                self.logger.info(f"   ðŸš€ Bulk created {bulk_result['created']} instruments (fast mode)")
+                self.logger.info(f"   🚀 Bulk created {bulk_result['created']} instruments (fast mode)")
             except Exception as e:
-                self.logger.error(f"   âŒ Bulk creation failed: {str(e)}")
+                self.logger.error(f"   ❌ Bulk creation failed: {str(e)}")
                 # Fallback to individual processing
                 for isin in isins:
                     try:
@@ -1964,11 +1964,11 @@ class SqliteInstrumentService(InstrumentServiceInterface):
         
         try:
             # Step 1: Load FIRDS data for all ISINs in batch
-            self.logger.debug(f"ðŸ” Loading FIRDS data for {len(isins)} ISINs...")
+            self.logger.debug(f"🔍 Loading FIRDS data for {len(isins)} ISINs...")
             firds_data_map = self._load_firds_data_bulk(isins, instrument_type)
             
             if not firds_data_map:
-                self.logger.warning("âŒ No FIRDS data found for any ISINs")
+                self.logger.warning("❌ No FIRDS data found for any ISINs")
                 result["failed"] = len(isins)
                 result["failed_instruments"] = [{"isin": isin, "error": "No FIRDS data found"} for isin in isins]
                 return result
@@ -2017,7 +2017,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             
             # Step 3: Bulk insert using SQLAlchemy
             if insert_data:
-                self.logger.debug(f"ðŸ’¾ Bulk inserting {len(insert_data)} instruments...")
+                self.logger.debug(f"💾 Bulk inserting {len(insert_data)} instruments...")
                 
                 # Use bulk insert for maximum performance
                 if self.database_type == 'sqlite':
@@ -2039,12 +2039,12 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                 result["created"] = created_count
                 result["failed"] = len(isins) - created_count
                 
-                self.logger.info(f"ðŸš€ Bulk inserted {created_count} instruments successfully")
+                self.logger.info(f"🚀 Bulk inserted {created_count} instruments successfully")
             
             return result
             
         except Exception as e:
-            self.logger.error(f"âŒ Bulk fast creation failed: {str(e)}")
+            self.logger.error(f"❌ Bulk fast creation failed: {str(e)}")
             raise
 
     def _load_firds_data_bulk(self, isins: List[str], instrument_type: str) -> Dict[str, Dict]:
@@ -2059,16 +2059,16 @@ class SqliteInstrumentService(InstrumentServiceInterface):
         
         try:
             # Get FIRDS file pattern for instrument type
-            from ...services.esma_utils import BatchDataExtractor
+            from ...services.utils.esma_utils import BatchDataExtractor
             from ...models.utils.cfi_instrument_manager import get_firds_letter_for_type
             
             firds_letter = get_firds_letter_for_type(instrument_type)
             if not firds_letter:
-                self.logger.warning(f"âŒ No FIRDS letter mapping for type: {instrument_type}")
+                self.logger.warning(f"❌ No FIRDS letter mapping for type: {instrument_type}")
                 return {}
             
             # Use BatchDataExtractor for efficient consolidated data loading
-            self.logger.debug(f"ðŸ“ Loading consolidated FIRDS data for type '{instrument_type}' (letter: {firds_letter})")
+            self.logger.debug(f"📁 Loading consolidated FIRDS data for type '{instrument_type}' (letter: {firds_letter})")
             
             # Get consolidated DataFrame for the asset type
             df = BatchDataExtractor.get_firds_consolidated_dataframe(
@@ -2078,10 +2078,10 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             )
             
             if df is None or df.empty:
-                self.logger.warning(f"âŒ No consolidated FIRDS data found for asset type: {firds_letter}")
+                self.logger.warning(f"❌ No consolidated FIRDS data found for asset type: {firds_letter}")
                 return {}
             
-            self.logger.debug(f"ï¿½ Loaded consolidated DataFrame with {len(df)} total records")
+            self.logger.debug(f"� Loaded consolidated DataFrame with {len(df)} total records")
             
             # Filter to only ISINs we need
             isin_set = set(isins)  # For fast lookup
@@ -2112,15 +2112,15 @@ class SqliteInstrumentService(InstrumentServiceInterface):
                     
                     firds_data_map[isin] = standardized_record
                 
-                self.logger.debug(f"ðŸ“Š Found {len(matching_records)} matching ISINs from consolidated data")
+                self.logger.debug(f"📊 Found {len(matching_records)} matching ISINs from consolidated data")
             else:
-                self.logger.warning(f"âŒ Id column not found in consolidated DataFrame")
+                self.logger.warning(f"❌ Id column not found in consolidated DataFrame")
             
-            self.logger.info(f"ðŸ“ˆ Loaded FIRDS data for {len(firds_data_map)}/{len(isins)} ISINs")
+            self.logger.info(f"📈 Loaded FIRDS data for {len(firds_data_map)}/{len(isins)} ISINs")
             return firds_data_map
             
         except Exception as e:
-            self.logger.error(f"âŒ Failed to load FIRDS data in bulk: {str(e)}")
+            self.logger.error(f"❌ Failed to load FIRDS data in bulk: {str(e)}")
             return {}
 
     def create_instrument_minimal(self, isin: str, instrument_type: str = None):
@@ -2231,7 +2231,7 @@ class SqliteInstrumentService(InstrumentServiceInterface):
             # Update the timestamp
             instrument.updated_at = datetime.utcnow()
             
-            self.logger.info(f"ðŸ”´ Marked {instrument.isin} as FIGI failed on {failure_date}")
+            self.logger.info(f"🔴 Marked {instrument.isin} as FIGI failed on {failure_date}")
             
         except Exception as e:
             self.logger.error(f"Failed to mark FIGI failure for {instrument.isin}: {str(e)}")

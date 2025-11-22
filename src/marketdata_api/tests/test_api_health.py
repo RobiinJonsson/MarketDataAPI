@@ -144,16 +144,16 @@ class TestServiceHealthChecks:
             pytest.fail(f"Database connection failed: {e}")
 
     @pytest.mark.integration
-    @patch("marketdata_api.services.sqlite.instrument_service.get_session")
+    @patch("marketdata_api.database.session.get_session")
     def test_instrument_service_health(self, mock_get_session):
         """Test instrument service basic operations."""
-        from marketdata_api.services.sqlite.instrument_service import SqliteInstrumentService
+        from marketdata_api.services.core.instrument_service import InstrumentService
 
         # Mock session
         mock_session = Mock()
         mock_get_session.return_value.__enter__.return_value = mock_session
 
-        service = SqliteInstrumentService()
+        service = InstrumentService()
 
         # Test service can be instantiated and has expected methods
         assert hasattr(service, "get_instrument")
@@ -161,10 +161,10 @@ class TestServiceHealthChecks:
         assert hasattr(service, "search_instruments")
 
     @pytest.mark.integration
-    @patch("marketdata_api.services.sqlite.legal_entity_service.get_session")
+    @patch("marketdata_api.database.session.get_session")
     def test_legal_entity_service_health(self, mock_get_session):
         """Test legal entity service basic operations."""
-        from marketdata_api.services.sqlite.legal_entity_service import LegalEntityService
+        from marketdata_api.services.core.legal_entity_service import LegalEntityService
 
         # Mock session
         mock_session = Mock()
@@ -179,7 +179,7 @@ class TestServiceHealthChecks:
     @pytest.mark.integration
     def test_file_management_service_health(self):
         """Test file management service basic operations."""
-        from marketdata_api.services.file_management_service import FileManagementService
+        from marketdata_api.services.utils.file_management_service import FileManagementService
 
         service = FileManagementService()
 
@@ -191,7 +191,7 @@ class TestServiceHealthChecks:
     @pytest.mark.unit
     def test_esma_data_loader_service_health(self):
         """Test ESMA data loader service basic operations."""
-        from marketdata_api.services.esma_data_loader import EsmaDataLoader
+        from marketdata_api.services.utils.esma_data_loader import EsmaDataLoader
 
         loader = EsmaDataLoader()
 
@@ -206,7 +206,7 @@ class TestServiceHealthChecks:
         # Mock session required for MICDataLoader
         from unittest.mock import Mock
 
-        from marketdata_api.services.mic_data_loader import MICDataLoader
+        from marketdata_api.services.utils.mic_data_loader import MICDataLoader
 
         mock_session = Mock()
         loader = MICDataLoader(mock_session)
@@ -218,7 +218,7 @@ class TestServiceHealthChecks:
     @pytest.mark.unit
     def test_gleif_service_health(self):
         """Test GLEIF service basic operations."""
-        from marketdata_api.services.gleif import GLEIFService
+        from marketdata_api.services.utils.gleif import GLEIFService
 
         service = GLEIFService()
 
@@ -232,7 +232,7 @@ class TestServiceHealthChecks:
     def test_openfigi_service_health(self):
         """Test OpenFIGI service basic operations."""
         try:
-            from marketdata_api.services.openfigi import OpenFIGIService
+            from marketdata_api.services.utils.openfigi import OpenFIGIService
 
             service = OpenFIGIService()
 
@@ -247,10 +247,10 @@ class TestServiceIntegration:
     """Test service integration with real data."""
 
     @pytest.mark.integration
-    @patch("marketdata_api.services.sqlite.instrument_service.get_session")
+    @patch("marketdata_api.database.session.get_session")
     def test_instrument_service_with_real_data(self, mock_get_session):
         """Test instrument service with real test data."""
-        from marketdata_api.services.sqlite.instrument_service import SqliteInstrumentService
+        from marketdata_api.services.core.instrument_service import InstrumentService
 
         # Mock session and query results
         mock_session = Mock()
@@ -267,7 +267,7 @@ class TestServiceIntegration:
 
         mock_session.query.return_value.filter_by.return_value.first.return_value = mock_instrument
 
-        service = SqliteInstrumentService()
+        service = InstrumentService()
         result_session, result_instrument = service.get_instrument(real_instrument["isin"])
 
         assert result_instrument is not None

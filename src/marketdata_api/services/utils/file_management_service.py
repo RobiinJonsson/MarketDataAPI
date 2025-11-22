@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 
-from ..config import esmaConfig
+from ...config import esmaConfig
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,7 @@ class FileManagementService:
         """Lazy initialization of database backup manager."""
         if self._backup_manager is None:
             try:
-                from ..config import Config
+                from ...config import Config
                 from ..database.database_backup import DatabaseBackupManager
 
                 self._backup_manager = DatabaseBackupManager(
@@ -724,7 +724,7 @@ class FileManagementService:
                 use_latest = False
             else:
                 # Use config defaults
-                from ..config import esmaConfig
+                from ...config import esmaConfig
 
                 date_from = esmaConfig.start_date
                 date_to = esmaConfig.end_date

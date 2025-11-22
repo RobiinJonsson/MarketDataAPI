@@ -69,7 +69,7 @@ class TestInstrumentsCommands:
     @pytest.mark.cli
     def test_instruments_list_success(self):
         """Test successful instruments list command."""
-        with patch("marketdata_api.services.sqlite.instrument_service.SqliteInstrumentService") as mock_service:
+        with patch("marketdata_api.services.InstrumentService") as mock_service:
             # Mock service response
             mock_service_instance = Mock()
             mock_service.return_value = mock_service_instance
@@ -101,7 +101,7 @@ class TestInstrumentsCommands:
             assert "CH0012221716" in result.output
 
     @pytest.mark.cli
-    @patch("marketdata_api.services.sqlite.instrument_service.SqliteInstrumentService")
+    @patch("marketdata_api.services.InstrumentService")
     def test_instruments_get_success(self, mock_service):
         """Test successful instrument get command."""
         # Mock service response
@@ -133,7 +133,7 @@ class TestInstrumentsCommands:
         assert real_instrument["short_name"] in result.output
 
     @pytest.mark.cli
-    @patch("marketdata_api.services.sqlite.instrument_service.SqliteInstrumentService")
+    @patch("marketdata_api.services.InstrumentService")
     def test_instruments_get_not_found(self, mock_service):
         """Test instrument get command with non-existent ISIN."""
         # Mock service response for not found
@@ -347,7 +347,7 @@ class TestCLIOutputFormatting:
     """Test CLI output formatting and presentation."""
 
     @pytest.mark.cli
-    @patch("marketdata_api.services.sqlite.instrument_service.SqliteInstrumentService")
+    @patch("marketdata_api.services.InstrumentService")
     def test_table_output_format(self, mock_service):
         """Test that list commands produce properly formatted tables."""
         mock_service_instance = Mock()
@@ -374,7 +374,7 @@ class TestCLIOutputFormatting:
         assert "ISIN" in result.output  # Column header
 
     @pytest.mark.cli
-    @patch("marketdata_api.services.sqlite.instrument_service.SqliteInstrumentService")
+    @patch("marketdata_api.services.InstrumentService")
     def test_panel_output_format(self, mock_service):
         """Test that get commands produce properly formatted panels."""
         mock_service_instance = Mock()

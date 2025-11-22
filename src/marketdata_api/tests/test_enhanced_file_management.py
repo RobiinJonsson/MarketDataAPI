@@ -20,7 +20,7 @@ def test_file_management_service():
     print("🧪 Testing FileManagementService directly...")
 
     try:
-        from marketdata_api.services.file_management_service import FileManagementService
+        from marketdata_api.services.utils.file_management_service import FileManagementService
 
         service = FileManagementService()
 

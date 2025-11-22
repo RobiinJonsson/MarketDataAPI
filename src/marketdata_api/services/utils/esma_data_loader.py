@@ -7,7 +7,7 @@ import pandas as pd
 import requests
 from tqdm import tqdm
 
-import marketdata_api.services.esma_utils as u
+from . import esma_utils as u
 
 
 class EsmaDataLoader:

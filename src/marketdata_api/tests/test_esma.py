@@ -1,8 +1,8 @@
 import pandas as pd
 import pytest
 
-from ..services.esma_data_loader import EsmaDataLoader
-from ..services.esma_utils import Utils
+from ..services.utils.esma_data_loader import EsmaDataLoader
+from ..services.utils.esma_utils import Utils
 
 
 @pytest.fixture(scope="module")

@@ -191,7 +191,7 @@ def list(ctx, limit, offset, type, liquidity, threshold, isin):
 def create(ctx, isin, type):
     """Create transparency calculations for an ISIN from FITRS data"""
     try:
-        from marketdata_api.services.sqlite.transparency_service import TransparencyService
+        from marketdata_api.services.core.transparency_service import TransparencyService
         
         service = TransparencyService()
 
@@ -246,11 +246,11 @@ def create(ctx, isin, type):
 def get_transparency(ctx, isin, full):
     """Get transparency calculations by ISIN with enhanced analysis"""
     try:
-        from marketdata_api.services.sqlite.transparency_service import TransparencyService
-        from marketdata_api.services.sqlite.instrument_service import SqliteInstrumentService
+        from marketdata_api.services.core.transparency_service import TransparencyService
+        from marketdata_api.services.core.instrument_service import InstrumentService
         
         service = TransparencyService()
-        instrument_service = SqliteInstrumentService()
+        instrument_service = InstrumentService()
 
         with console.status(f"[bold green]Looking up transparency calculations for {isin}..."):
             calculations = service.get_transparency_by_isin(isin.upper())
@@ -527,7 +527,7 @@ def _display_calculation_details(calculation, index):
 def bulk_create(ctx, limit, batch_size, skip_existing):
     """Create transparency calculations in bulk for instruments without them"""
     try:
-        from marketdata_api.services.sqlite.transparency_service import TransparencyService
+        from marketdata_api.services.core.transparency_service import TransparencyService
         
         service = TransparencyService()
 
