@@ -11,6 +11,7 @@ from flask import current_app, request
 from flask_restx import Namespace, Resource
 
 from ...constants import ErrorMessages, HTTPStatus, Pagination, ResponseFields
+from ...services import VenueService
 
 logger = logging.getLogger(__name__)
 
@@ -63,9 +64,7 @@ def create_venue_resources(api, models):
         def get(self):
             """List trading venues with comprehensive filtering"""
             try:
-                from ...services.sqlite.venue_service import SqliteVenueService
-                
-                service = SqliteVenueService()
+                service = VenueService()
                 
                 # Extract filters from request
                 filters = {
@@ -133,9 +132,7 @@ def create_venue_resources(api, models):
         def get(self, mic_code):
             """Get detailed venue information"""
             try:
-                from ...services.sqlite.venue_service import SqliteVenueService
-                
-                service = SqliteVenueService()
+                service = VenueService()
                 
                 include_instruments = request.args.get("include_instruments", "false").lower() == "true"
                 instrument_limit = min(int(request.args.get("instrument_limit", 50)), 200)
@@ -189,9 +186,7 @@ def create_venue_resources(api, models):
         def get(self, mic_code):
             """Get instruments traded on a venue"""
             try:
-                from ...services.sqlite.venue_service import SqliteVenueService
-                
-                service = SqliteVenueService()
+                service = VenueService()
                 
                 # Extract filters
                 instrument_type = request.args.get("instrument_type")
@@ -268,9 +263,7 @@ def create_venue_resources(api, models):
                         },
                     }, HTTPStatus.BAD_REQUEST
 
-                from ...services.sqlite.venue_service import SqliteVenueService
-                
-                service = SqliteVenueService()
+                service = VenueService()
                 
                 filters = {
                     "country": request.args.get("country"),
@@ -312,9 +305,7 @@ def create_venue_resources(api, models):
         def get(self):
             """Get venue and trading statistics"""
             try:
-                from ...services.sqlite.venue_service import SqliteVenueService
-                
-                service = SqliteVenueService()
+                service = VenueService()
                 
                 stats = service.get_venue_statistics()
                 
@@ -349,9 +340,7 @@ def create_venue_resources(api, models):
         def get(self):
             """Get countries with venue counts"""
             try:
-                from ...services.sqlite.venue_service import SqliteVenueService
-                
-                service = SqliteVenueService()
+                service = VenueService()
                 
                 countries = service.get_venue_countries()
                 

@@ -10,6 +10,7 @@ from flask import current_app, request
 from flask_restx import Namespace, Resource
 
 from ...constants import ErrorMessages, HTTPStatus, Pagination, ResponseFields
+from ...services import LegalEntityService
 
 logger = logging.getLogger(__name__)
 
@@ -60,10 +61,9 @@ def create_relationship_resources(api, models):
             """Retrieves all relationships for a specific legal entity"""
             try:
                 from ...database.session import get_session
-                from ...interfaces.factory.services_factory import ServicesFactory
 
                 # First check if the entity exists
-                service = ServicesFactory.get_legal_entity_service()
+                service = LegalEntityService()
                 session, entity = service.get_entity(lei)
 
                 if not entity:

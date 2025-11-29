@@ -8,6 +8,24 @@ from rich.table import Table
 from ..core.utils import console, handle_database_error
 
 
+def _parse_raw_data(raw_data):
+    """Parse raw_data field handling both dictionary (SQLite) and JSON string (SQL Server) formats."""
+    if not raw_data:
+        return {}
+    
+    if isinstance(raw_data, dict):
+        return raw_data
+    
+    if isinstance(raw_data, str):
+        try:
+            import json
+            return json.loads(raw_data)
+        except (json.JSONDecodeError, TypeError):
+            return {}
+    
+    return {}
+
+
 @click.group()
 def transparency():
     """Manage transparency calculations and FITRS data"""
@@ -33,7 +51,14 @@ def list(ctx, limit, offset, type, liquidity, threshold, isin):
     """List transparency calculations with advanced filtering"""
     try:
         from marketdata_api.database.session import get_session
-        from marketdata_api.models.sqlite.transparency import TransparencyCalculation
+        from marketdata_api.config import DatabaseConfig
+        
+        # Dynamic model imports based on database type
+        db_type = DatabaseConfig.get_database_type()
+        if db_type == 'sqlite':
+            from marketdata_api.models.sqlite.transparency import TransparencyCalculation
+        else:
+            from marketdata_api.models.sqlserver.transparency import SqlServerTransparencyCalculation as TransparencyCalculation
         
         with console.status("[bold green]Fetching transparency calculations..."):
             with get_session() as session:
@@ -69,7 +94,8 @@ def list(ctx, limit, offset, type, liquidity, threshold, isin):
 
                 # Execute query and extract data within session context
                 calculations_data = []
-                for calc in query.limit(limit).offset(offset).all():
+                # Add ORDER BY for SQL Server compatibility (MSSQL requires order_by when using OFFSET/LIMIT)
+                for calc in query.order_by(TransparencyCalculation.id).limit(limit).offset(offset).all():
                     period = (
                         f"{calc.from_date} to {calc.to_date}"
                         if calc.from_date and calc.to_date
@@ -111,7 +137,7 @@ def list(ctx, limit, offset, type, liquidity, threshold, isin):
                             transactions_formatted = f"{calc.total_transactions_executed:,}"
 
                     # Extract additional data from raw_data JSON if available
-                    raw_data = calc.raw_data or {}
+                    raw_data = _parse_raw_data(calc.raw_data)
                     instrument_class = raw_data.get("FinInstrmClssfctn", "N/A")
                     methodology = raw_data.get("Mthdlgy", "N/A")
 
@@ -372,7 +398,7 @@ def _format_transparency_summary(calculations):
     # Market activity insight
     if active_calcs:
         latest_active = max(active_calcs, key=lambda x: x.to_date or x.from_date or x.created_at)
-        raw_data = latest_active.raw_data or {}
+        raw_data = _parse_raw_data(latest_active.raw_data)
         
         if raw_data.get('AvrgDalyTrnvr'):
             daily_turnover = float(raw_data['AvrgDalyTrnvr'])
@@ -492,7 +518,7 @@ def _display_calculation_details(calculation, index):
 [cyan]Volume:[/cyan] {volume:,.2f}"""
 
     # Add asset-type-specific details from raw_data
-    raw_data = calculation.raw_data or {}
+    raw_data = _parse_raw_data(calculation.raw_data)
 
     # Check if this is equity data (FULECR files)
     is_equity = calculation.file_type and calculation.file_type.startswith("FULECR")
@@ -616,7 +642,7 @@ def bulk_create(ctx, limit, batch_size, skip_existing):
             sample_size = min(5, len(results["successful_instruments"]))
             console.print(
                 f"[green]Sample Successful Instruments ({sample_size}/{len(results['successful_instruments'])}):[/green]"
-            )
+                )
             for success in results["successful_instruments"][:sample_size]:
                 console.print(
                     f"  [green]✓[/green] {success['isin']}: {success['calculations_created']} calculations"
@@ -627,3 +653,102 @@ def bulk_create(ctx, limit, batch_size, skip_existing):
         if ctx.obj.get("verbose"):
             import traceback
             traceback.print_exc()
+
+
+@transparency.command()
+@click.option("--isin", help="Check duplicates for specific ISIN (default: all ISINs)")
+@click.option("--remove", is_flag=True, help="Remove duplicate records (keeps latest created)")
+@click.option("--confirm", is_flag=True, help="Actually remove duplicates (required with --remove)")
+@click.pass_context
+@handle_database_error
+def duplicates(ctx, isin, remove, confirm):
+    """Detect and optionally remove duplicate transparency calculations."""
+    from ...config import DatabaseConfig
+    from ...database.session import get_session
+    
+    # Get database-agnostic imports
+    db_type = DatabaseConfig.get_database_type()
+    if db_type == "sqlite":
+        from ...models.sqlite.transparency import SqliteTransparencyCalculation as TransparencyCalculation
+    else:
+        from ...models.sqlserver.transparency import SqlServerTransparencyCalculation as TransparencyCalculation
+    
+    with get_session() as session:
+        # Build query to find duplicates
+        query = session.query(TransparencyCalculation)
+        if isin:
+            query = query.filter(TransparencyCalculation.isin == isin)
+        
+        # Get all calculations ordered by ISIN, period, and created_at
+        calculations = query.order_by(
+            TransparencyCalculation.isin,
+            TransparencyCalculation.from_date,
+            TransparencyCalculation.to_date,
+            TransparencyCalculation.file_type,
+            TransparencyCalculation.created_at.desc()
+        ).all()
+        
+        # Group by (isin, from_date, to_date, file_type) to find duplicates
+        groups = {}
+        for calc in calculations:
+            key = (calc.isin, calc.from_date, calc.to_date, calc.file_type)
+            if key not in groups:
+                groups[key] = []
+            groups[key].append(calc)
+        
+        # Find groups with duplicates
+        duplicate_groups = {k: v for k, v in groups.items() if len(v) > 1}
+        
+        if not duplicate_groups:
+            console.print("[green]No duplicate transparency calculations found.[/green]")
+            return
+        
+        # Show duplicate summary
+        total_duplicates = sum(len(group) - 1 for group in duplicate_groups.values())
+        console.print(f"\n[yellow]Found {len(duplicate_groups)} groups with duplicates ({total_duplicates} excess records)[/yellow]")
+        
+        # Create table showing duplicates
+        table = Table(title="Duplicate Transparency Calculations")
+        table.add_column("ISIN", style="cyan")
+        table.add_column("Period", style="blue")
+        table.add_column("Type", style="magenta")
+        table.add_column("Count", style="red")
+        table.add_column("IDs (latest first)", style="dim")
+        
+        for (isin, from_date, to_date, file_type), calcs in duplicate_groups.items():
+            period = f"{from_date} to {to_date}" if from_date and to_date else "N/A"
+            ids_str = ", ".join(str(c.id)[:8] + "..." for c in calcs[:3])
+            if len(calcs) > 3:
+                ids_str += f" (+{len(calcs)-3} more)"
+            
+            table.add_row(
+                isin or "N/A",
+                period,
+                file_type or "N/A", 
+                str(len(calcs)),
+                ids_str
+            )
+        
+        console.print(table)
+        
+        if remove and confirm:
+            # Remove duplicates (keep the latest created record for each group)
+            removed_count = 0
+            for calcs in duplicate_groups.values():
+                # Keep the first (latest created), remove the rest
+                for calc_to_remove in calcs[1:]:
+                    session.delete(calc_to_remove)
+                    removed_count += 1
+            
+            session.commit()
+            console.print(f"\n[green]Removed {removed_count} duplicate records.[/green]")
+            
+        elif remove and not confirm:
+            would_remove = sum(len(group) - 1 for group in duplicate_groups.values())
+            console.print(f"\n[yellow]DRY RUN: Would remove {would_remove} duplicate records.[/yellow]")
+            console.print("[dim]Use --remove --confirm to actually delete duplicates.[/dim]")
+        
+        else:
+            # Just showing duplicates, no removal requested
+            console.print(f"\n[dim]Use --remove --confirm to delete duplicate records.[/dim]")
+        

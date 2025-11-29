@@ -5,8 +5,34 @@ This module handles all presentation logic for instrument API responses,
 including normalization and type-specific formatting.
 """
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_isoformat(value: Union[str, datetime, None]) -> Optional[str]:
+    """
+    Safely convert a datetime field to ISO format string.
+    Handles both datetime objects (SQLite) and string dates (SQL Server).
+    """
+    if value is None:
+        return None
+    
+    if isinstance(value, datetime):
+        return value.isoformat()
+    
+    if isinstance(value, str):
+        try:
+            # Try to parse the string as datetime and convert back to ISO format
+            parsed_dt = datetime.fromisoformat(value.replace('Z', '+00:00'))
+            return parsed_dt.isoformat()
+        except (ValueError, AttributeError):
+            # If parsing fails, return the string as-is (assuming it's already ISO format)
+            return value
+    
+    return None
 
 
 def build_raw_instrument_response(raw_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -95,10 +121,10 @@ def normalize_base_fields(raw_data: Dict[str, Any]) -> Dict[str, Any]:
         "competent_authority": str(raw_data.get('competent_authority')) if raw_data.get('competent_authority') else None,
         "relevant_trading_venue": str(raw_data.get('relevant_trading_venue')) if raw_data.get('relevant_trading_venue') else None,
         
-        # Datetime fields - ISO format or None
-        "publication_from_date": publication_date.isoformat() if publication_date else None,
-        "created_at": created_at.isoformat() if created_at else None,
-        "updated_at": updated_at.isoformat() if updated_at else None,
+        # Datetime fields - ISO format or None (database-agnostic handling)
+        "publication_from_date": _safe_isoformat(publication_date),
+        "created_at": _safe_isoformat(created_at),
+        "updated_at": _safe_isoformat(updated_at),
         
         # Arrays - always present as empty arrays if no data
         "status_indicators": [],
@@ -138,8 +164,8 @@ def _extract_rich_data(instrument, raw_data: Dict[str, Any]) -> Dict[str, Any]:
             {
                 "venue_id": venue.venue_id,
                 "mic_code": venue.mic_code,
-                "first_trade_date": venue.first_trade_date.isoformat() if venue.first_trade_date else None,
-                "termination_date": venue.termination_date.isoformat() if venue.termination_date else None,
+                "first_trade_date": _safe_isoformat(venue.first_trade_date),
+                "termination_date": _safe_isoformat(venue.termination_date),
                 "venue_full_name": venue.venue_full_name,
                 "venue_short_name": venue.venue_short_name,
             }
@@ -156,7 +182,7 @@ def _extract_rich_data(instrument, raw_data: Dict[str, Any]) -> Dict[str, Any]:
             "legal_form": instrument.legal_entity.legal_form,
             "status": instrument.legal_entity.status,
             "creation_date": (
-                instrument.legal_entity.creation_date.isoformat()
+                _safe_isoformat(instrument.legal_entity.creation_date)
                 if instrument.legal_entity.creation_date else None
             ),
         }

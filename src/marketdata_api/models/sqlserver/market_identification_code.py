@@ -92,7 +92,7 @@ class SqlServerMarketIdentificationCode(SqlServerBaseModel):
     data_source_version = Column(String(50))  # Version of ISO data used
 
     # Relationships (SQL Server version)
-    # trading_venues = relationship("SqlServerTradingVenue", back_populates="market_identification_code")
+    trading_venues = relationship("SqlServerTradingVenue", back_populates="market_identification_code")
 
     # Performance indexes - EXACT match to SQLite
     __table_args__ = (

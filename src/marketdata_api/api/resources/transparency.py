@@ -11,6 +11,7 @@ from flask import current_app, request
 from flask_restx import Namespace, Resource
 
 from ...constants import ErrorMessages, HTTPStatus, Pagination, ResponseFields
+from ...services import TransparencyService
 
 logger = logging.getLogger(__name__)
 
@@ -106,7 +107,7 @@ def create_transparency_resources(api, models):
                     # Use rich transparency response builder like CLI
                     from ..utils.transparency_utils import build_transparency_response
                     
-                    logger.info(f"Building rich responses for {len(calculations)} transparency calculations")
+                    logger.debug(f"Building rich responses for {len(calculations)} transparency calculations")
                     result = []
                     for calc in calculations:
                         try:
@@ -311,8 +312,6 @@ def create_transparency_resources(api, models):
             """Fill transparency data for instruments without current data"""
             try:
                 # Get service instance
-                from ...services.sqlite.transparency_service import TransparencyService
-                
                 transparency_service = TransparencyService()
                 
                 # Get optional parameters from request

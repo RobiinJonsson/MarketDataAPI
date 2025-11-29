@@ -13,6 +13,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from ...constants import API, Endpoints, ErrorMessages, HTTPStatus, ResponseFields
+from ...services import InstrumentService
 
 # Optional psutil import for system monitoring
 try:
@@ -113,9 +114,7 @@ def create_system_resources(api, models):
 
             # API endpoints health
             try:
-                from ...interfaces.factory.services_factory import ServicesFactory
-
-                instrument_service = ServicesFactory.get_instrument_service()
+                instrument_service = InstrumentService()
                 health_data["services"]["instrument_service"] = {
                     "status": "healthy",
                     "type": type(instrument_service).__name__,

@@ -75,7 +75,7 @@ class SqlServerDatabase(DatabaseInterface):
             echo=False,  # Set to True for SQL debugging
         )
 
-        logger.info(f"Created SQL Server engine for {AZURE_SQL_SERVER}/{AZURE_SQL_DATABASE}")
+        logger.debug(f"Created SQL Server engine for {AZURE_SQL_SERVER}/{AZURE_SQL_DATABASE}")
         return engine
 
     def init_db(self) -> None:

@@ -123,7 +123,7 @@ class LegalEntityService(LegalEntityServiceInterface):
             if entity:
                 # Ensure all relationships are loaded
                 session.refresh(entity)
-                self.logger.info(
+                self.logger.debug(
                     f"Loaded entity {lei} with relationships: "
                     f"addresses={len(entity.addresses) if entity.addresses else 0}, "
                     f"direct_parent={entity.direct_parent_relation is not None}, "

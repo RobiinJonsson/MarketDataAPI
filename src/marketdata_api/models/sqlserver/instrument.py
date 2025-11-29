@@ -251,6 +251,7 @@ class SqlServerTradingVenue(SqlServerBaseModel):
     
     # Relationships
     instrument = relationship("SqlServerInstrument", back_populates="trading_venues")
+    market_identification_code = relationship("SqlServerMarketIdentificationCode", back_populates="trading_venues")
     
     # Indexes for performance
     __table_args__ = (

@@ -63,7 +63,14 @@ def create_mic_resources(api, models):
             try:
                 # Call business logic directly instead of route function
                 from ...database.session import get_session
-                from ...models.sqlite.market_identification_code import MarketIdentificationCode
+                from ...config import DatabaseConfig
+                
+                # Dynamic model imports based on database type
+                db_type = DatabaseConfig.get_database_type()
+                if db_type == "sqlite":
+                    from ...models.sqlite.market_identification_code import MarketIdentificationCode
+                else:
+                    from ...models.sqlserver.market_identification_code import SqlServerMarketIdentificationCode as MarketIdentificationCode
 
                 with get_session() as session:
                     query = session.query(MarketIdentificationCode)
@@ -104,7 +111,8 @@ def create_mic_resources(api, models):
                     offset = int(request.args.get("offset", 0))
 
                     total = query.count()
-                    mics = query.offset(offset).limit(limit).all()
+                    # Add ORDER BY for SQL Server compatibility (MSSQL requires order_by when using OFFSET/LIMIT)
+                    mics = query.order_by(MarketIdentificationCode.mic).offset(offset).limit(limit).all()
 
                     return {
                         ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,

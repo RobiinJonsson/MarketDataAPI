@@ -2,7 +2,7 @@
 Venue Service Implementation
 
 This service provides comprehensive trading venue operations with MIC integration.
-Supports venue listing, filtering, search, and self.Instrument relationships.
+Supports venue listing, filtering, search, and instrument relationships.
 """
 
 import logging
@@ -34,11 +34,11 @@ class VenueService:
             from ...models.sqlserver.instrument import SqlServerInstrument as Instrument, SqlServerTradingVenue as TradingVenue
             from ...models.sqlserver.market_identification_code import SqlServerMarketIdentificationCode as MarketIdentificationCode, SqlServerMICStatus as MICStatus, SqlServerMICType as MICType
         
-        self.self.Instrument = self.Instrument
-        self.self.TradingVenue = self.TradingVenue
-        self.self.MarketIdentificationCode = self.MarketIdentificationCode
-        self.self.MICStatus = self.MICStatus
-        self.self.MICType = self.MICType
+        self.Instrument = Instrument
+        self.TradingVenue = TradingVenue
+        self.MarketIdentificationCode = MarketIdentificationCode
+        self.MICStatus = MICStatus
+        self.MICType = MICType
 
     def get_venues_list(
         self, filters: Dict[str, Any], page: int = 1, per_page: int = 50
@@ -57,8 +57,8 @@ class VenueService:
         try:
             with get_session() as session:
                 # Build query - using self.MarketIdentificationCode as primary source
-                query = session.query(self.self.MarketIdentificationCode).options(
-                    joinedload(self.self.MarketIdentificationCode.trading_venues)
+                query = session.query(self.MarketIdentificationCode).options(
+                    joinedload(self.MarketIdentificationCode.trading_venues)
                 )
                 
                 # Apply filters
@@ -103,9 +103,9 @@ class VenueService:
                 # Get total count before pagination
                 total = query.count()
                 
-                # Apply pagination
+                # Apply pagination (with ORDER BY for SQL Server compatibility)
                 offset = (page - 1) * per_page
-                venues_data = query.offset(offset).limit(per_page).all()
+                venues_data = query.order_by(self.MarketIdentificationCode.mic).offset(offset).limit(per_page).all()
                 
                 # Format results
                 venues = []
@@ -170,18 +170,18 @@ class VenueService:
                             "venue_status": tv.venue_status,
                         }
                         
-                        # Add self.Instrument details if available
-                        if tv.self.Instrument:
+                        # Add instrument details if available
+                        if tv.instrument:
                             instrument_info.update({
-                                "self.Instrument_name": tv.self.Instrument.self.Instrument_name,
-                                "cfi_code": tv.self.Instrument.cfi_code,
-                                "instrument_type": tv.self.Instrument.instrument_type,
+                                "instrument_name": tv.instrument.instrument_name,
+                                "cfi_code": tv.instrument.cfi_code,
+                                "instrument_type": tv.instrument.instrument_type,
                             })
                         
                         instruments.append(instrument_info)
                     
                     venue_detail["instruments"] = instruments
-                    venue_detail["self.Instrument_count"] = len(instruments)
+                    venue_detail["instrument_count"] = len(instruments)
                 
                 return venue_detail
 
@@ -197,7 +197,7 @@ class VenueService:
         
         Args:
             mic_code: MIC code for the venue
-            instrument_type: Optional self.Instrument type filter
+            instrument_type: Optional instrument type filter
             page: Page number for pagination
             per_page: Number of items per page
             
@@ -227,9 +227,9 @@ class VenueService:
                 # Get total count
                 total = query.count()
                 
-                # Apply pagination
+                # Apply pagination (with ORDER BY for SQL Server compatibility)
                 offset = (page - 1) * per_page
-                trading_venues = query.offset(offset).limit(per_page).all()
+                trading_venues = query.order_by(self.TradingVenue.isin, self.TradingVenue.venue_id).offset(offset).limit(per_page).all()
                 
                 # Format results
                 instruments = []
@@ -243,13 +243,13 @@ class VenueService:
                         "venue_status": tv.venue_status,
                     }
                     
-                    # Add self.Instrument details
-                    if tv.self.Instrument:
+                    # Add instrument details
+                    if tv.instrument:
                         instrument_info.update({
-                            "self.Instrument_name": tv.self.Instrument.self.Instrument_name,
-                            "cfi_code": tv.self.Instrument.cfi_code,
-                            "instrument_type": tv.self.Instrument.instrument_type,
-                            "issuer_name": tv.self.Instrument.issuer_name,
+                            "instrument_name": tv.instrument.instrument_name,
+                            "cfi_code": tv.instrument.cfi_code,
+                            "instrument_type": tv.instrument.instrument_type,
+                            "issuer_name": tv.instrument.issuer_name,
                         })
                     
                     instruments.append(instrument_info)
@@ -329,17 +329,17 @@ class VenueService:
                 # Basic MIC counts
                 total_mics = session.query(self.MarketIdentificationCode).count()
                 operating_mics = session.query(self.MarketIdentificationCode).filter(
-                    self.MarketIdentificationCode.operation_type == self.MICType.OPRT
+                    self.MarketIdentificationCode.operation_type == "OPRT"
                 ).count()
                 segment_mics = session.query(self.MarketIdentificationCode).filter(
-                    self.MarketIdentificationCode.operation_type == self.MICType.SGMT
+                    self.MarketIdentificationCode.operation_type == "SGMT"
                 ).count()
                 
                 # Status breakdown
                 status_counts = {}
                 for status in self.MICStatus:
                     count = session.query(self.MarketIdentificationCode).filter(
-                        self.MarketIdentificationCode.status == status
+                        self.MarketIdentificationCode.status == status.value
                     ).count()
                     status_counts[status.value] = count
                 
@@ -398,13 +398,13 @@ class VenueService:
                         func.count(self.MarketIdentificationCode.mic).label('total_mics'),
                         func.sum(
                             case(
-                                (self.MarketIdentificationCode.operation_type == self.MICType.OPRT, 1),
+                                (self.MarketIdentificationCode.operation_type == "OPRT", 1),
                                 else_=0
                             )
                         ).label('operating_mics'),
                         func.sum(
                             case(
-                                (self.MarketIdentificationCode.operation_type == self.MICType.SGMT, 1),
+                                (self.MarketIdentificationCode.operation_type == "SGMT", 1),
                                 else_=0
                             )
                         ).label('segment_mics'),
@@ -431,8 +431,31 @@ class VenueService:
 
     def _format_venue_summary(self, mic) -> Dict[str, Any]:
         """Format MIC data for venue summary display."""
-        # Count associated instruments
-        self.Instrument_count = len(mic.trading_venues) if mic.trading_venues else 0
+        # Count associated instruments (instruments trading on this MIC)
+        try:
+            with get_session() as debug_session:
+                # Try multiple approaches to count instruments for this MIC
+                
+                # Method 1: Count instruments via trading_venues table with this MIC
+                venues_count = debug_session.query(self.Instrument.id).join(
+                    self.TradingVenue, self.Instrument.id == self.TradingVenue.instrument_id
+                ).filter(
+                    self.TradingVenue.mic_code == mic.mic
+                ).distinct().count()
+                
+                # Method 2: Count instruments that have relevant_trading_venue matching this MIC
+                direct_count = debug_session.query(self.Instrument).filter(
+                    self.Instrument.relevant_trading_venue == mic.mic
+                ).count()
+                
+                # Use the higher count (more comprehensive approach)
+                self.Instrument_count = max(venues_count, direct_count)
+                
+                logger.debug(f"MIC {mic.mic}: Via trading_venues={venues_count}, direct={direct_count}, using={self.Instrument_count}")
+                
+        except Exception as e:
+            logger.error(f"Error counting instruments for MIC {mic.mic}: {str(e)}")
+            self.Instrument_count = 0
         
         try:
             return {
@@ -442,12 +465,12 @@ class VenueService:
                 "legal_entity_name": mic.legal_entity_name,
                 "country_code": mic.iso_country_code,
                 "city": mic.city,
-                "status": mic.status.value if mic.status else None,
-                "operation_type": mic.operation_type.value if mic.operation_type else None,
-                "market_category": mic.market_category_code.value if mic.market_category_code else None,
+                "status": mic.status.value if hasattr(mic.status, 'value') else mic.status,
+                "operation_type": mic.operation_type.value if hasattr(mic.operation_type, 'value') else mic.operation_type,
+                "market_category": mic.market_category_code.value if hasattr(mic.market_category_code, 'value') else mic.market_category_code,
                 "website": mic.website,
-                "self.Instrument_count": self.Instrument_count,
-                "last_update_date": mic.last_update_date.isoformat() if mic.last_update_date else None,
+                "instrument_count": self.Instrument_count,
+                "last_update_date": self._safe_isoformat(mic.last_update_date),
             }
         except Exception as e:
             logger.error(f"Error formatting venue summary for MIC {mic.mic}: {str(e)}")
@@ -463,7 +486,7 @@ class VenueService:
                 "operation_type": str(mic.operation_type) if mic.operation_type else None,
                 "market_category": str(mic.market_category_code) if mic.market_category_code else None,
                 "website": mic.website,
-                "self.Instrument_count": self.Instrument_count,
+                "instrument_count": self.Instrument_count,
                 "last_update_date": str(mic.last_update_date) if mic.last_update_date else None,
             }
 
@@ -476,14 +499,14 @@ class VenueService:
             "acronym": mic.acronym,
             "lei": mic.lei,
             "comments": mic.comments,
-            "creation_date": mic.creation_date.isoformat() if mic.creation_date else None,
-            "last_validation_date": mic.last_validation_date.isoformat() if mic.last_validation_date else None,
-            "expiry_date": mic.expiry_date.isoformat() if mic.expiry_date else None,
+            "creation_date": self._safe_isoformat(mic.creation_date),
+            "last_validation_date": self._safe_isoformat(mic.last_validation_date),
+            "expiry_date": self._safe_isoformat(mic.expiry_date),
             "data_source_version": mic.data_source_version,
         })
         
         # Add segment MICs if this is an operating MIC
-        if mic.operation_type == self.MICType.OPRT:
+        if mic.operation_type == "OPRT":
             try:
                 with get_session() as session:
                     segments = session.query(self.MarketIdentificationCode).filter(
@@ -494,7 +517,7 @@ class VenueService:
                         {
                             "mic_code": seg.mic,
                             "market_name": seg.market_name,
-                            "status": seg.status.value if seg.status else None,
+                            "status": seg.status.value if hasattr(seg.status, 'value') else seg.status,
                         }
                         for seg in segments
                     ]
@@ -503,3 +526,30 @@ class VenueService:
                 venue_data["segment_mics"] = []
         
         return venue_data
+
+    def _safe_isoformat(self, date_value):
+        """
+        Safely convert date value to ISO format string.
+        
+        Handles both SQLite datetime objects and SQL Server datetime strings.
+        """
+        if not date_value:
+            return None
+        
+        # SQLite returns datetime objects - use isoformat()
+        if hasattr(date_value, 'isoformat'):
+            return date_value.isoformat()
+        
+        # SQL Server returns datetime strings - convert to proper ISO format
+        if isinstance(date_value, str):
+            try:
+                from datetime import datetime
+                # Parse SQL Server format and convert to ISO format
+                dt = datetime.strptime(date_value, '%Y-%m-%d %H:%M:%S')
+                return dt.isoformat()
+            except (ValueError, TypeError):
+                # If parsing fails, return the string as-is
+                return str(date_value)
+        
+        # Fallback to string representation
+        return str(date_value)

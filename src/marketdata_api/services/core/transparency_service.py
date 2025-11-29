@@ -237,25 +237,33 @@ class TransparencyService(TransparencyServiceInterface):
         session = SessionLocal()
         try:
             # Extract core fields
-            transparency_calc = Any(
+            # Prepare raw_data based on database type
+            if self.database_type == 'sqlite':
+                raw_data = data.copy()  # SQLite supports JSON columns
+            else:
+                # SQL Server requires JSON as text
+                import json
+                raw_data = json.dumps(data.copy(), default=str)  # Serialize to JSON string
+            
+            transparency_calc = self.TransparencyCalculation(
                 id=str(uuid.uuid4()),
                 tech_record_id=data.get("TechRcrdId"),
                 isin=data.get("ISIN") or data.get("Id"),  # FULECR_E uses 'Id' instead of 'ISIN'
                 from_date=self._parse_date(data.get("FrDt")),
                 to_date=self._parse_date(data.get("ToDt")),
                 liquidity=self._determine_liquidity(data, file_type),
-                total_transactions_executed=data.get("TtlNbOfTxsExctd"),
-                total_volume_executed=data.get("TtlVolOfTxsExctd"),
+                total_transactions_executed=self._parse_numeric(data.get("TtlNbOfTxsExctd")),
+                total_volume_executed=self._parse_numeric(data.get("TtlVolOfTxsExctd")),
                 file_type=file_type,
                 source_file=source_filename,
-                raw_data=data.copy(),  # Store all original data
+                raw_data=raw_data,  # Store all original data (database-type appropriate)
             )
 
             session.add(transparency_calc)
             session.flush()  # Get the ID
 
             # Create threshold records
-            thresholds = Any.create_from_fitrs_data(transparency_calc.id, data)
+            thresholds = self.TransparencyThreshold.create_from_fitrs_data(transparency_calc.id, data)
 
             for threshold in thresholds:
                 session.add(threshold)
@@ -301,14 +309,14 @@ class TransparencyService(TransparencyServiceInterface):
         # 1. First check if ISIN exists in instruments table (FIRDS reference data)
         session = SessionLocal()
         try:
-            Any = session.query(Any).filter(Any.isin == isin).first()
+            instrument = session.query(self.Instrument).filter(self.Instrument.isin == isin).first()
 
-            if not Any:
+            if not instrument:
                 raise TransparencyNotFoundError(f"ISIN {isin} does not exist in the database")
 
             # Use provided instrument_type or get from database
-            final_instrument_type = instrument_type or Any.instrument_type
-            self.logger.info(f"Found Any {isin} with type {final_instrument_type}")
+            final_instrument_type = instrument_type or instrument.instrument_type
+            self.logger.info(f"Found instrument {isin} with type {final_instrument_type}")
 
         finally:
             session.close()
@@ -340,7 +348,7 @@ class TransparencyService(TransparencyServiceInterface):
         """Get all transparency calculations"""
         session = SessionLocal()
         try:
-            calculations = session.query(Any).all()
+            calculations = session.query(self.TransparencyCalculation).all()
             # Detach from session to avoid issues
             for calc in calculations:
                 session.expunge(calc)
@@ -356,8 +364,8 @@ class TransparencyService(TransparencyServiceInterface):
         session = SessionLocal()
         try:
             calculations = (
-                session.query(Any)
-                .filter(Any.isin == isin)
+                session.query(self.TransparencyCalculation)
+                .filter(self.TransparencyCalculation.isin == isin)
                 .all()
             )
             # Detach from session to avoid issues
@@ -375,8 +383,8 @@ class TransparencyService(TransparencyServiceInterface):
         session = SessionLocal()
         try:
             calc = (
-                session.query(Any)
-                .filter(Any.id == calc_id)
+                session.query(self.TransparencyCalculation)
+                .filter(self.TransparencyCalculation.id == calc_id)
                 .first()
             )
 
@@ -472,13 +480,13 @@ class TransparencyService(TransparencyServiceInterface):
             search_method = "Any-type-based"
         else:
             # CFI-based returned specific patterns, but we need to convert them to letters
-            # Extract letters from Any database lookup
+            # Extract letters from instrument database lookup
             try:
                 session = SessionLocal()
                 try:
-                    Any = session.query(Any).filter(Any.isin == isin).first()
-                    if Any and Any.cfi_code:
-                        target_letters = [Any.cfi_code[0].upper()]
+                    instrument = session.query(self.Instrument).filter(self.Instrument.isin == isin).first()
+                    if instrument and instrument.cfi_code:
+                        target_letters = [instrument.cfi_code[0].upper()]
                     else:
                         target_letters = self._get_fitrs_file_patterns(instrument_type)
                 finally:
@@ -648,18 +656,18 @@ class TransparencyService(TransparencyServiceInterface):
         from marketdata_api.models.utils.cfi_instrument_manager import CFIInstrumentTypeManager
 
         try:
-            # Get the Any's CFI code from the database
+            # Get the instrument's CFI code from the database
             session = SessionLocal()
             try:
-                Any = session.query(Any).filter(Any.isin == isin).first()
+                instrument = session.query(self.Instrument).filter(self.Instrument.isin == isin).first()
 
-                if Any and Any.cfi_code:
+                if instrument and instrument.cfi_code:
                     # Use CFI manager for consistent pattern determination
                     patterns = CFIInstrumentTypeManager.get_fitrs_patterns_from_cfi(
-                        Any.cfi_code
+                        instrument.cfi_code
                     )
                     self.logger.info(
-                        f"CFI-based file pattern for ISIN {isin}: CFI {Any.cfi_code} -> {patterns}"
+                        f"CFI-based file pattern for ISIN {isin}: CFI {instrument.cfi_code} -> {patterns}"
                     )
                     return patterns
                 else:
@@ -705,6 +713,34 @@ class TransparencyService(TransparencyServiceInterface):
             return value.lower() in BusinessConstants.BOOLEAN_TRUE_VALUES
 
         return bool(value)
+
+    def _parse_numeric(self, value: Union[str, int, float, None]) -> Optional[float]:
+        """Parse numeric value, converting NaN to None for SQL Server compatibility"""
+        import math
+        
+        if value is None:
+            return None
+            
+        try:
+            if isinstance(value, str):
+                if not value.strip():
+                    return None
+                numeric_value = float(value)
+            else:
+                numeric_value = float(value)
+                
+            # Check for NaN (which SQL Server doesn't accept)
+            if math.isnan(numeric_value):
+                return None
+                
+            # Check for infinity (which SQL Server also doesn't accept)
+            if math.isinf(numeric_value):
+                return None
+                
+            return numeric_value
+            
+        except (ValueError, TypeError):
+            return None
 
     def _determine_liquidity(self, data: Dict[str, Any], file_type: str) -> Optional[bool]:
         """
@@ -865,11 +901,11 @@ class TransparencyService(TransparencyServiceInterface):
         try:
             if skip_existing:
                 # Find instruments that don't have any transparency calculations
-                subquery = session.query(Any.isin).distinct()
-                query = session.query(Any).filter(~Any.isin.in_(subquery))
+                subquery = session.query(self.TransparencyCalculation.isin).distinct()
+                query = session.query(self.Instrument).filter(~self.Instrument.isin.in_(subquery))
             else:
                 # Get all instruments
-                query = session.query(Any)
+                query = session.query(self.Instrument)
 
             if limit:
                 query = query.limit(limit)
@@ -878,13 +914,13 @@ class TransparencyService(TransparencyServiceInterface):
 
             # Convert to dict format for processing
             self.Instrument_data = []
-            for Any in instruments:
+            for instrument in instruments:
                 self.Instrument_data.append(
                     {
-                        "isin": Any.isin,
-                        "instrument_type": Any.instrument_type,
-                        "name": Any.full_name or Any.short_name,
-                        "cfi_code": Any.cfi_code,
+                        "isin": instrument.isin,
+                        "instrument_type": instrument.instrument_type,
+                        "name": instrument.full_name or instrument.short_name,
+                        "cfi_code": instrument.cfi_code,
                     }
                 )
 
@@ -906,15 +942,15 @@ class TransparencyService(TransparencyServiceInterface):
         
         grouped = defaultdict(list)
         
-        for Any in instruments:
-            cfi_code = Any.get("cfi_code")
+        for instrument_data in instruments:
+            cfi_code = instrument_data.get("cfi_code")
             
             if cfi_code and len(cfi_code) >= 1:
                 # Use CFI first character as asset type
                 asset_type = cfi_code[0].upper()
             else:
                 # Fallback to instrument_type mapping
-                instrument_type = Any.get("instrument_type", "").lower()
+                instrument_type = instrument_data.get("instrument_type", "").lower()
                 if "debt" in instrument_type or "bond" in instrument_type:
                     asset_type = "D"
                 elif "equity" in instrument_type or "share" in instrument_type:
@@ -926,7 +962,7 @@ class TransparencyService(TransparencyServiceInterface):
                 else:
                     asset_type = "C"  # Default to collective investment
             
-            grouped[asset_type].append(Any)
+            grouped[asset_type].append(instrument_data)
         
         return dict(grouped)
 

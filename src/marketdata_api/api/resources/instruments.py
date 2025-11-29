@@ -14,10 +14,33 @@ from sqlalchemy.orm import sessionmaker
 
 from ...constants import ErrorMessages, HTTPStatus, Pagination, ResponseFields
 from ...database import get_session
-from ...models.sqlite.instrument import Instrument
-from ...models.sqlite.legal_entity import LegalEntity
-from ...models.sqlite.figi import FigiMapping
-from ...models.sqlite.transparency import TransparencyCalculation
+from ...config import DatabaseConfig
+
+# Import database-agnostic services
+from ...services import InstrumentService
+
+# Dynamic model imports based on database type
+def _get_models():
+    """Get appropriate model classes based on database configuration."""
+    db_type = DatabaseConfig.get_database_type()
+    
+    if db_type == 'sqlite':
+        from ...models.sqlite.instrument import Instrument
+        from ...models.sqlite.legal_entity import LegalEntity
+        from ...models.sqlite.figi import FigiMapping
+        from ...models.sqlite.transparency import TransparencyCalculation
+    elif db_type in ['azure_sql', 'sqlserver', 'sql_server', 'mssql']:
+        from ...models.sqlserver.instrument import SqlServerInstrument as Instrument
+        from ...models.sqlserver.legal_entity import SqlServerLegalEntity as LegalEntity
+        from ...models.sqlserver.figi import SqlServerFigiMapping as FigiMapping
+        from ...models.sqlserver.transparency import SqlServerTransparencyCalculation as TransparencyCalculation
+    else:
+        raise ValueError(f"Unsupported database type: {db_type}")
+    
+    return Instrument, LegalEntity, FigiMapping, TransparencyCalculation
+
+# Get models for this module
+Instrument, LegalEntity, FigiMapping, TransparencyCalculation = _get_models()
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +168,7 @@ def create_instrument_resources(api, models):
                     # Use rich instrument response builder following CLI pattern
                     from ..utils.type_specific_responses import build_instrument_response, build_raw_instrument_response
                     
-                    logger.info(f"Building rich responses for {len(instruments)} instruments")
+                    logger.debug(f"Building rich responses for {len(instruments)} instruments")
                     result = []
                     for instrument in instruments:
                         try:
@@ -201,7 +224,6 @@ def create_instrument_resources(api, models):
             """Create a new instrument from FIRDS data"""
             from werkzeug.exceptions import BadRequest
 
-            from ...interfaces.factory.services_factory import ServicesFactory
             from ...models.utils.cfi_instrument_manager import (
                 get_valid_instrument_types,
                 normalize_instrument_type_from_cfi,
@@ -277,8 +299,8 @@ def create_instrument_resources(api, models):
                             },
                         }, HTTPStatus.BAD_REQUEST
 
-                # Use factory pattern for service access
-                service = ServicesFactory.get_instrument_service()
+                # Use database-agnostic service
+                service = InstrumentService()
 
                 # Use the create_instrument method that gets data from FIRDS
                 instrument = service.create_instrument(data["isin"], instrument_type)
@@ -327,10 +349,8 @@ def create_instrument_resources(api, models):
         )
         def get(self, isin):
             """Retrieves detailed information about a specific instrument by its ISIN"""
-            from ...interfaces.factory.services_factory import ServicesFactory
-
             try:
-                service = ServicesFactory.get_instrument_service()
+                service = InstrumentService()
                 session, instrument = service.get_instrument(isin)
 
                 if not instrument:
@@ -376,10 +396,8 @@ def create_instrument_resources(api, models):
         )
         def get(self, isin):
             """Retrieves raw model data for a specific instrument - useful for comparing with normalized API responses"""
-            from ...interfaces.factory.services_factory import ServicesFactory
-
             try:
-                service = ServicesFactory.get_instrument_service()
+                service = InstrumentService()
                 session, instrument = service.get_instrument(isin)
 
                 if not instrument:
@@ -455,10 +473,8 @@ def create_instrument_resources(api, models):
         )
         def get(self, identifier):
             """Retrieves trading venues for a specific instrument"""
-            from ...interfaces.factory.services_factory import ServicesFactory
-
             try:
-                service = ServicesFactory.get_instrument_service()
+                service = InstrumentService()
                 session, instrument = service.get_instrument(identifier)
 
                 if not instrument:
@@ -602,11 +618,10 @@ def create_instrument_resources(api, models):
         )
         def get(self, isin):
             """Retrieves CFI information for a specific instrument"""
-            from ...interfaces.factory.services_factory import ServicesFactory
             from ...models.utils.cfi import CFI
 
             try:
-                service = ServicesFactory.get_instrument_service()
+                service = InstrumentService()
                 session, instrument = service.get_instrument(isin)
 
                 if not instrument:
@@ -722,11 +737,10 @@ def create_instrument_resources(api, models):
                         }
                     }, HTTPStatus.BAD_REQUEST
 
-                from ...services.sqlite.instrument_service import SqliteInstrumentService
                 from ...services.utils.esma_utils import BatchDataExtractor
                 from ...models.utils.cfi_instrument_manager import get_valid_instrument_types, validate_instrument_type
 
-                instrument_service = SqliteInstrumentService()
+                instrument_service = InstrumentService()
                 
                 # Method 1: Full Type Import (Resource Intensive)
                 if method == "full_type":
@@ -984,13 +998,11 @@ def create_instrument_resources(api, models):
         def post(self):
             """Map ISINs to Bloomberg FIGIs using OpenFIGI API"""
             try:
-                from ...services.sqlite.instrument_service import SqliteInstrumentService
-                
                 data = request.get_json()
                 isins = data.get("isins", []) if data else None
                 
                 # Use service layer for business logic
-                instrument_service = SqliteInstrumentService()
+                instrument_service = InstrumentService()
                 results = instrument_service.batch_enrich_figi(isins=isins, batch_size=50)
                 
                 return {

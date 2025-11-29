@@ -11,6 +11,7 @@ from flask import current_app, request
 from flask_restx import Namespace, Resource
 
 from ...constants import ErrorMessages, HTTPStatus, Pagination, ResponseFields
+from ...services import LegalEntityService
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +58,6 @@ def create_legal_entity_resources(api, models):
         # @legal_entities_ns.marshal_with(legal_entity_models["legal_entity_list_response"])  # Removed to allow rich response
         def get(self):
             """Retrieves a paginated list of legal entities"""
-            from ...interfaces.factory.services_factory import ServicesFactory
-
             try:
                 # Query parameters for filtering
                 status = request.args.get("status")
@@ -96,7 +95,7 @@ def create_legal_entity_resources(api, models):
                     limit=limit, offset=offset, filters=filters if filters else None
                 )
 
-                logger.info(f"Building rich responses for {len(entities)} legal entities (total: {total_count})")
+                logger.debug(f"Building rich responses for {len(entities)} legal entities (total: {total_count})")
                 result = []
                 for entity in entities:
                     try:
@@ -142,13 +141,11 @@ def create_legal_entity_resources(api, models):
         )
         def get(self, lei):
             """Retrieves detailed information about a specific legal entity by its LEI"""
-            from ...interfaces.factory.services_factory import ServicesFactory
-
             try:
                 # Use rich legal entity response builder with full details
                 from ..utils.legal_entity_utils import build_legal_entity_response
                 
-                service = ServicesFactory.get_legal_entity_service()
+                service = LegalEntityService()
                 session, entity = service.get_entity(lei)
 
                 if not entity:

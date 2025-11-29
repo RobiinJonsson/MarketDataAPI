@@ -6,18 +6,21 @@ Provides CLI-style rich data extraction for legal entities similar to instrument
 """
 
 
+
+
+
 def build_legal_entity_response(entity, include_rich_details=True):
     """
     Build comprehensive response with CLI-style rich data extraction for legal entities.
     
     Args:
-        entity: SQLAlchemy LegalEntity model instance
+        entity: SQLAlchemy LegalEntity model instance (SQLite or SQL Server)
         include_rich_details: Whether to include rich data extraction and analysis
         
     Returns:
         dict: Comprehensive entity response with relationships, addresses, status indicators, etc.
     """
-    # Start with the model's built-in serialization method
+    # Both SQLite and SQL Server models now have to_api_response method
     response = entity.to_api_response(
         include_relationships=True, 
         include_addresses=True, 

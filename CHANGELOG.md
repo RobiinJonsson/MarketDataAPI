@@ -2,6 +2,26 @@
 
 All notable changes to the MarketDataAPI project will be documented in this file.
 
+## [2025-11-29] - SQL Server Frontend Compatibility
+
+### Frontend Integration Fixes
+- Fixed venue service enum handling for SQL Server string values versus SQLite enum objects
+- Resolved date marshalling errors in Flask-RESTx API responses with ISO 8601 format conversion
+- Corrected instrument counting logic in venue service to display actual trading instrument counts
+- Enhanced venue service with database-agnostic date formatting using safe isoformat conversion
+
+### API Response Improvements
+- Fixed malformed field names in venue API responses (instrument_count field mapping)
+- Added comprehensive enum value handling supporting both SQLite enums and SQL Server strings
+- Implemented proper datetime serialization for both SQLite objects and SQL Server string formats
+- Enhanced venue summary formatting with robust error handling and fallback responses
+
+### Database Compatibility Enhancements
+- Added dual-path instrument counting for venues using both direct and trading_venues relationships
+- Implemented database-agnostic approach for enum field access with hasattr validation
+- Enhanced SQLAlchemy relationship handling across SQLite and SQL Server model implementations
+- Validated complete frontend functionality across both database backends
+
 ## [2025-11-22] - Database-Agnostic Service Layer Completion
 
 ### Service Layer Architecture

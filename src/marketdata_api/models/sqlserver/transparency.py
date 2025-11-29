@@ -63,6 +63,7 @@ class SqlServerTransparencyCalculation(SqlServerBaseModel):
 
     # Relationships (SQL Server version)
     instrument = relationship("SqlServerInstrument", back_populates="transparency_calculations")
+    thresholds = relationship("SqlServerTransparencyThreshold", back_populates="transparency", cascade="all, delete-orphan")
 
     # Indexes for efficient querying (EXACT match to SQLite)
     __table_args__ = (
@@ -150,15 +151,104 @@ class SqlServerTransparencyCalculation(SqlServerBaseModel):
             ),
         }
     
-    # Indexes for performance
+    # Indexes for performance (EXACT match to SQLite)
     __table_args__ = (
-        CheckConstraint(
-            "liquidity IN ('liquid', 'illiquid', 'unknown')",
-            name='chk_transparency_liquidity'
-        ),
         Index("idx_transparency_isin", "isin"),
         Index("idx_transparency_file_type", "file_type"),
         Index("idx_transparency_dates", "from_date", "to_date"),
         Index("idx_transparency_tech_id", "tech_record_id"),
         {'extend_existing': True}
     )
+
+
+class SqlServerTransparencyThreshold(SqlServerBaseModel):
+    """
+    SQL Server threshold data for transparency calculations - EXACT match to SQLite TransparencyThreshold.
+
+    Normalizes all the various threshold types (pre/post trade, large scale,
+    instrument specific, by amount or number) into a single table.
+    """
+
+    __tablename__ = "transparency_thresholds"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    transparency_id = Column(
+        String(36), ForeignKey("transparency_calculations.id", ondelete="CASCADE"), nullable=False
+    )
+
+    # Threshold classification
+    threshold_type = Column(String(100), nullable=False)
+    """
+    Threshold types:
+    - 'pre_trade_large_scale'
+    - 'post_trade_large_scale'  
+    - 'pre_trade_instrument_specific'
+    - 'post_trade_instrument_specific'
+    """
+
+    # Threshold values
+    amount_value = Column(Float)  # For amount-based thresholds
+    number_value = Column(Float)  # For number-based thresholds (futures)
+
+    # Additional threshold metadata
+    raw_data = Column(Text, default='{}')  # JSON stored as text for SQL Server compatibility
+    """
+    Additional metadata about the threshold, such as:
+    - currency
+    - calculation method
+    - validity period
+    - source field name
+    """
+
+    # Relationships
+    transparency = relationship(
+        "SqlServerTransparencyCalculation", back_populates="thresholds", passive_deletes=True
+    )
+
+    # Indexes for performance
+    __table_args__ = (
+        Index("idx_threshold_transparency_id", "transparency_id"),
+        Index("idx_threshold_type", "threshold_type"),
+        {'extend_existing': True}
+    )
+
+    @classmethod
+    def create_from_fitrs_data(cls, transparency_id: str, fitrs_data: dict):
+        """
+        Create threshold records from FITRS data.
+
+        Extracts all threshold fields and creates appropriate records.
+        """
+        import json
+        
+        thresholds = []
+
+        # Amount-based thresholds
+        threshold_mappings = {
+            "PreTradLrgInScaleThrshld_Amt": ("pre_trade_large_scale", "amount_value"),
+            "PstTradLrgInScaleThrshld_Amt": ("post_trade_large_scale", "amount_value"),
+            "PreTradInstrmSzSpcfcThrshld_Amt": ("pre_trade_instrument_specific", "amount_value"),
+            "PstTradInstrmSzSpcfcThrshld_Amt": ("post_trade_instrument_specific", "amount_value"),
+            # Number-based thresholds (futures)
+            "PreTradLrgInScaleThrshld_Nb": ("pre_trade_large_scale", "number_value"),
+            "PstTradLrgInScaleThrshld_Nb": ("post_trade_large_scale", "number_value"),
+            "PreTradInstrmSzSpcfcThrshld_Nb": ("pre_trade_instrument_specific", "number_value"),
+            "PstTradInstrmSzSpcfcThrshld_Nb": ("post_trade_instrument_specific", "number_value"),
+        }
+
+        for field_name, (threshold_type, value_type) in threshold_mappings.items():
+            if field_name in fitrs_data and fitrs_data[field_name] is not None:
+                threshold = cls(
+                    transparency_id=transparency_id,
+                    threshold_type=threshold_type,
+                    raw_data=json.dumps({"source_field": field_name}),  # JSON as text for SQL Server
+                )
+
+                if value_type == "amount_value":
+                    threshold.amount_value = fitrs_data[field_name]
+                else:
+                    threshold.number_value = fitrs_data[field_name]
+
+                thresholds.append(threshold)
+
+        return thresholds
