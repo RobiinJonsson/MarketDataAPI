@@ -349,6 +349,14 @@ class TransparencyThreshold(Base):
 
         for field_name, (threshold_type, value_type) in threshold_mappings.items():
             if field_name in fitrs_data and fitrs_data[field_name] is not None:
+                # Get the value and handle NaN for cross-database compatibility
+                raw_value = fitrs_data[field_name]
+                
+                # Skip if value is NaN (ensures consistent behavior across databases)
+                import math
+                if isinstance(raw_value, (int, float)) and math.isnan(raw_value):
+                    continue
+                    
                 threshold = cls(
                     transparency_id=transparency_id,
                     threshold_type=threshold_type,
@@ -356,9 +364,9 @@ class TransparencyThreshold(Base):
                 )
 
                 if value_type == "amount_value":
-                    threshold.amount_value = fitrs_data[field_name]
+                    threshold.amount_value = raw_value
                 else:
-                    threshold.number_value = fitrs_data[field_name]
+                    threshold.number_value = raw_value
 
                 thresholds.append(threshold)
 

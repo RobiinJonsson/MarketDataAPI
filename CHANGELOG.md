@@ -2,7 +2,33 @@
 
 All notable changes to the MarketDataAPI project will be documented in this file.
 
-## [2025-11-29] - SQL Server Frontend Compatibility
+## [2025-11-29] - SQL Server Production Readiness & Performance
+
+### Performance Optimizations
+- Enhanced legal entities API with direct count queries eliminating timeout issues
+- Optimized instruments stats endpoint to use aggregated statistics instead of individual CFI type queries
+- Reduced frontend API calls from 10+ individual requests to single stats endpoint call
+- Improved legal entity loading performance with eager loading and optimized query patterns
+
+### Single Instrument Operations
+- Added comprehensive single-instrument API endpoints for create, update, delete operations
+- Implemented individual instrument management supporting all 10 CFI types (C,D,E,F,H,I,J,O,R,S)
+- Enhanced instrument service with complete CRUD operations for production use
+- Added validation and error handling for single instrument lifecycle management
+
+### SQL Server Transparency Fixes
+- Fixed critical SQL Server compatibility issue with NaN values in transparency threshold calculations
+- Resolved "invalid instance of data type float" errors during transparency fill operations
+- Added proper NaN handling in both SQLite and SQL Server transparency models for cross-database consistency
+- Validated bulk transparency creation works without errors on SQL Server backend
+
+### Frontend Integration Completion
+- Tested and validated complete frontend functionality across both SQLite and SQL Server backends
+- Fixed venue service enum handling for SQL Server string values versus SQLite enum objects
+- Resolved date marshalling errors in Flask-RESTx API responses with ISO 8601 format conversion
+- Enhanced venue service with database-agnostic date formatting and comprehensive error handling
+
+## [2025-11-29] - SQL Server Frontend Compatibility (Previous Build)
 
 ### Frontend Integration Fixes
 - Fixed venue service enum handling for SQL Server string values versus SQLite enum objects

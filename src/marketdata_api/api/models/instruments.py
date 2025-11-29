@@ -258,16 +258,10 @@ def create_instrument_models(api, common_models):
     instrument_create_request = api.model(
         "InstrumentCreateRequest",
         {
-            "isin": fields.String(required=True, description="ISIN code", example="US0378331005"),
+            "isin": fields.String(required=True, description="ISIN code", example="CH0012221716"),
             "type": fields.String(required=True, description="Instrument type", example="equity"),
             "cfi_code": fields.String(
-                required=False, description="CFI code for validation (optional)"
-            ),
-            "symbol": fields.String(required=False, description="Trading symbol (optional)"),
-            "name": fields.String(required=False, description="Instrument name (optional)"),
-            "currency": fields.String(required=False, description="Trading currency (optional)"),
-            "mic_code": fields.String(
-                required=False, description="Market Identification Code (optional)"
+                required=False, description="CFI code for validation (optional) - other fields populated from FIRDS data"
             ),
         },
     )

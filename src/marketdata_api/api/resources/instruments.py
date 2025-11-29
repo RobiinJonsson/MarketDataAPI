@@ -326,6 +326,20 @@ def create_instrument_resources(api, models):
                             ResponseFields.MESSAGE: str(e),
                         },
                     }, HTTPStatus.NOT_FOUND
+                
+                # Check if it's a duplicate key constraint violation
+                if "UNIQUE KEY constraint" in str(e) or "duplicate key" in str(e):
+                    isin = data.get("isin", "unknown")
+                    logger.info(f"Attempt to create existing instrument: {isin}")
+                    return {
+                        ResponseFields.STATUS: "error",
+                        ResponseFields.ERROR: {
+                            "code": str(HTTPStatus.CONFLICT),
+                            ResponseFields.MESSAGE: f"Instrument with ISIN '{isin}' already exists. Use the update endpoint or retrieve the existing instrument.",
+                            "error_type": "duplicate_instrument",
+                            "suggestion": "To view the existing instrument, use GET /api/v1/instruments/{isin}"
+                        },
+                    }, HTTPStatus.CONFLICT
 
                 logger.error(f"Error in create_instrument: {str(e)}")
                 return {
@@ -452,6 +466,63 @@ def create_instrument_resources(api, models):
 
             except Exception as e:
                 logger.error(f"Error in raw data endpoint: {str(e)}")
+                return {
+                    ResponseFields.STATUS: "error",
+                    ResponseFields.ERROR: {
+                        "code": str(HTTPStatus.INTERNAL_SERVER_ERROR),
+                        ResponseFields.MESSAGE: str(e),
+                    },
+                }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+    @instruments_ns.route("/<string:isin>/enrich")
+    @instruments_ns.param("isin", "International Securities Identification Number")
+    class InstrumentEnrich(Resource):
+        @instruments_ns.doc(
+            description="Enrich an existing instrument with additional data from external sources (FIGI, legal entities)",
+            responses={
+                HTTPStatus.OK: ("Enrichment successful", instrument_models["instrument_detailed"]),
+                HTTPStatus.NOT_FOUND: ("Instrument not found", common_models["error_model"]),
+                HTTPStatus.INTERNAL_SERVER_ERROR: ("Server error", common_models["error_model"]),
+            },
+        )
+        def post(self, isin):
+            """Enrich instrument with FIGI mappings and legal entity data"""
+            try:
+                # Use database-agnostic service
+                service = InstrumentService()
+                
+                # First, get the instrument
+                session, instrument = service.get_instrument(isin)
+                if not instrument:
+                    session.close()
+                    return {
+                        ResponseFields.STATUS: "error",
+                        ResponseFields.ERROR: {
+                            "code": str(HTTPStatus.NOT_FOUND),
+                            ResponseFields.MESSAGE: f"Instrument with ISIN {isin} not found",
+                        },
+                    }, HTTPStatus.NOT_FOUND
+
+                # Close the first session since enrich_instrument creates its own
+                session.close()
+                
+                # Enrich the instrument
+                session, enriched_instrument = service.enrich_instrument(instrument)
+                
+                # Build detailed response using CLI-pattern response builder
+                from ..utils.type_specific_responses import build_detailed_instrument_response
+                result = build_detailed_instrument_response(enriched_instrument)
+                
+                session.close()
+                
+                return {
+                    ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                    ResponseFields.MESSAGE: "Instrument enriched successfully",
+                    ResponseFields.DATA: result,
+                }, HTTPStatus.OK
+
+            except Exception as e:
+                logger.error(f"Error in instrument enrichment: {str(e)}")
                 return {
                     ResponseFields.STATUS: "error",
                     ResponseFields.ERROR: {
@@ -925,32 +996,25 @@ def create_instrument_resources(api, models):
                             type_results = []
                             failed_isins = []
                             
-                            # Process in smaller batches to avoid memory issues
-                            batch_size = 50
-                            for i in range(0, len(isins), batch_size):
-                                batch_isins = isins[i:i+batch_size]
+                            # Use fast bulk creation for performance (no enrichment for isin_list method)
+                            try:
+                                bulk_result = instrument_service.bulk_create_instruments_fast(isins, instr_type)
                                 
-                                for isin in batch_isins:
-                                    try:
-                                        # Use service create_instrument method (already uses BatchDataExtractor internally)
-                                        instrument = instrument_service.create_instrument(isin, instr_type)
-                                        if instrument:
-                                            type_results.append(isin)
-                                            total_results["created_instruments"].append({
-                                                "isin": isin,
-                                                "type": instr_type,
-                                                "id": instrument.id
-                                            })
-                                        else:
-                                            failed_isins.append(isin)
-                                    except Exception as e:
-                                        logger.warning(f"Failed to create {instr_type} instrument {isin}: {str(e)}")
-                                        failed_isins.append(isin)
-                                        total_results["failed_instruments"].append({
-                                            "isin": isin,
-                                            "type": instr_type, 
-                                            "error": str(e)
-                                        })
+                                # Add successful creations to results
+                                for isin in bulk_result.get("created_instruments", []):
+                                    type_results.append(isin)
+                                    total_results["created_instruments"].append({
+                                        "isin": isin,
+                                        "type": instr_type,
+                                        "id": None  # Bulk creation doesn't return individual IDs
+                                    })
+                                
+                                # Add failures 
+                                failed_isins.extend(bulk_result.get("failed_instruments", []))
+                                
+                            except Exception as bulk_error:
+                                logger.error(f"Bulk creation failed for {instr_type}: {str(bulk_error)}")
+                                failed_isins.extend(isins)
                             
                             total_results["total_created"] += len(type_results)
                             total_results["total_failed"] += len(failed_isins)
@@ -1017,6 +1081,89 @@ def create_instrument_resources(api, models):
 
             except Exception as e:
                 logger.error(f"Error in batch FIGI mapping: {str(e)}")
+                return {
+                    ResponseFields.STATUS: "error",
+                    ResponseFields.ERROR: {
+                        "code": str(HTTPStatus.INTERNAL_SERVER_ERROR),
+                        ResponseFields.MESSAGE: str(e),
+                    },
+                }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+    @instruments_ns.route("/stats")
+    class InstrumentStats(Resource):
+        @instruments_ns.doc(
+            description="Get general instrument statistics",
+            responses={
+                HTTPStatus.OK: ("Success", common_models["success_model"]),
+                HTTPStatus.INTERNAL_SERVER_ERROR: ("Server Error", common_models["error_model"]),
+            },
+        )
+        def get(self):
+            """Get general instrument statistics"""
+            try:
+                instrument_service = InstrumentService()
+                
+                # Get basic count statistics
+                from ...database.session import get_session
+                with get_session() as session:
+                    total_instruments = session.query(instrument_service.Instrument).count()
+                    
+                    # Count by CFI type (first letter of CFI code)
+                    cfi_type_counts = {}
+                    cfi_types = ['C', 'D', 'E', 'F', 'H', 'I', 'J', 'O', 'R', 'S']
+                    
+                    for cfi_type in cfi_types:
+                        count = session.query(instrument_service.Instrument).filter(
+                            instrument_service.Instrument.cfi_code.like(f'{cfi_type}%')
+                        ).count()
+                        if count > 0:
+                            cfi_type_counts[cfi_type] = count
+                    
+                    # Also count by instrument type for backward compatibility
+                    type_counts = {}
+                    from ...models.utils.cfi_instrument_manager import get_valid_instrument_types
+                    valid_types = get_valid_instrument_types()
+                    
+                    for instrument_type in valid_types:
+                        count = session.query(instrument_service.Instrument).filter(
+                            instrument_service.Instrument.instrument_type == instrument_type
+                        ).count()
+                        if count > 0:
+                            type_counts[instrument_type] = count
+                    
+                    # Count with/without LEI
+                    with_lei = session.query(instrument_service.Instrument).filter(
+                        instrument_service.Instrument.lei_id.isnot(None),
+                        instrument_service.Instrument.lei_id != ""
+                    ).count()
+                    
+                    # Count with FIGI mappings
+                    with_figi = session.query(instrument_service.Instrument).filter(
+                        instrument_service.Instrument.figi_mappings.any()
+                    ).count()
+                
+                return {
+                    ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                    ResponseFields.DATA: {
+                        "total_instruments": total_instruments,
+                        "cfi_type_breakdown": cfi_type_counts,
+                        "type_breakdown": type_counts,
+                        "lei_coverage": {
+                            "with_lei": with_lei,
+                            "without_lei": total_instruments - with_lei,
+                            "percentage": round((with_lei / total_instruments * 100) if total_instruments > 0 else 0, 1)
+                        },
+                        "figi_coverage": {
+                            "with_figi": with_figi,
+                            "without_figi": total_instruments - with_figi,
+                            "percentage": round((with_figi / total_instruments * 100) if total_instruments > 0 else 0, 1)
+                        }
+                    },
+                    ResponseFields.MESSAGE: "Instrument statistics retrieved successfully"
+                }, HTTPStatus.OK
+            
+            except Exception as e:
+                logger.error(f"Error getting instrument statistics: {str(e)}")
                 return {
                     ResponseFields.STATUS: "error",
                     ResponseFields.ERROR: {

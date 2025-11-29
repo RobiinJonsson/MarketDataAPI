@@ -27,6 +27,7 @@ export default class DataOpsPage extends BasePage {
         
         ${this.createTabs([
           { id: 'files', label: 'File Management', active: true },
+          { id: 'single-instrument', label: 'Single Instrument' },
           { id: 'storage', label: 'Storage Analytics' },
           { id: 'operations', label: 'Batch Operations' }
         ])}
@@ -121,6 +122,112 @@ export default class DataOpsPage extends BasePage {
               </table>
             </div>
           `, '📁 File Management')}
+        </div>
+
+        <!-- Single Instrument Tab -->
+        <div data-tab-pane="single-instrument" class="hidden">
+          ${this.createCard(`
+            <div class="space-y-6">
+              <!-- Single Instrument Operations Overview -->
+              <div class="border-b border-gray-200 pb-6">
+                <h3 class="text-lg font-medium text-gray-900 mb-2">Single Instrument Operations</h3>
+                <p class="text-gray-600">Create and enrich individual instruments with FIRDS data and external sources</p>
+              </div>
+
+              <!-- Instrument Input Form -->
+              <div class="max-w-2xl">
+                <div class="space-y-4">
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label for="single-instrument-isin" class="block text-sm font-medium text-gray-700 mb-2">
+                        ISIN Code *
+                      </label>
+                      <input 
+                        type="text" 
+                        id="single-instrument-isin" 
+                        placeholder="e.g., CH0012221716" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        maxlength="12"
+                        pattern="[A-Z]{2}[A-Z0-9]{10}"
+                      >
+                      <p class="mt-1 text-xs text-gray-500">12-character International Securities Identification Number</p>
+                    </div>
+                    <div>
+                      <label for="single-instrument-type" class="block text-sm font-medium text-gray-700 mb-2">
+                        Instrument Type *
+                      </label>
+                      <select 
+                        id="single-instrument-type" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="">Select type...</option>
+                        <option value="equity">Equity</option>
+                        <option value="debt">Debt</option>
+                        <option value="derivative">Derivative</option>
+                        <option value="fund">Fund</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <!-- Action Buttons -->
+                  <div class="flex space-x-4">
+                    <button 
+                      id="create-single-instrument" 
+                      class="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled
+                    >
+                      Create Instrument
+                    </button>
+                    <button 
+                      id="enrich-single-instrument" 
+                      class="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled
+                    >
+                      Create & Enrich
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Operation Status -->
+              <div id="single-instrument-status" class="hidden">
+                <div class="border border-blue-200 bg-blue-50 rounded-lg p-4">
+                  <div class="flex items-center">
+                    <div class="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-3"></div>
+                    <div>
+                      <h4 class="font-medium text-blue-900">Processing Instrument</h4>
+                      <p class="text-sm text-blue-700" id="single-instrument-progress">Initializing...</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Results Display -->
+              <div id="single-instrument-results" class="hidden">
+                <div class="space-y-4">
+                  <h4 class="text-lg font-medium text-gray-900">Operation Results</h4>
+                  <div id="single-instrument-details" class="bg-gray-50 rounded-lg p-4">
+                    <!-- Results will be populated here -->
+                  </div>
+                  <div class="flex space-x-4">
+                    <button 
+                      id="view-instrument-detail" 
+                      class="bg-indigo-600 text-white px-4 py-2 rounded-md hover:bg-indigo-700 transition-colors"
+                    >
+                      View Full Details
+                    </button>
+                    <button 
+                      id="reset-single-instrument" 
+                      class="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition-colors"
+                    >
+                      Create Another
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          `, '🎯 Single Instrument')}
         </div>
 
         <!-- Storage Analytics Tab -->
@@ -534,6 +641,7 @@ export default class DataOpsPage extends BasePage {
       await this.loadFileStatistics();
       await this.loadFilesList();
       await this.loadDataCoverage();
+      await this.loadInstrumentTypes();
       
       // Setup event listeners
       this.setupEventListeners();
@@ -802,6 +910,9 @@ export default class DataOpsPage extends BasePage {
       batchFigiBtn.addEventListener('click', () => this.startBatchFigi());
     }
 
+    // Single Instrument listeners
+    this.setupSingleInstrumentListeners();
+
     // Download dialog event listeners
     this.setupDownloadDialogListeners();
   }
@@ -818,6 +929,114 @@ export default class DataOpsPage extends BasePage {
         }
       });
     });
+  }
+
+  private async loadInstrumentTypes(): Promise<void> {
+    try {
+      const response = await this.instrumentService.getInstrumentTypes();
+      
+      if (response.status === 'success' && response.data?.instrument_types) {
+        this.populateInstrumentTypeDropdown(response.data.instrument_types);
+      } else {
+        // Fallback to hardcoded types if API fails
+        console.warn('Failed to load instrument types from API, using fallback');
+        this.populateInstrumentTypeDropdown([
+          'collective_investment', 'debt', 'equity', 'future', 'structured', 
+          'spot', 'forward', 'option', 'rights', 'swap', 'strategy', 
+          'financing', 'referential', 'other'
+        ]);
+      }
+    } catch (error) {
+      console.error('Error loading instrument types:', error);
+      // Fallback to hardcoded types
+      this.populateInstrumentTypeDropdown([
+        'collective_investment', 'debt', 'equity', 'future', 'structured', 
+        'spot', 'forward', 'option', 'rights', 'swap', 'strategy', 
+        'financing', 'referential', 'other'
+      ]);
+    }
+  }
+
+  private populateInstrumentTypeDropdown(types: string[]): void {
+    const typeSelect = this.container.querySelector('#single-instrument-type') as HTMLSelectElement;
+    if (!typeSelect) return;
+
+    // Clear existing options except the first one
+    while (typeSelect.children.length > 1) {
+      typeSelect.removeChild(typeSelect.lastChild!);
+    }
+
+    // Create readable labels for the types
+    const typeLabels: Record<string, string> = {
+      'collective_investment': 'Collective Investment',
+      'debt': 'Debt',
+      'equity': 'Equity',
+      'future': 'Future',
+      'structured': 'Structured Product',
+      'spot': 'Spot',
+      'forward': 'Forward',
+      'option': 'Option',
+      'rights': 'Rights',
+      'swap': 'Swap',
+      'strategy': 'Strategy',
+      'financing': 'Financing',
+      'referential': 'Referential',
+      'other': 'Other'
+    };
+
+    // Add options for each type
+    types.forEach(type => {
+      const option = document.createElement('option');
+      option.value = type;
+      option.textContent = typeLabels[type] || type.charAt(0).toUpperCase() + type.slice(1);
+      typeSelect.appendChild(option);
+    });
+  }
+
+  private setupSingleInstrumentListeners(): void {
+    // Form validation
+    const isinInput = this.container.querySelector('#single-instrument-isin') as HTMLInputElement;
+    const typeSelect = this.container.querySelector('#single-instrument-type') as HTMLSelectElement;
+    const createBtn = this.container.querySelector('#create-single-instrument') as HTMLButtonElement;
+    const enrichBtn = this.container.querySelector('#enrich-single-instrument') as HTMLButtonElement;
+    const viewDetailBtn = this.container.querySelector('#view-instrument-detail') as HTMLButtonElement;
+    const resetBtn = this.container.querySelector('#reset-single-instrument') as HTMLButtonElement;
+
+    // Enable/disable buttons based on form state
+    const validateForm = () => {
+      const isValid = isinInput?.value.trim().length === 12 && typeSelect?.value;
+      if (createBtn) createBtn.disabled = !isValid;
+      if (enrichBtn) enrichBtn.disabled = !isValid;
+    };
+
+    if (isinInput) {
+      isinInput.addEventListener('input', validateForm);
+      isinInput.addEventListener('input', (e) => {
+        const target = e.target as HTMLInputElement;
+        target.value = target.value.toUpperCase();
+      });
+    }
+    if (typeSelect) typeSelect.addEventListener('change', validateForm);
+
+    // Create instrument button
+    if (createBtn) {
+      createBtn.addEventListener('click', () => this.createSingleInstrument(false));
+    }
+
+    // Create & enrich button
+    if (enrichBtn) {
+      enrichBtn.addEventListener('click', () => this.createSingleInstrument(true));
+    }
+
+    // View detail button
+    if (viewDetailBtn) {
+      viewDetailBtn.addEventListener('click', () => this.viewInstrumentDetail());
+    }
+
+    // Reset form button
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => this.resetSingleInstrumentForm());
+    }
   }
 
   private async applyFilters(): Promise<void> {
@@ -1847,5 +2066,167 @@ Total Size: ${totalSize}`);
       console.error('Error downloading all latest files:', error);
       this.showDataOpsError('Error downloading all latest files.');
     }
+  }
+
+  private async createSingleInstrument(shouldEnrich: boolean): Promise<void> {
+    const isinInput = this.container.querySelector('#single-instrument-isin') as HTMLInputElement;
+    const typeSelect = this.container.querySelector('#single-instrument-type') as HTMLSelectElement;
+    const statusDiv = this.container.querySelector('#single-instrument-status') as HTMLDivElement;
+    const progressText = this.container.querySelector('#single-instrument-progress') as HTMLElement;
+    const resultsDiv = this.container.querySelector('#single-instrument-results') as HTMLDivElement;
+
+    const isin = isinInput.value.trim();
+    const type = typeSelect.value;
+
+    if (!isin || !type) return;
+
+    // Show progress
+    statusDiv.classList.remove('hidden');
+    resultsDiv.classList.add('hidden');
+    if (progressText) progressText.textContent = shouldEnrich ? 'Creating and enriching instrument...' : 'Creating instrument...';
+
+    try {
+      // Step 1: Create the instrument
+      if (progressText) progressText.textContent = 'Creating instrument from FIRDS data...';
+      const createResponse = await fetch('/api/v1/instruments/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isin, type })
+      });
+
+      if (!createResponse.ok) {
+        const errorData = await createResponse.json();
+        
+        // Handle duplicate instrument case
+        if (createResponse.status === 409 && errorData.error?.error_type === 'duplicate_instrument') {
+          statusDiv.classList.add('hidden');
+          this.showWarning(
+            `Instrument ${isin} already exists. ` + 
+            `<a href="#" onclick="window.open('/api/v1/instruments/${isin}', '_blank')" class="underline text-blue-600 hover:text-blue-800">View existing instrument</a>`
+          );
+          return;
+        }
+        
+        throw new Error(errorData.error?.message || 'Failed to create instrument');
+      }
+
+      const createResult = await createResponse.json();
+
+      if (createResult.status !== 'success') {
+        throw new Error(createResult.error?.message || 'Failed to create instrument');
+      }
+
+      let finalData = createResult.data;
+
+      // Step 2: Enrich if requested
+      if (shouldEnrich) {
+        if (progressText) progressText.textContent = 'Enriching with FIGI and legal entity data...';
+        
+        try {
+          const enrichResponse = await fetch(`/api/v1/instruments/${isin}/enrich`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+
+          if (enrichResponse.ok) {
+            const enrichResult = await enrichResponse.json();
+            if (enrichResult.status === 'success') {
+              finalData = enrichResult.data;
+            } else {
+              console.warn('Enrichment failed:', enrichResult.error?.message);
+              this.showWarning('Instrument created but enrichment failed: ' + (enrichResult.error?.message || 'Unknown error'));
+            }
+          }
+        } catch (enrichError) {
+          console.warn('Enrichment failed:', enrichError);
+          this.showWarning('Instrument created but enrichment failed');
+        }
+      }
+
+      // Hide progress and show results
+      statusDiv.classList.add('hidden');
+      this.displaySingleInstrumentResults(finalData, shouldEnrich);
+      this.showSuccess(`Instrument ${shouldEnrich ? 'created and enriched' : 'created'} successfully!`);
+
+    } catch (error) {
+      statusDiv.classList.add('hidden');
+      console.error('Error creating instrument:', error);
+      this.showDataOpsError(error instanceof Error ? error.message : 'Failed to create instrument');
+    }
+  }
+
+  private displaySingleInstrumentResults(instrumentData: any, wasEnriched: boolean): void {
+    const resultsDiv = this.container.querySelector('#single-instrument-results') as HTMLDivElement;
+    const detailsDiv = this.container.querySelector('#single-instrument-details') as HTMLDivElement;
+
+    if (!resultsDiv || !detailsDiv) return;
+
+    const enrichmentStatus = wasEnriched ? '✅ Enriched' : '⚠️ Basic';
+    
+    detailsDiv.innerHTML = `
+      <div class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h5 class="font-medium text-gray-900">Instrument Created</h5>
+          <span class="text-sm px-2 py-1 rounded ${wasEnriched ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}">${enrichmentStatus}</span>
+        </div>
+        <div class="grid grid-cols-2 gap-4 text-sm">
+          <div><span class="font-medium">ISIN:</span> ${instrumentData.isin || 'N/A'}</div>
+          <div><span class="font-medium">Type:</span> ${instrumentData.instrument_type || instrumentData.type || 'N/A'}</div>
+          <div><span class="font-medium">Name:</span> ${instrumentData.full_name || instrumentData.name || 'N/A'}</div>
+          <div><span class="font-medium">Currency:</span> ${instrumentData.currency || 'N/A'}</div>
+        </div>
+        ${instrumentData.lei_id ? `<div class="text-sm"><span class="font-medium">LEI:</span> ${instrumentData.lei_id}</div>` : ''}
+        ${instrumentData.figi_mapping?.figi ? `<div class="text-sm"><span class="font-medium">FIGI:</span> ${instrumentData.figi_mapping.figi}</div>` : ''}
+      </div>
+    `;
+
+    // Store the ISIN for the detail view
+    resultsDiv.setAttribute('data-isin', instrumentData.isin);
+    resultsDiv.classList.remove('hidden');
+  }
+
+  private viewInstrumentDetail(): void {
+    const resultsDiv = this.container.querySelector('#single-instrument-results') as HTMLDivElement;
+    const isin = resultsDiv?.getAttribute('data-isin');
+    
+    if (isin) {
+      // Navigate to instrument detail page
+      window.location.href = `/instruments/${isin}`;
+    }
+  }
+
+  private resetSingleInstrumentForm(): void {
+    const isinInput = this.container.querySelector('#single-instrument-isin') as HTMLInputElement;
+    const typeSelect = this.container.querySelector('#single-instrument-type') as HTMLSelectElement;
+    const createBtn = this.container.querySelector('#create-single-instrument') as HTMLButtonElement;
+    const enrichBtn = this.container.querySelector('#enrich-single-instrument') as HTMLButtonElement;
+    const statusDiv = this.container.querySelector('#single-instrument-status') as HTMLDivElement;
+    const resultsDiv = this.container.querySelector('#single-instrument-results') as HTMLDivElement;
+
+    // Reset form
+    if (isinInput) isinInput.value = '';
+    if (typeSelect) typeSelect.selectedIndex = 0;
+    if (createBtn) createBtn.disabled = true;
+    if (enrichBtn) enrichBtn.disabled = true;
+
+    // Hide status and results
+    if (statusDiv) statusDiv.classList.add('hidden');
+    if (resultsDiv) resultsDiv.classList.add('hidden');
+  }
+
+  private showWarning(message: string): void {
+    // Create a warning toast/notification
+    const warningDiv = document.createElement('div');
+    warningDiv.className = 'fixed top-4 right-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded shadow-lg z-50';
+    warningDiv.innerHTML = `
+      <div class="flex items-center">
+        <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+        </svg>
+        <span>${message}</span>
+      </div>
+    `;
+    document.body.appendChild(warningDiv);
+    setTimeout(() => warningDiv.remove(), 5000);
   }
 }

@@ -1859,7 +1859,7 @@ class InstrumentService(InstrumentServiceInterface):
                 for i in range(0, len(isins), batch_size):
                     batch = isins[i : i + batch_size]
                     existing_batch = (
-                        session.query(self.Instrument.isin).filter(self.self.Instrument.isin.in_(batch)).all()
+                        session.query(self.Instrument.isin).filter(self.Instrument.isin.in_(batch)).all()
                     )
                     existing_isins.update([isin for (isin,) in existing_batch])
 
@@ -1916,7 +1916,7 @@ class InstrumentService(InstrumentServiceInterface):
         else:
             # Use bulk processing without enrichment (much faster)
             try:
-                bulk_result = self._bulk_create_instruments_fast(isins, instrument_type)
+                bulk_result = self.bulk_create_instruments_fast(isins, instrument_type)
                 batch_result["created"] = bulk_result["created"]
                 batch_result["failed"] = bulk_result["failed"] 
                 batch_result["created_instruments"] = bulk_result["created_instruments"]
@@ -1940,7 +1940,7 @@ class InstrumentService(InstrumentServiceInterface):
 
         return batch_result
 
-    def _bulk_create_instruments_fast(self, isins: List[str], instrument_type: str) -> Dict[str, Any]:
+    def bulk_create_instruments_fast(self, isins: List[str], instrument_type: str) -> Dict[str, Any]:
         """
         Ultra-fast bulk creation without enrichment - uses batch database operations.
         
@@ -1990,6 +1990,7 @@ class InstrumentService(InstrumentServiceInterface):
                         cmdt_deriv_ind = None
                     
                     instrument_data = {
+                        'id': str(uuid.uuid4()),  # Add required ID field
                         'isin': isin,
                         'full_name': firds_record.get('FullNm', f"Instrument {isin}"),
                         'short_name': firds_record.get('ShrtNm', ''),
@@ -2001,10 +2002,10 @@ class InstrumentService(InstrumentServiceInterface):
                         'lei_id': firds_record.get('Issr', ''),
                         'commodity_derivative_indicator': cmdt_deriv_ind,
                         'publication_from_date': _parse_firds_date(firds_record.get('PublctnFrDt')),
-                        'firds_data': firds_record,
-                        'processed_attributes': {},
-                        'created_at': datetime.utcnow(),
-                        'updated_at': datetime.utcnow()
+                        'firds_data': json.dumps(firds_record),  # Convert dict to JSON string
+                        'processed_attributes': json.dumps({}),  # Convert dict to JSON string
+                        'created_at': datetime.now(UTC),  # Use UTC timezone
+                        'updated_at': datetime.now(UTC)  # Use UTC timezone
                     }
                     insert_data.append(instrument_data)
                     result["created_instruments"].append(isin)
@@ -2020,18 +2021,43 @@ class InstrumentService(InstrumentServiceInterface):
                 self.logger.debug(f"💾 Bulk inserting {len(insert_data)} instruments...")
                 
                 # Use bulk insert for maximum performance
-                if self.database_type == 'sqlite':
-                    from sqlalchemy.dialects.sqlite import insert
-                else:
-                    from sqlalchemy.dialects.mssql import insert
-                
-                stmt = insert(self.Instrument).values(insert_data)
-                # Use ON CONFLICT IGNORE to handle duplicates gracefully
-                stmt = stmt.on_conflict_do_nothing(index_elements=['isin'])
-                
                 session = SessionLocal()
                 try:
-                    session.execute(stmt)
+                    if self.database_type == 'sqlite':
+                        from sqlalchemy.dialects.sqlite import insert
+                        InstrumentTable = self.Instrument.__table__
+                        stmt = insert(InstrumentTable).values(insert_data)
+                        # Use ON CONFLICT IGNORE to handle duplicates gracefully
+                        stmt = stmt.on_conflict_do_nothing(index_elements=['isin'])
+                        session.execute(stmt)
+                        created_count = len(insert_data)  # SQLite handles duplicates automatically
+                    else:
+                        # For SQL Server, filter out existing ISINs first to avoid duplicates
+                        from sqlalchemy import insert
+                        
+                        # Get existing ISINs to avoid duplicates
+                        existing_isins = set()
+                        if insert_data:
+                            isins_to_check = [item['isin'] for item in insert_data]
+                            existing_records = session.query(self.Instrument.isin).filter(
+                                self.Instrument.isin.in_(isins_to_check)
+                            ).all()
+                            existing_isins = {record.isin for record in existing_records}
+                            
+                            # Filter out existing ISINs
+                            filtered_data = [item for item in insert_data if item['isin'] not in existing_isins]
+                            
+                            if filtered_data:
+                                # Use the table for bulk insert
+                                InstrumentTable = self.Instrument.__table__
+                                stmt = insert(InstrumentTable).values(filtered_data)
+                                session.execute(stmt)
+                                created_count = len(filtered_data)
+                            else:
+                                created_count = 0
+                        else:
+                            created_count = 0
+                    
                     session.commit()
                 finally:
                     session.close()

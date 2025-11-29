@@ -15,6 +15,11 @@ class LegalEntityServiceInterface(ABC):
         pass
 
     @abstractmethod
+    def count_entities(self, filters: Optional[Dict[str, Any]] = None) -> int:
+        """Get count of legal entities with optional filtering."""
+        pass
+
+    @abstractmethod
     def get_all_entities(
         self,
         limit: Optional[int] = None,

@@ -76,8 +76,8 @@ export class AnalyticsService extends BaseApiService {
       if (instrumentStats.status === 'fulfilled' && instrumentStats.value.data) {
         const instrData = instrumentStats.value.data;
         analytics.instrument_stats = {
-          total: instrData.total || 125430,
-          by_type: instrData.by_type || {
+          total: instrData.total_instruments || 125430,  // Use correct API field
+          by_type: instrData.type_breakdown || {
             'equity': 85420,
             'debt': 28930,
             'future': 8520,
@@ -102,8 +102,8 @@ export class AnalyticsService extends BaseApiService {
       if (entityStats.status === 'fulfilled' && entityStats.value.data) {
         const entityData = entityStats.value.data;
         analytics.entity_stats = {
-          total: entityData.total || 8920,
-          by_country: entityData.by_country || {
+          total: entityData.total_entities || 8920,  // Use correct API field
+          by_country: entityData.entity_breakdown || {  // Use correct API field
             'US': 2540,
             'GB': 1820,
             'DE': 1240,

@@ -138,6 +138,36 @@ class LegalEntityService(LegalEntityServiceInterface):
             session.close()
             raise
 
+    def count_entities(self, filters: Optional[Dict[str, Any]] = None) -> int:
+        """
+        Get count of legal entities with optional filtering.
+
+        Args:
+            filters (dict, optional): Dictionary of filters to apply (e.g. {'status': 'ACTIVE'})
+
+        Returns:
+            int: Count of entities matching filters
+        """
+        session = SessionLocal()
+        try:
+            query = session.query(self.LegalEntity)
+
+            # Apply filters if provided (same logic as get_all_entities)
+            if filters:
+                filter_conditions = []
+                if "status" in filters and filters["status"]:
+                    filter_conditions.append(self.LegalEntity.status == filters["status"])
+                if "jurisdiction" in filters and filters["jurisdiction"]:
+                    filter_conditions.append(self.LegalEntity.jurisdiction == filters["jurisdiction"])
+
+                if filter_conditions:
+                    query = query.filter(and_(*filter_conditions))
+
+            count = query.count()
+            return count
+        finally:
+            session.close()
+
     def get_all_entities(
         self,
         limit: Optional[int] = None,
@@ -157,7 +187,13 @@ class LegalEntityService(LegalEntityServiceInterface):
         """
         session = SessionLocal()
         try:
-            query = session.query(self.LegalEntity)
+            # Use eager loading for addresses and registration since list endpoint includes these
+            from sqlalchemy.orm import joinedload
+            
+            query = session.query(self.LegalEntity).options(
+                joinedload(self.LegalEntity.addresses),
+                joinedload(self.LegalEntity.registration)
+            )
 
             # Apply filters if provided
             if filters:

@@ -124,18 +124,15 @@ export default class InstrumentsPage extends BasePage {
       this.loading = true;
       this.error = null;
       
-      // Load counts for each CFI instrument type  
-      const promises = this.cfiInstrumentTypes.map(async (type) => {
-        const filters = { cfi_type: type.code };
-        const response = await this.instrumentService.listInstruments(filters, { page: 1, per_page: 1 });
-        
-        return {
-          ...type,
-          count: response.meta?.total || 0
-        };
-      });
+      // Load counts efficiently from stats endpoint in a single API call
+      const statsResponse = await this.instrumentService.getInstrumentStats();
+      const cfiTypeBreakdown = statsResponse.data.cfi_type_breakdown || {};
       
-      this.cfiInstrumentTypes = await Promise.all(promises);
+      // Update counts using the stats response
+      this.cfiInstrumentTypes = this.cfiInstrumentTypes.map(type => ({
+        ...type,
+        count: cfiTypeBreakdown[type.code] || 0
+      }));
       
     } catch (error) {
       console.error('Error loading instrument type counts:', error);
@@ -403,7 +400,7 @@ export default class InstrumentsPage extends BasePage {
                       <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
                         <a href="#/instruments/${instrument.isin}" class="hover:underline">${instrument.isin}</a>
                       </td>
-                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${instrument.name || 'N/A'}</td>
+                      <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${instrument.short_name || 'N/A'}</td>
                       <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                           ${instrument.cfi_code || 'N/A'}
@@ -1219,7 +1216,7 @@ export default class InstrumentsPage extends BasePage {
           </span>
         </td>
         <td class="px-6 py-4">
-          <div class="text-sm font-medium text-gray-900">${instrument.name || 'N/A'}</div>
+          <div class="text-sm font-medium text-gray-900">${instrument.short_name || 'N/A'}</div>
         </td>
         <td class="px-6 py-4 whitespace-nowrap">
           <div class="text-sm font-mono text-gray-900">${instrument.cfi_code || 'N/A'}</div>

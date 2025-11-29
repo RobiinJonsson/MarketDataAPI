@@ -83,29 +83,36 @@ def create_legal_entity_resources(api, models):
                 
                 service = LegalEntityService()
                 
-                # First get total count without pagination (like instruments endpoint)
-                session_count, all_entities = service.get_all_entities(
-                    limit=None, offset=None, filters=filters if filters else None
-                )
-                total_count = len(all_entities)
-                session_count.close()
+                # Get total count efficiently (no data loading)
+                total_count = service.count_entities(filters=filters if filters else None)
                 
-                # Then get paginated results
+                # Get only paginated results
                 session, entities = service.get_all_entities(
                     limit=limit, offset=offset, filters=filters if filters else None
                 )
 
-                logger.debug(f"Building rich responses for {len(entities)} legal entities (total: {total_count})")
+                logger.debug(f"Building responses for {len(entities)} legal entities (total: {total_count})")
                 result = []
                 for entity in entities:
                     try:
-                        rich_response = build_legal_entity_response(entity, include_rich_details=True)
-                        logger.debug(f"Rich response for {entity.lei} has keys: {list(rich_response.keys())}")
-                        result.append(rich_response)
+                        # Use basic response for list endpoint to improve performance
+                        # Rich details are only needed for individual entity lookup
+                        basic_response = entity.to_api_response(
+                            include_relationships=False, 
+                            include_addresses=True, 
+                            include_registration=True
+                        )
+                        result.append(basic_response)
                     except Exception as e:
-                        logger.error(f"Error building rich response for {entity.lei}: {e}")
-                        # Fallback to basic response
-                        result.append(entity.to_api_response())
+                        logger.error(f"Error building response for {entity.lei}: {e}")
+                        # Fallback to minimal response
+                        result.append({
+                            "lei": entity.lei,
+                            "name": entity.name,
+                            "status": entity.status,
+                            "jurisdiction": entity.jurisdiction,
+                            "error": "Response building failed"
+                        })
 
                 session.close()
                 return {
@@ -214,6 +221,66 @@ def create_legal_entity_resources(api, models):
 
             except Exception as e:
                 logger.error(f"Error in batch entity fill: {str(e)}")
+                return {
+                    ResponseFields.STATUS: "error",
+                    ResponseFields.ERROR: {
+                        "code": str(HTTPStatus.INTERNAL_SERVER_ERROR),
+                        ResponseFields.MESSAGE: str(e),
+                    },
+                }, HTTPStatus.INTERNAL_SERVER_ERROR
+
+    @legal_entities_ns.route("/stats")
+    class LegalEntityStats(Resource):
+        @legal_entities_ns.doc(
+            description="Get legal entity statistics",
+            responses={
+                HTTPStatus.OK: ("Success", common_models["success_model"]),
+                HTTPStatus.INTERNAL_SERVER_ERROR: ("Server Error", common_models["error_model"]),
+            },
+        )
+        def get(self):
+            """Get legal entity statistics"""
+            try:
+                service = LegalEntityService()
+                
+                # Use direct count query for performance - don't load all entities
+                from ...database import SessionLocal
+                session = SessionLocal()
+                
+                try:
+                    # Just count entities, don't load them all
+                    total_count = session.query(service.LegalEntity).count()
+                    
+                finally:
+                    session.close()
+                
+                return {
+                    ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                    ResponseFields.DATA: {
+                        "total_entities": total_count,
+                        "entity_breakdown": {},  # Placeholder for future detailed breakdown
+                        "message": "Legal entity statistics retrieved successfully"
+                    },
+                    ResponseFields.MESSAGE: f"Found {total_count} legal entities"
+                }, HTTPStatus.OK
+                
+                return {
+                    ResponseFields.STATUS: ResponseFields.SUCCESS_STATUS,
+                    ResponseFields.DATA: {
+                        "total_entities": total_entities,
+                        "status_breakdown": status_counts,
+                        "top_jurisdictions": jurisdiction_counts,
+                        "relationship_coverage": {
+                            "with_relationships": with_relationships,
+                            "without_relationships": total_entities - with_relationships,
+                            "percentage": round((with_relationships / total_entities * 100) if total_entities > 0 else 0, 1)
+                        }
+                    },
+                    ResponseFields.MESSAGE: "Legal entity statistics retrieved successfully"
+                }, HTTPStatus.OK
+            
+            except Exception as e:
+                logger.error(f"Error getting legal entity statistics: {str(e)}")
                 return {
                     ResponseFields.STATUS: "error",
                     ResponseFields.ERROR: {
