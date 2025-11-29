@@ -30,6 +30,12 @@ OPENFIGI_API_KEY = os.getenv("OPENFIGI_API_KEY")
 FLASK_ENV = os.getenv("FLASK_ENV", "production")
 SECRET_KEY = os.getenv("SECRET_KEY", "default_secret_key")
 
+# JWT Configuration
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", SECRET_KEY)
+JWT_ACCESS_TOKEN_EXPIRES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES", "1"))  # hours
+JWT_REFRESH_TOKEN_EXPIRES = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES", "168"))  # hours (7 days)
+JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+
 # Database configuration
 # Note: DATABASE_TYPE is dynamically evaluated to allow runtime changes
 def get_database_type_from_env():

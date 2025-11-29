@@ -4,6 +4,7 @@ Resource Registration Module
 This module handles the registration of all Swagger API resources.
 """
 
+from .auth import auth_ns
 from .docs import create_docs_resources
 from .files import create_file_resources
 from .frontend import create_frontend_resources
@@ -30,6 +31,9 @@ def register_all_resources(api):
 
     models = register_all_models(api)
 
+    # Register authentication endpoints
+    api.add_namespace(auth_ns)
+    
     # Register domain-specific resources with complete working endpoints
     instruments_ns = create_instrument_resources(api, models)  # Working endpoints
     legal_entities_ns = create_legal_entity_resources(api, models)  # Working endpoints
@@ -44,6 +48,7 @@ def register_all_resources(api):
     files_ns = create_file_resources(api, models)  # File management endpoints migrated to Swagger
 
     return {
+        "auth": auth_ns,  # Authentication endpoints
         "mic": mic_ns,  # MIC endpoints now in Swagger
         "venues": venues_ns,  # Venue endpoints
         "instruments": instruments_ns,

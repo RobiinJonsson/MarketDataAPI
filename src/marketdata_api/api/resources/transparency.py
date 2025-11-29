@@ -13,6 +13,10 @@ from flask_restx import Namespace, Resource
 from ...constants import ErrorMessages, HTTPStatus, Pagination, ResponseFields
 from ...services import TransparencyService
 
+# Import authentication decorators
+from ...auth.decorators import require_read_permission, require_write_permission
+from ...auth.rate_limiting import read_rate_limit, write_rate_limit
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,6 +59,8 @@ def create_transparency_resources(api, models):
             },
         )
         # @transparency_ns.marshal_with(transparency_models["transparency_list_response"])  # Removed to allow rich response
+        @require_read_permission
+        @read_rate_limit
         def get(self):
             """Get all transparency calculations with optional filtering"""
             from sqlalchemy.orm import joinedload
@@ -308,6 +314,8 @@ def create_transparency_resources(api, models):
                 HTTPStatus.INTERNAL_SERVER_ERROR: ("Server Error", common_models["error_model"]),
             },
         )
+        @require_write_permission
+        @write_rate_limit
         def post(self):
             """Fill transparency data for instruments without current data"""
             try:

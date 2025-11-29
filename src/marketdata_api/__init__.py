@@ -3,8 +3,11 @@ import os
 
 from flask import Flask
 from flask_cors import CORS
+from flask_jwt_extended import JWTManager
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
-from marketdata_api.config import FLASK_ENV, Config
+from marketdata_api.config import FLASK_ENV, Config, JWT_SECRET_KEY, JWT_ACCESS_TOKEN_EXPIRES, JWT_REFRESH_TOKEN_EXPIRES
 from marketdata_api.database import init_database
 
 
@@ -14,6 +17,23 @@ def create_app(config_override=None):
     )
     app.config["ENV"] = FLASK_ENV
     app.config["ROOT_PATH"] = Config.ROOT_PATH
+    
+    # JWT Configuration
+    app.config['JWT_SECRET_KEY'] = JWT_SECRET_KEY
+    app.config['JWT_ACCESS_TOKEN_EXPIRES'] = JWT_ACCESS_TOKEN_EXPIRES
+    app.config['JWT_REFRESH_TOKEN_EXPIRES'] = JWT_REFRESH_TOKEN_EXPIRES
+    
+    # Initialize JWT
+    jwt = JWTManager(app)
+    
+    # Initialize rate limiter
+    limiter = Limiter(
+        app=app,
+        key_func=get_remote_address,
+        default_limits=["1000 per hour", "100 per minute"],
+        storage_uri="memory://",
+        strategy="fixed-window"
+    )
 
     # Apply test configuration if provided
     if config_override:

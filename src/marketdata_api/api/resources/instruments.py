@@ -19,6 +19,10 @@ from ...config import DatabaseConfig
 # Import database-agnostic services
 from ...services import InstrumentService
 
+# Import authentication decorators
+from ...auth.decorators import require_auth, require_write_permission, require_read_permission
+from ...auth.rate_limiting import read_rate_limit, write_rate_limit
+
 # Dynamic model imports based on database type
 def _get_models():
     """Get appropriate model classes based on database configuration."""
@@ -87,6 +91,8 @@ def create_instrument_resources(api, models):
             },
         )
         # @instruments_ns.marshal_with(instrument_models["instrument_list_response"])  # Removed to allow rich response
+        @require_read_permission
+        @read_rate_limit
         def get(self):
             """Retrieves a paginated list of instruments"""
             from ...database.session import get_session
@@ -220,6 +226,8 @@ def create_instrument_resources(api, models):
             },
         )
         @instruments_ns.expect(instrument_models["instrument_create_request"])
+        @require_write_permission
+        @write_rate_limit
         def post(self):
             """Create a new instrument from FIRDS data"""
             from werkzeug.exceptions import BadRequest
@@ -361,6 +369,8 @@ def create_instrument_resources(api, models):
                 HTTPStatus.UNAUTHORIZED: ("Unauthorized", common_models["error_model"]),
             },
         )
+        @require_read_permission
+        @read_rate_limit
         def get(self, isin):
             """Retrieves detailed information about a specific instrument by its ISIN"""
             try:
@@ -485,6 +495,8 @@ def create_instrument_resources(api, models):
                 HTTPStatus.INTERNAL_SERVER_ERROR: ("Server error", common_models["error_model"]),
             },
         )
+        @require_write_permission
+        @write_rate_limit
         def post(self, isin):
             """Enrich instrument with FIGI mappings and legal entity data"""
             try:

@@ -69,6 +69,7 @@ from .commands.figi import figi
 from .commands.entities import entities
 from .commands.files import files
 from .commands.api import api
+from .commands.auth import auth
 
 cli.add_command(transparency)
 cli.add_command(mic)
@@ -76,6 +77,7 @@ cli.add_command(figi)
 cli.add_command(entities)
 cli.add_command(files)
 cli.add_command(api)
+cli.add_command(auth)
 
 
 def main():
