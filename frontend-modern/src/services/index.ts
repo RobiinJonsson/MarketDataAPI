@@ -5,6 +5,9 @@
 // Base service
 export { BaseApiService } from './BaseApiService';
 
+// Authentication service
+export { AuthService, authService } from './AuthService';
+
 // Domain-specific services
 export { InstrumentService } from './InstrumentService';
 export { LegalEntityService } from './LegalEntityService';

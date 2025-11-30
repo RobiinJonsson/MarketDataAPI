@@ -669,7 +669,7 @@ def duplicates(ctx, isin, remove, confirm):
     # Get database-agnostic imports
     db_type = DatabaseConfig.get_database_type()
     if db_type == "sqlite":
-        from ...models.sqlite.transparency import SqliteTransparencyCalculation as TransparencyCalculation
+        from ...models.sqlite.transparency import TransparencyCalculation
     else:
         from ...models.sqlserver.transparency import SqlServerTransparencyCalculation as TransparencyCalculation
     

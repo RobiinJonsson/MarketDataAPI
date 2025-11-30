@@ -28,17 +28,17 @@ def require_auth(f):
             # Get token from Authorization header
             auth_header = request.headers.get('Authorization')
             if not auth_header:
-                return jsonify({
+                return {
                     'error': 'Authentication required',
                     'message': 'Missing Authorization header'
-                }), 401
+                }, 401
             
             # Extract token from "Bearer <token>" format
             if not auth_header.startswith('Bearer '):
-                return jsonify({
+                return {
                     'error': 'Invalid authentication format',
                     'message': 'Authorization header must start with "Bearer "'
-                }), 401
+                }, 401
             
             token = auth_header.split(' ')[1]
             
@@ -59,16 +59,16 @@ def require_auth(f):
             
         except ValueError as e:
             logger.warning(f"Authentication failed: {e}")
-            return jsonify({
+            return {
                 'error': 'Authentication failed',
                 'message': str(e)
-            }), 401
+            }, 401
         except Exception as e:
             logger.error(f"Unexpected authentication error: {e}")
-            return jsonify({
+            return {
                 'error': 'Authentication error',
                 'message': 'An unexpected error occurred'
-            }), 500
+            }, 500
     
     return decorated_function
 
@@ -90,10 +90,10 @@ def require_role(required_roles: Union[str, List[str]]):
             try:
                 # Check if user is authenticated (should be set by @require_auth)
                 if not hasattr(g, 'current_user') or not g.current_user:
-                    return jsonify({
+                    return {
                         'error': 'Authentication required',
                         'message': 'User must be authenticated to access this resource'
-                    }), 401
+                    }, 401
                 
                 user_roles = g.current_user.get('roles', [])
                 
@@ -103,10 +103,10 @@ def require_role(required_roles: Union[str, List[str]]):
                 if not has_required_role:
                     logger.warning(f"Access denied for user {g.current_user['username']}: "
                                  f"requires {required_roles}, has {user_roles}")
-                    return jsonify({
+                    return {
                         'error': 'Insufficient permissions',
                         'message': f'This operation requires one of these roles: {", ".join(required_roles)}'
-                    }), 403
+                    }, 403
                 
                 logger.debug(f"Role check passed for user {g.current_user['username']}: "
                            f"has {user_roles}, required {required_roles}")
@@ -114,10 +114,10 @@ def require_role(required_roles: Union[str, List[str]]):
                 
             except Exception as e:
                 logger.error(f"Role check error: {e}")
-                return jsonify({
+                return {
                     'error': 'Authorization error',
                     'message': 'An unexpected error occurred during authorization'
-                }), 500
+                }, 500
         
         return decorated_function
     return decorator
@@ -140,10 +140,10 @@ def require_permission(required_permissions: Union[str, List[str]]):
             try:
                 # Check if user is authenticated
                 if not hasattr(g, 'current_user') or not g.current_user:
-                    return jsonify({
+                    return {
                         'error': 'Authentication required',
                         'message': 'User must be authenticated to access this resource'
-                    }), 401
+                    }, 401
                 
                 user_permissions = g.current_user.get('permissions', [])
                 
@@ -153,10 +153,10 @@ def require_permission(required_permissions: Union[str, List[str]]):
                 if not has_required_permission:
                     logger.warning(f"Access denied for user {g.current_user['username']}: "
                                  f"requires {required_permissions}, has {user_permissions}")
-                    return jsonify({
+                    return {
                         'error': 'Insufficient permissions',
                         'message': f'This operation requires one of these permissions: {", ".join(required_permissions)}'
-                    }), 403
+                    }, 403
                 
                 logger.debug(f"Permission check passed for user {g.current_user['username']}: "
                            f"has {user_permissions}, required {required_permissions}")
@@ -164,10 +164,10 @@ def require_permission(required_permissions: Union[str, List[str]]):
                 
             except Exception as e:
                 logger.error(f"Permission check error: {e}")
-                return jsonify({
+                return {
                     'error': 'Authorization error',
                     'message': 'An unexpected error occurred during authorization'
-                }), 500
+                }, 500
         
         return decorated_function
     return decorator
@@ -269,3 +269,157 @@ def has_role(role: str) -> bool:
     """
     user = get_current_user()
     return user and role in user.get('roles', [])
+
+
+# Convenience decorators for common permission patterns
+def require_read_permission(f):
+    """
+    Decorator to require read permissions.
+    Allows both User and Admin roles.
+    Bypasses for SQLite development mode.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Skip authentication for SQLite (development mode)
+        if not auth_service.is_authentication_enabled():
+            logger.debug("Authentication disabled for SQLite development mode - allowing read access")
+            return f(*args, **kwargs)
+        
+        # For SQL Server mode, check authentication first
+        try:
+            # Get token from Authorization header
+            auth_header = request.headers.get('Authorization')
+            if not auth_header:
+                return {
+                    'error': 'Authentication required',
+                    'message': 'Missing Authorization header'
+                }, 401
+            
+            # Extract token from "Bearer <token>" format
+            if not auth_header.startswith('Bearer '):
+                return {
+                    'error': 'Invalid authentication format',
+                    'message': 'Authorization header must start with "Bearer "'
+                }, 401
+            
+            token = auth_header.split(' ')[1]
+            
+            # Verify token
+            payload = auth_service.verify_token(token)
+            
+            # Set current user in Flask g object
+            g.current_user = {
+                'id': payload.get('user_id'),
+                'username': payload.get('username'),
+                'email': payload.get('email'),
+                'roles': payload.get('roles', []),
+                'permissions': payload.get('permissions', [])
+            }
+            
+            # Check permissions - use the actual permission patterns from the system
+            user_permissions = g.current_user.get('permissions', [])
+            # Users with admin role or any read permission should have access
+            user_roles = g.current_user.get('roles', [])
+            required_permissions = [
+                'instruments:read', 'transparency:read', 'legal_entities:read', 
+                'venues:read', 'relationships:read', 'mic_codes:read'
+            ]
+            
+            # Allow if user has admin role or any read permission
+            has_admin = 'admin' in user_roles
+            has_read_permission = any(perm in user_permissions for perm in required_permissions)
+            
+            if not (has_admin or has_read_permission):
+                return {
+                    'error': 'Permission denied',
+                    'message': f'Requires admin role or one of: {", ".join(required_permissions)}'
+                }, 403
+            
+            logger.debug(f"Authenticated user with read permission: {g.current_user['username']}")
+            return f(*args, **kwargs)
+            
+        except ValueError as e:
+            logger.warning(f"Authentication failed: {e}")
+            return {
+                'error': 'Authentication failed',
+                'message': str(e)
+            }, 401
+        except Exception as e:
+            logger.error(f"Unexpected authentication error: {e}")
+            return {
+                'error': 'Authentication error',
+                'message': 'An unexpected error occurred'
+            }, 500
+    
+    return decorated_function
+
+
+def require_write_permission(f):
+    """
+    Decorator to require write permissions.
+    Only allows Admin role.
+    Bypasses for SQLite development mode.
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Skip authentication for SQLite (development mode)
+        if not auth_service.is_authentication_enabled():
+            logger.debug("Authentication disabled for SQLite development mode - allowing write access")
+            return f(*args, **kwargs)
+        
+        # For SQL Server mode, check authentication and admin role
+        try:
+            # Get token from Authorization header
+            auth_header = request.headers.get('Authorization')
+            if not auth_header:
+                return {
+                    'error': 'Authentication required',
+                    'message': 'Missing Authorization header'
+                }, 401
+            
+            # Extract token from "Bearer <token>" format
+            if not auth_header.startswith('Bearer '):
+                return {
+                    'error': 'Invalid authentication format',
+                    'message': 'Authorization header must start with "Bearer "'
+                }, 401
+            
+            token = auth_header.split(' ')[1]
+            
+            # Verify token
+            payload = auth_service.verify_token(token)
+            
+            # Set current user in Flask g object
+            g.current_user = {
+                'id': payload.get('user_id'),
+                'username': payload.get('username'),
+                'email': payload.get('email'),
+                'roles': payload.get('roles', []),
+                'permissions': payload.get('permissions', [])
+            }
+            
+            # Check for Admin role
+            user_roles = g.current_user.get('roles', [])
+            if 'admin' not in user_roles:
+                return {
+                    'error': 'Permission denied',
+                    'message': 'Admin role required for this operation'
+                }, 403
+            
+            logger.debug(f"Authenticated admin user: {g.current_user['username']}")
+            return f(*args, **kwargs)
+            
+        except ValueError as e:
+            logger.warning(f"Authentication failed: {e}")
+            return {
+                'error': 'Authentication failed',
+                'message': str(e)
+            }, 401
+        except Exception as e:
+            logger.error(f"Unexpected authentication error: {e}")
+            return {
+                'error': 'Authentication error',
+                'message': 'An unexpected error occurred'
+            }, 500
+    
+    return decorated_function

@@ -26,6 +26,19 @@ def create_app(config_override=None):
     # Initialize JWT
     jwt = JWTManager(app)
     
+    # Configure JSON serialization to handle NaN values
+    import json
+    import math
+    
+    def default_json_handler(obj):
+        """Handle special values in JSON serialization"""
+        if isinstance(obj, float):
+            if math.isnan(obj) or math.isinf(obj):
+                return None
+        raise TypeError(f"Object {obj} is not JSON serializable")
+    
+    app.json.default = default_json_handler
+    
     # Initialize rate limiter
     limiter = Limiter(
         app=app,

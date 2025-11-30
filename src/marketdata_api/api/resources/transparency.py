@@ -242,6 +242,8 @@ def create_transparency_resources(api, models):
                 HTTPStatus.UNAUTHORIZED: ("Unauthorized", common_models["error_model"]),
             },
         )
+        @require_read_permission
+        @read_rate_limit
         def get(self, isin):
             """Get transparency calculations for a specific ISIN"""
             from ...database.session import SessionLocal

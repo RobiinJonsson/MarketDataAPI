@@ -260,3 +260,25 @@ class SqlServerTransparencyThreshold(SqlServerBaseModel):
                 thresholds.append(threshold)
 
         return thresholds
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert model to dictionary with NaN handling"""
+        import math
+        
+        def clean_value(value):
+            """Clean individual values, converting NaN to None"""
+            if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+                return None
+            elif isinstance(value, dict):
+                return {k: clean_value(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                return [clean_value(item) for item in value]
+            return value
+        
+        # Get all column values
+        result = {}
+        for column in self.__table__.columns:
+            value = getattr(self, column.name)
+            result[column.name] = clean_value(value)
+        
+        return result

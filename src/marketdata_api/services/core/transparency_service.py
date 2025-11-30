@@ -227,16 +227,43 @@ class TransparencyService(TransparencyServiceInterface):
             source_filename: Original filename for type determination
 
         Returns:
-            Created Any instance
+            Created Any instance or existing record if duplicate found
         """
         self.validate_transparency_data(data)
 
         # Determine file type
         file_type = self.determine_file_type(data, source_filename)
+        
+        # Extract core identification fields
+        isin = data.get("ISIN") or data.get("Id")
+        from_date = self._parse_date(data.get("FrDt"))
+        to_date = self._parse_date(data.get("ToDt"))
+        tech_record_id = data.get("TechRcrdId")
 
         session = SessionLocal()
         try:
-            # Extract core fields
+            # Get methodology for uniqueness check
+            methodology = self._determine_methodology(data)
+            
+            # Check for existing record to prevent duplicates
+            # Unique criteria: (isin, file_type, from_date, to_date, methodology)
+            existing = session.query(self.TransparencyCalculation).filter(
+                self.TransparencyCalculation.isin == isin,
+                self.TransparencyCalculation.file_type == file_type,
+                self.TransparencyCalculation.from_date == from_date,
+                self.TransparencyCalculation.to_date == to_date
+            ).first()
+            
+            # Additional check for methodology in raw_data if existing found
+            if existing:
+                existing_methodology = self._get_methodology_from_calculation(existing)
+                if existing_methodology == methodology:
+                    self.logger.info(f"Found existing transparency calculation {existing.id} for {isin} ({file_type}, {methodology})")
+                    return existing
+
+            # Create new record
+            self.logger.info(f"Creating new transparency calculation for {isin} ({file_type})")
+            
             # Prepare raw_data based on database type
             if self.database_type == 'sqlite':
                 raw_data = data.copy()  # SQLite supports JSON columns
@@ -247,10 +274,10 @@ class TransparencyService(TransparencyServiceInterface):
             
             transparency_calc = self.TransparencyCalculation(
                 id=str(uuid.uuid4()),
-                tech_record_id=data.get("TechRcrdId"),
-                isin=data.get("ISIN") or data.get("Id"),  # FULECR_E uses 'Id' instead of 'ISIN'
-                from_date=self._parse_date(data.get("FrDt")),
-                to_date=self._parse_date(data.get("ToDt")),
+                tech_record_id=tech_record_id,
+                isin=isin,
+                from_date=from_date,
+                to_date=to_date,
                 liquidity=self._determine_liquidity(data, file_type),
                 total_transactions_executed=self._parse_numeric(data.get("TtlNbOfTxsExctd")),
                 total_volume_executed=self._parse_numeric(data.get("TtlVolOfTxsExctd")),
@@ -291,6 +318,26 @@ class TransparencyService(TransparencyServiceInterface):
             raise TransparencyServiceError(f"Failed to create transparency calculation: {str(e)}")
         finally:
             session.close()
+
+    def _determine_methodology(self, data: Dict[str, Any]) -> str:
+        """Extract methodology from FITRS data."""
+        methodology = data.get("Mthdlgy", "")
+        # Handle None or empty values
+        return str(methodology).strip() if methodology else "UNKNOWN"
+
+    def _get_methodology_from_calculation(self, calculation: Any) -> str:
+        """Extract methodology from existing transparency calculation."""
+        try:
+            if self.database_type == 'sqlite':
+                raw_data = calculation.raw_data or {}
+            else:
+                import json
+                raw_data = json.loads(calculation.raw_data or '{}')
+            
+            methodology = raw_data.get("Mthdlgy", "")
+            return str(methodology).strip() if methodology else "UNKNOWN"
+        except:
+            return "UNKNOWN"
 
     def create_transparency(
         self, isin: str, instrument_type: str = None

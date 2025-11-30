@@ -1,5 +1,6 @@
 import { BasePage } from './BasePage';
 import { apiServices } from '../services';
+import { authService } from '../services/AuthService';
 
 /**
  * Home Dashboard Page
@@ -8,8 +9,18 @@ import { apiServices } from '../services';
 export default class HomePage extends BasePage {
   
   async render(): Promise<void> {
+    // Check if authentication is required by testing a protected endpoint
+    const authRequired = await this.checkAuthenticationRequired();
+    
+
+    
+    if (authRequired && !authService.isAuthenticated()) {
+      this.renderLoginForm();
+      return;
+    }
+    
     this.container.innerHTML = `
-      ${this.createSectionHeader('MarketData API Dashboard', 'Enterprise-grade financial market data platform with comprehensive MiFID II compliance')}
+      ${this.createDashboardHeader(authRequired)}
       
       <!-- Quick Stats Row -->
       <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -263,6 +274,7 @@ export default class HomePage extends BasePage {
 
     // Setup search functionality
     this.setupSearchFunctionality();
+    this.setupLogoutButton();
 
     // Load dashboard data
     await this.loadDashboardData();
@@ -672,5 +684,204 @@ export default class HomePage extends BasePage {
     }
   }
 
+  /**
+   * Check if authentication is required by testing a simple API endpoint
+   */
+  private async checkAuthenticationRequired(): Promise<boolean> {
+    try {
+      // Test a protected endpoint (instruments) to check if auth is required
+      const response = await fetch('/api/v1/instruments/?page=1&limit=1');
+      
+      if (response.status === 401) {
+        // 401 means authentication is required (SQL Server mode)
+        return true;
+      }
+      
+      // If we get any other response, auth is not required (SQLite mode)
+      return false;
+    } catch (error) {
+      // On error, assume auth is required to be safe
+      console.warn('Error checking auth requirement:', error);
+      return true;
+    }
+  }
+
+  /**
+   * Render login form when authentication is required
+   */
+  private renderLoginForm(): void {
+    this.container.innerHTML = `
+      <div class="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-md w-full space-y-8">
+          <div>
+            <div class="mx-auto h-12 w-12 flex items-center justify-center rounded-full bg-blue-100">
+              <svg class="h-6 w-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h2 class="mt-6 text-center text-3xl font-extrabold text-gray-900">
+              Sign in to MarketData API
+            </h2>
+            <p class="mt-2 text-center text-sm text-gray-600">
+              Authentication required for SQL Server production mode
+            </p>
+          </div>
+          
+          <form id="login-form" class="mt-8 space-y-6">
+            <div class="rounded-md shadow-sm -space-y-px">
+              <div>
+                <label for="username" class="sr-only">Username</label>
+                <input 
+                  id="username" 
+                  name="username" 
+                  type="text" 
+                  value="sqladmin"
+                  required 
+                  class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm" 
+                  placeholder="Username"
+                >
+              </div>
+              <div>
+                <label for="password" class="sr-only">Password</label>
+                <input 
+                  id="password" 
+                  name="password" 
+                  type="password" 
+                  value="AdminPass123!"
+                  required 
+                  class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm" 
+                  placeholder="Password"
+                >
+              </div>
+            </div>
+
+            <div id="login-status" class="text-center"></div>
+
+            <div>
+              <button 
+                type="submit" 
+                class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                id="login-button"
+              >
+                <span class="absolute left-0 inset-y-0 flex items-center pl-3">
+                  <svg class="h-5 w-5 text-blue-500 group-hover:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd" />
+                  </svg>
+                </span>
+                Sign in
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+
+    // Add login form event listener
+    const loginForm = document.getElementById('login-form') as HTMLFormElement;
+    const loginButton = document.getElementById('login-button') as HTMLButtonElement;
+    const loginStatus = document.getElementById('login-status') as HTMLDivElement;
+
+    loginForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const username = (document.getElementById('username') as HTMLInputElement).value;
+      const password = (document.getElementById('password') as HTMLInputElement).value;
+      
+      // Show loading state
+      loginButton.disabled = true;
+      loginButton.textContent = 'Signing in...';
+      loginStatus.innerHTML = '<div class="text-blue-600">Authenticating...</div>';
+      
+      try {
+        const result = await authService.login({ username, password });
+        
+        if (result.success) {
+          loginStatus.innerHTML = '<div class="text-green-600">✅ Login successful! Loading dashboard...</div>';
+          
+          // Reload the page to show dashboard
+          setTimeout(() => {
+            this.render();
+          }, 1000);
+        } else {
+          loginStatus.innerHTML = `<div class="text-red-600">❌ ${result.error}</div>`;
+        }
+        
+      } catch (error) {
+        console.error('Login error:', error);
+        loginStatus.innerHTML = `<div class="text-red-600">❌ Login failed: ${error instanceof Error ? error.message : 'Unknown error'}</div>`;
+      } finally {
+        // Reset button state
+        loginButton.disabled = false;
+        loginButton.textContent = 'Sign in';
+      }
+    });
+  }
+
+  /**
+   * Create dashboard header with optional user info and logout
+   */
+  /**
+   * Setup logout button event listener
+   */
+  private setupLogoutButton(): void {
+    const logoutButton = document.getElementById('logout-button') as HTMLButtonElement;
+    if (logoutButton) {
+      logoutButton.addEventListener('click', () => {
+        // Confirm logout
+        const confirmed = confirm('Are you sure you want to sign out?');
+        if (confirmed) {
+          authService.logout();
+          // Reload the page to show login form
+          this.render();
+        }
+      });
+    }
+  }
+
+  /**
+   * Create dashboard header with optional user info and logout
+   */
+  private createDashboardHeader(authRequired: boolean): string {
+    const baseHeader = this.createSectionHeader('MarketData API Dashboard', 'Enterprise-grade financial market data platform with comprehensive MiFID II compliance');
+    
+    if (!authRequired || !authService.isAuthenticated()) {
+      return baseHeader;
+    }
+
+    // Get current user info
+    const user = authService.getCurrentUser();
+    const userInfo = user ? {
+      username: user.username,
+      email: user.email,
+      roles: user.roles
+    } : null;
+
+    return `
+      <div class="mb-8">
+        <div class="flex justify-between items-center">
+          <div>
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">MarketData API Dashboard</h1>
+            <p class="text-lg text-gray-600">Enterprise-grade financial market data platform with comprehensive MiFID II compliance</p>
+          </div>
+          
+          <!-- User Info & Logout -->
+          <div class="flex items-center space-x-4">
+            <div class="text-right">
+              <p class="text-sm font-medium text-gray-900">${userInfo?.username || 'Unknown User'}</p>
+              <p class="text-xs text-gray-500">${userInfo?.email || ''}</p>
+              <p class="text-xs text-blue-600">${userInfo?.roles.join(', ') || 'No roles'}</p>
+            </div>
+            <button 
+              id="logout-button"
+              class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+        <hr class="mt-4 border-gray-200">
+      </div>
+    `;
+  }
 
 }

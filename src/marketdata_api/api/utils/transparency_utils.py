@@ -6,9 +6,21 @@ for transparency calculations, matching the comprehensive data formatting used i
 """
 
 import logging
+import math
 from typing import Dict, Any, List
 
 logger = logging.getLogger(__name__)
+
+
+def _clean_metrics(metrics_dict):
+    """Clean metrics dictionary, converting NaN and Inf values to None"""
+    cleaned = {}
+    for key, value in metrics_dict.items():
+        if isinstance(value, float) and (math.isnan(value) or math.isinf(value)):
+            cleaned[key] = None
+        else:
+            cleaned[key] = value
+    return cleaned
 
 
 def build_transparency_response(calculation, include_rich_details=False):
@@ -44,9 +56,10 @@ def build_transparency_response(calculation, include_rich_details=False):
     else:
         liquidity_status = "❓ Unknown"
     
-    # Extract fields from raw_data like CLI
+    # Extract fields from raw_data like CLI with NaN cleaning
     instrument_class = raw_data.get("FinInstrmClssfctn", "N/A")
-    methodology = raw_data.get("Mthdlgy", "N/A")
+    methodology_raw = raw_data.get("Mthdlgy", "N/A")
+    methodology = None if (isinstance(methodology_raw, float) and (math.isnan(methodology_raw) or math.isinf(methodology_raw))) else methodology_raw
     
     # Core response matching both CLI and API needs
     response = {
@@ -69,11 +82,11 @@ def build_transparency_response(calculation, include_rich_details=False):
                 "period": period,
                 "liquidity_status": liquidity_status,
                 "has_trading_activity": has_trading_activity,
-                "raw_metrics": {
+                "raw_metrics": _clean_metrics({
                     "avg_daily_turnover": raw_data.get("AvrgDalyTrnvr"),
                     "large_in_scale": raw_data.get("LrgInScale"),
                     "standard_market_size": raw_data.get("StdMktSz"),
-                } if raw_data else {}
+                }) if raw_data else {}
             },
             "mifid_context": {
                 "is_equity": calculation.file_type and calculation.file_type.startswith("FULECR"),

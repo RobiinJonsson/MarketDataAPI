@@ -48,12 +48,15 @@ if not SECRET_KEY:
 # JWT Configuration
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
 if not JWT_SECRET_KEY:
-    import warnings
-    warnings.warn(
-        "JWT_SECRET_KEY not set! Using SECRET_KEY fallback. "
-        "Set JWT_SECRET_KEY environment variable for production!",
-        UserWarning
-    )
+    # Only warn in production environments (not SQLite development mode)
+    db_type = os.getenv("DATABASE_TYPE", "sqlite").lower()
+    if db_type != "sqlite":
+        import warnings
+        warnings.warn(
+            "JWT_SECRET_KEY not set! Using SECRET_KEY fallback. "
+            "Set JWT_SECRET_KEY environment variable for production!",
+            UserWarning
+        )
     JWT_SECRET_KEY = SECRET_KEY
 JWT_ACCESS_TOKEN_EXPIRES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES", "1"))  # hours
 JWT_REFRESH_TOKEN_EXPIRES = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES", "168"))  # hours (7 days)

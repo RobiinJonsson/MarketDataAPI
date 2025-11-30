@@ -8,7 +8,7 @@ from marshmallow import ValidationError
 from ...services.core.auth_service import auth_service
 from ...auth.decorators import require_auth, admin_required, get_current_user
 from ...auth.rate_limiting import auth_rate_limit, read_rate_limit
-from ...config import HTTPStatus
+from ...constants import HTTPStatus
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +77,7 @@ class LoginResource(Resource):
     @auth_ns.response(200, 'Login successful', auth_models['AuthResponse'])
     @auth_ns.response(401, 'Authentication failed', auth_models['ErrorResponse'])
     @auth_ns.response(400, 'Invalid request data', auth_models['ErrorResponse'])
-    @auth_rate_limit
+    # @auth_rate_limit  # Temporarily disabled for debugging
     def post(self):
         """
         Authenticate user and return JWT tokens
@@ -95,6 +95,7 @@ class LoginResource(Resource):
             
             # Validate required fields
             if not username or not password:
+                print("LOGIN DEBUG: Missing username or password")
                 return {
                     'error': 'Missing credentials',
                     'message': 'Username and password are required'

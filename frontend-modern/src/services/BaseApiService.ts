@@ -4,6 +4,7 @@
  */
 
 import { ApiResponse, HttpError, RequestConfig } from '../types/api';
+import { authService } from './AuthService';
 
 export class BaseApiService {
   protected baseURL: string;
@@ -44,12 +45,16 @@ export class BaseApiService {
       }
     }
 
+    // Get authentication headers
+    const authHeaders = await authService.getAuthHeader();
+    
     // Setup request options
     const requestOptions: RequestInit = {
       method: 'GET',
       ...options,
       headers: {
         ...finalConfig.headers,
+        ...authHeaders,
         ...options.headers,
       },
     };
