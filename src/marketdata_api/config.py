@@ -28,10 +28,33 @@ else:
 
 OPENFIGI_API_KEY = os.getenv("OPENFIGI_API_KEY")
 FLASK_ENV = os.getenv("FLASK_ENV", "production")
-SECRET_KEY = os.getenv("SECRET_KEY", "default_secret_key")
+
+# Generate a secure random secret key if not provided
+def _generate_secure_key():
+    """Generate a secure random key for development use only"""
+    import secrets
+    return secrets.token_urlsafe(32)
+
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    import warnings
+    warnings.warn(
+        "SECRET_KEY not set! Using generated key for development. "
+        "Set SECRET_KEY environment variable for production!",
+        UserWarning
+    )
+    SECRET_KEY = _generate_secure_key()
 
 # JWT Configuration
-JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", SECRET_KEY)
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY:
+    import warnings
+    warnings.warn(
+        "JWT_SECRET_KEY not set! Using SECRET_KEY fallback. "
+        "Set JWT_SECRET_KEY environment variable for production!",
+        UserWarning
+    )
+    JWT_SECRET_KEY = SECRET_KEY
 JWT_ACCESS_TOKEN_EXPIRES = int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES", "1"))  # hours
 JWT_REFRESH_TOKEN_EXPIRES = int(os.getenv("JWT_REFRESH_TOKEN_EXPIRES", "168"))  # hours (7 days)
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
