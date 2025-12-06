@@ -20,6 +20,11 @@ from .test_data_real import get_test_isin
 @pytest.fixture
 def app():
     """Create a test Flask application."""
+    import os
+    # Set environment variables for SQLite test mode (disables authentication)
+    os.environ["DATABASE_TYPE"] = "sqlite"
+    os.environ["TESTING"] = "true"
+    
     test_config = {
         "TESTING": True,
         "DATABASE_URL": "sqlite:///:memory:",

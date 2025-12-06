@@ -32,15 +32,11 @@ CSV_PATH = "data/downloads/ISO10383_MIC.csv"
 def test_database_connection():
     """Test database connection and MIC table existence."""
     print("🔌 Testing database connection...")
-    try:
-        with get_session() as session:
-            # Test if MIC table exists by trying a simple query
-            count = session.query(MarketIdentificationCode).count()
-            print(f"✅ Database connection successful. MIC table has {count} records.")
-            return True
-    except Exception as e:
-        print(f"❌ Database connection failed: {e}")
-        return False
+    with get_session() as session:
+        # Test if MIC table exists by trying a simple query
+        count = session.query(MarketIdentificationCode).count()
+        print(f"✅ Database connection successful. MIC table has {count} records.")
+        assert count >= 0  # Should not fail if table exists
 
 
 def test_load_mic_data():

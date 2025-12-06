@@ -23,6 +23,22 @@ from .test_data_real import get_test_instrument, get_test_lei, get_test_mic
 @pytest.fixture
 def app():
     """Create a test Flask application."""
+    # Set environment variables for SQLite test mode (disables authentication)
+    # Must be set BEFORE any imports to ensure proper module initialization
+    os.environ["DATABASE_TYPE"] = "sqlite"
+    os.environ["TESTING"] = "true"
+    
+    # Clear any cached modules that might have loaded with production config
+    import sys
+    modules_to_reload = [
+        'marketdata_api.config',
+        'marketdata_api.services.core.auth_service',
+        'marketdata_api.database.session'
+    ]
+    for module_name in modules_to_reload:
+        if module_name in sys.modules:
+            del sys.modules[module_name]
+    
     # Create app with test configuration to prevent production database access
     test_config = {
         "TESTING": True,

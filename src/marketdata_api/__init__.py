@@ -96,9 +96,31 @@ def create_app(config_override=None):
     root_logger.addHandler(debug_handler)
     root_logger.addHandler(console_handler)
 
+    # Configure specific loggers for development
+    # Suppress SQLite engine creation spam but keep other important messages
+    sqlite_logger = logging.getLogger('marketdata_api.database.sqlite.sqlite_database')
+    sqlite_logger.setLevel(logging.WARNING)
+    
+    # Reduce rate limiter warnings in development (but keep errors)
+    rate_limiter_logger = logging.getLogger('marketdata_api.auth.rate_limiting')
+    rate_limiter_logger.setLevel(logging.ERROR)
+    
+    # Keep HTTP request logging (werkzeug) at INFO level for development visibility
+    werkzeug_logger = logging.getLogger('werkzeug')
+    werkzeug_logger.setLevel(logging.INFO)
+    
+    # Also ensure Flask's built-in logger shows HTTP requests in development
+    if FLASK_ENV == "development":
+        app.logger.setLevel(logging.INFO)
+        # Enable werkzeug access logs
+        werkzeug_access_logger = logging.getLogger('werkzeug._internal')
+        werkzeug_access_logger.setLevel(logging.INFO)
+
     # Initialize database and create tables (skip during testing)
     if not app.config.get("TESTING"):
-        app.logger.info("Initializing database...")
+        from marketdata_api.config import DatabaseConfig
+        db_type = DatabaseConfig.get_database_type()
+        app.logger.info(f"Initializing database... (Database Type: {db_type.upper()})")
         init_database()
         app.logger.info("Database initialization complete")
 

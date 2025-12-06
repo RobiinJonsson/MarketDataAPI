@@ -24,21 +24,11 @@ def _get_engine():
     """Get database engine with lazy initialization."""
     global _engine
     if _engine is None:
-        db_type = DatabaseConfig.get_database_type()
-
-        if db_type == "sqlite":
-            from .sqlite.sqlite_database import SqliteDatabase
-
-            db = SqliteDatabase()
-        elif db_type in ["sqlserver", "azure_sql", "mssql"]:
-            from .sqlserver.sql_server_database import SqlServerDatabase
-
-            db = SqlServerDatabase()
-        else:
-            raise ValueError(f"Unsupported database type: {db_type}")
-
+        # Use singleton database instance to prevent multiple engine creation
+        from .session import _get_database_instance
+        db = _get_database_instance()
         _engine = db.get_engine()
-        logger.debug(f"Database engine initialized for {db_type}")
+        logger.debug(f"Database engine initialized")
     return _engine
 
 
@@ -46,40 +36,19 @@ def _get_session_local():
     """Get session maker with lazy initialization."""
     global _session_local
     if _session_local is None:
-        db_type = DatabaseConfig.get_database_type()
-
-        if db_type == "sqlite":
-            from .sqlite.sqlite_database import SqliteDatabase
-
-            db = SqliteDatabase()
-        elif db_type in ["sqlserver", "azure_sql", "mssql"]:
-            from .sqlserver.sql_server_database import SqlServerDatabase
-
-            db = SqlServerDatabase()
-        else:
-            raise ValueError(f"Unsupported database type: {db_type}")
-
+        # Use singleton database instance to prevent multiple engine creation
+        from .session import _get_database_instance
+        db = _get_database_instance()
         _session_local = db.get_session_maker()
-        logger.debug(f"Session maker initialized for {db_type}")
+        logger.debug(f"Session maker initialized")
     return _session_local
 
 
 # Functions for backward compatibility
 def get_database_url():
     """Get database URL via direct database configuration."""
-    db_type = DatabaseConfig.get_database_type()
-
-    if db_type == "sqlite":
-        from .sqlite.sqlite_database import SqliteDatabase
-
-        db = SqliteDatabase()
-    elif db_type in ["sqlserver", "azure_sql", "mssql"]:
-        from .sqlserver.sql_server_database import SqlServerDatabase
-
-        db = SqlServerDatabase()
-    else:
-        raise ValueError(f"Unsupported database type: {db_type}")
-
+    from .session import _get_database_instance
+    db = _get_database_instance()
     return db.get_url() if hasattr(db, "get_url") else str(db.get_engine().url)
 
 
@@ -90,19 +59,8 @@ def create_database_engine():
 
 def init_db():
     """Initialize database via direct database configuration."""
-    db_type = DatabaseConfig.get_database_type()
-
-    if db_type == "sqlite":
-        from .sqlite.sqlite_database import SqliteDatabase
-
-        db = SqliteDatabase()
-    elif db_type in ["sqlserver", "azure_sql", "mssql"]:
-        from .sqlserver.sql_server_database import SqlServerDatabase
-
-        db = SqlServerDatabase()
-    else:
-        raise ValueError(f"Unsupported database type: {db_type}")
-
+    from .session import _get_database_instance
+    db = _get_database_instance()
     db.init_db()
 
 

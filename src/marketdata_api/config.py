@@ -18,9 +18,13 @@ possible_env_locations = [
 ]
 
 # Try to load from the first available location
+# Don't override environment variables if we're in testing mode
+testing_mode = os.getenv("TESTING") == "true"
+override_env = not testing_mode
+
 for env_path in possible_env_locations:
     if os.path.exists(env_path):
-        load_dotenv(env_path, override=True)  # Override existing env vars
+        load_dotenv(env_path, override=override_env)  # Respect test env vars
         break
 else:
     # No .env found, proceed with system environment variables only

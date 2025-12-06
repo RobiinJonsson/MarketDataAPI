@@ -45,12 +45,12 @@ marketdata api start
 
 ## Recent Major Improvements
 
-### Database-Agnostic Service Layer (November 2025)
-- Complete service layer abstraction: All core services (Instrument, LegalEntity, Transparency, Venue) operate identically across SQLite and SQL Server
-- Dynamic model imports: Services automatically load appropriate database models based on environment configuration
-- SQL Server compatibility: Enhanced pagination with ORDER BY clauses, proper column constraints, and transaction handling
-- Unified test infrastructure: Service layer tests validated on both database backends with real-world data patterns
-- Production ready: Service layer foundation enables seamless deployment across development (SQLite) and production (Azure SQL Server) environments
+### Authentication & Production System (December 2025)
+- JWT-based authentication: Complete authentication system with role-based permissions for production SQL Server deployment
+- Environment-aware frontend: TypeScript frontend automatically detects database mode and shows/hides authentication interface accordingly
+- Development optimization: Virtual environment support with database singleton patterns and optimized logging configuration
+- Dual-mode operation: SQLite development mode bypasses authentication while SQL Server production mode enforces security
+- System robustness: Enhanced error handling, automatic database initialization, and comprehensive testing across environments
 
 ### Type-Specific Attribute Extractors (October 2025)
 - Complete CFI coverage: Intelligent attribute extraction for all 10 major instrument types with comprehensive FIRDS field analysis
@@ -203,6 +203,7 @@ python -m marketdata_api.cli [cmd]  # Alternative: Direct module execution
 - `mic` - Market Identification Code operations with ISO registry
 - `entities` - Legal entity operations and LEI handling
 - `files` - File management and ESMA integration
+- `auth` - User authentication and role management (SQL Server mode)
 - Core utilities: `stats`, `cfi`, `init`
 
 **Key Commands:**

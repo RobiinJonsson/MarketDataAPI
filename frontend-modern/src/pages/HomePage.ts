@@ -12,8 +12,6 @@ export default class HomePage extends BasePage {
     // Check if authentication is required by testing a protected endpoint
     const authRequired = await this.checkAuthenticationRequired();
     
-
-    
     if (authRequired && !authService.isAuthenticated()) {
       this.renderLoginForm();
       return;

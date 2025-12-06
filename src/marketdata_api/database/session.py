@@ -15,40 +15,38 @@ from ..config import DatabaseConfig
 
 logger = logging.getLogger(__name__)
 
+# Global database instance cache to prevent multiple engine creation
+_database_instance = None
+
+
+def _get_database_instance():
+    """Get singleton database instance to prevent multiple engine creation."""
+    global _database_instance
+    
+    if _database_instance is None:
+        db_type = DatabaseConfig.get_database_type()
+        
+        if db_type == "sqlite":
+            from .sqlite.sqlite_database import SqliteDatabase
+            _database_instance = SqliteDatabase()
+        elif db_type in ["sqlserver", "azure_sql", "mssql"]:
+            from .sqlserver.sql_server_database import SqlServerDatabase
+            _database_instance = SqlServerDatabase()
+        else:
+            raise ValueError(f"Unsupported database type: {db_type}")
+    
+    return _database_instance
+
 
 def _get_session_maker():
     """Get session maker based on database configuration."""
-    db_type = DatabaseConfig.get_database_type()
-
-    if db_type == "sqlite":
-        from .sqlite.sqlite_database import SqliteDatabase
-
-        db = SqliteDatabase()
-    elif db_type in ["sqlserver", "azure_sql", "mssql"]:
-        from .sqlserver.sql_server_database import SqlServerDatabase
-
-        db = SqlServerDatabase()
-    else:
-        raise ValueError(f"Unsupported database type: {db_type}")
-
+    db = _get_database_instance()
     return db.get_session_maker()
 
 
 def _get_engine():
     """Get engine based on database configuration."""
-    db_type = DatabaseConfig.get_database_type()
-
-    if db_type == "sqlite":
-        from .sqlite.sqlite_database import SqliteDatabase
-
-        db = SqliteDatabase()
-    elif db_type in ["sqlserver", "azure_sql", "mssql"]:
-        from .sqlserver.sql_server_database import SqlServerDatabase
-
-        db = SqlServerDatabase()
-    else:
-        raise ValueError(f"Unsupported database type: {db_type}")
-
+    db = _get_database_instance()
     return db.get_engine()
 
 

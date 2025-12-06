@@ -182,4 +182,21 @@ def create_system_resources(api, models):
 
             return status_data
 
+    @system_ns.route("/config")
+    class SystemConfig(Resource):
+        @system_ns.doc(
+            description="System configuration information (database type, environment, etc.)"
+        )
+        def get(self):
+            """Get system configuration information"""
+            from ...config import DatabaseConfig
+            from ...services.core.auth_service import auth_service
+            
+            return {
+                "database_type": DatabaseConfig.get_database_type(),
+                "authentication_enabled": auth_service.is_authentication_enabled(),
+                "environment": current_app.config.get('FLASK_ENV', 'production'),
+                "timestamp": datetime.now(UTC).isoformat()
+            }
+
     return system_ns

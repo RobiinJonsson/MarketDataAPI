@@ -246,7 +246,7 @@ class EsmaDataLoader:
                     df = pd.DataFrame(json_request)
                     list_dfs.append(df)
                 else:
-                    self.warning(
+                    self.__logger.warning(
                         f"Request failed, status code {request.status_code} for country {country}"
                     )
 
